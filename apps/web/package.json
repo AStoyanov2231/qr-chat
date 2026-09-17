@@ -12,18 +12,25 @@
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
+    "@phosphor-icons/react": "2.1.10",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.116.0",
     "gsap": "^3.15.0",
     "next": "16.3.4",
+    "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "@qr-chat/api": "workspace:*",
+    "@qr-chat/types": "workspace:*",
+    "@qr-chat/validation": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react-dom": "19.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",

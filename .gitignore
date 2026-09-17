@@ -1,7 +1,11 @@
 node_modules/
+.pnpm-store/
 .next/
 .turbo/
 .DS_Store
 *.tsbuildinfo
 .env*
 !.env.example
+
+# Local Supabase migrations
+/supabase/migrations/
