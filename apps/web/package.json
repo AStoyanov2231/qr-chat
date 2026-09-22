@@ -8,11 +8,16 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test tests/*.test.mjs",
+    "test:e2e": "node tests/backend.e2e.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
     "@phosphor-icons/react": "2.1.10",
+    "@qr-chat/api": "workspace:*",
+    "@qr-chat/domain": "workspace:*",
+    "@qr-chat/types": "workspace:*",
+    "@qr-chat/validation": "workspace:*",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.116.0",
     "gsap": "^3.15.0",
@@ -20,10 +25,7 @@
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "@qr-chat/api": "workspace:*",
-    "@qr-chat/types": "workspace:*",
-    "@qr-chat/validation": "workspace:*"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

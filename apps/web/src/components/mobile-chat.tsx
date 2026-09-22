@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { messageAge } from "@qr-chat/domain";
 import { usePathname, useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
 import {
@@ -17,20 +18,96 @@ import { Icon } from "@/components/icon";
 import { resolveCode, type Venue } from "@/lib/chat-view";
 import { useChatBackend, useDirectMessages, errorMessage } from "@/hooks/use-chat-backend";
 
-function messageAge(time: number) {
-  const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000));
-  if (minutes < 1) return "Now";
-  if (minutes < 60) return `${minutes}m`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h`;
-  return `${Math.floor(minutes / 1440)}d`;
-}
-
 function venueIcon(venue: Venue): "coffee" | "sun" | "pin" {
   return venue.kind === "cafe"
     ? "coffee"
     : venue.kind === "event"
       ? "sun"
       : "pin";
+}
+
+function LoadingSkeleton({ view }: { view: "scanner" | "chats" | "profile" }) {
+  if (view === "scanner") {
+    return (
+      <section className="loading-skeleton scanner-skeleton" role="status" aria-label="Loading your chats">
+        <span className="skeleton-block skeleton-toolbar" />
+        <div className="skeleton-copy">
+          <span className="skeleton-block" />
+          <span className="skeleton-block" />
+          <span className="skeleton-block" />
+          <span className="skeleton-block skeleton-subtitle" />
+        </div>
+        <span className="skeleton-block skeleton-scan" />
+        <span className="skeleton-block skeleton-tip" />
+      </section>
+    );
+  }
+
+  if (view === "profile") {
+    return (
+      <section className="loading-skeleton profile-skeleton" role="status" aria-label="Loading your profile">
+        <span className="skeleton-block skeleton-avatar" />
+        <span className="skeleton-block skeleton-name" />
+        <span className="skeleton-block skeleton-handle" />
+        <div className="skeleton-stats">
+          <span className="skeleton-block" />
+          <span className="skeleton-block" />
+          <span className="skeleton-block" />
+        </div>
+        <div className="skeleton-menu">
+          <span className="skeleton-block" />
+          <span className="skeleton-block" />
+          <span className="skeleton-block" />
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="loading-skeleton chats-skeleton" role="status" aria-label="Loading your groups">
+      <div className="skeleton-heading">
+        <span className="skeleton-block" />
+        <span className="skeleton-block" />
+      </div>
+      <div className="skeleton-filters">
+        <span className="skeleton-block" />
+        <span className="skeleton-block" />
+        <span className="skeleton-block" />
+      </div>
+      <div className="skeleton-rooms">
+        {[0, 1, 2].map((item) => (
+          <div key={item}>
+            <span className="skeleton-block skeleton-room-icon" />
+            <span>
+              <i className="skeleton-block" />
+              <i className="skeleton-block" />
+              <i className="skeleton-block" />
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MessageSkeleton() {
+  return (
+    <div className="message-skeleton" role="status" aria-label="Loading messages">
+      <span className="skeleton-block" />
+      <span className="skeleton-block" />
+      <span className="skeleton-block" />
+    </div>
+  );
+}
+
+function BottomNavigation({ view }: { view: "scanner" | "chats" | "profile" }) {
+  return (
+    <nav className="bottom-nav" aria-label="Primary navigation">
+      <Link href="/" className={view === "scanner" ? "active" : ""} aria-current={view === "scanner" ? "page" : undefined}><House size={29} weight={view === "scanner" ? "fill" : "regular"} /><span>Home</span></Link>
+      <Link href="/chats" className={view === "chats" ? "active" : ""} aria-current={view === "chats" ? "page" : undefined}><Users size={30} weight={view === "chats" ? "fill" : "regular"} /><span>Groups</span></Link>
+      <Link href="/profile" className={view === "profile" ? "active" : ""} aria-current={view === "profile" ? "page" : undefined}><User size={29} weight={view === "profile" ? "fill" : "regular"} /><span>Profile</span></Link>
+    </nav>
+  );
 }
 
 export default function QrChatApp() {
@@ -257,11 +334,22 @@ export default function QrChatApp() {
         ? "chats"
         : "scanner";
 
+  if (!ready && !backend.error) {
+    return (
+      <div className={`qr-app ${view === "scanner" ? "home-screen" : ""}`} aria-busy="true">
+        <main className="app-content">
+          <LoadingSkeleton view={view} />
+        </main>
+        <BottomNavigation view={view} />
+      </div>
+    );
+  }
+
   return (
     <div className={`qr-app ${view === "scanner" ? "home-screen" : ""}`}>
       {backend.error ? (
         <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>
-      ) : !ready ? <div className="connection-banner" role="status">Loading your chats…</div> : null}
+      ) : null}
       <main
         className={`app-content ${(active || directId) && view === "chats" ? "has-chat" : ""}`}
       >
@@ -380,7 +468,7 @@ export default function QrChatApp() {
               </details>}
               {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
               {!group?.messages.length && (
-                <p className="first-message">{!ready ? "Loading messages…" : group ? "Be the first to say hello." : "Your membership has ended."}</p>
+                <p className="first-message">{group ? "Be the first to say hello." : "Your membership has ended."}</p>
               )}
               {group?.messages
                 .filter((message) => !hiddenUsers.has(message.user))
@@ -455,7 +543,7 @@ export default function QrChatApp() {
             {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
               {direct.error && <div className="connection-banner" role="alert">{direct.error} <button onClick={() => void perform(direct.refresh)}>Retry</button></div>}
               <div className="message-stream" aria-live="polite">
-                {direct.loading && <p className="first-message">Loading messages…</p>}
+                {direct.loading && <MessageSkeleton />}
                 {direct.nextCursor !== null && <button className="text-button" disabled={busy} onClick={() => void perform(direct.loadOlder)}>Load older messages</button>}
                 {direct.messages.map((message) => <article key={message.id} className={message.sender_id === session?.id ? "own" : ""}>
                   <div><span className="message-meta">{message.sender_id === session?.id ? "You" : peer?.display_name ?? "Friend"}</span><p>{message.body}</p><time>{new Date(message.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</time></div>
@@ -474,11 +562,7 @@ export default function QrChatApp() {
         {view === "profile" && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name) => perform(async () => { await api.saveProfile({ display_name }); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
       </main>
 
-      <nav className="bottom-nav" aria-label="Primary navigation">
-        <Link href="/" className={view === "scanner" ? "active" : ""} aria-current={view === "scanner" ? "page" : undefined}><House size={29} weight={view === "scanner" ? "fill" : "regular"} /><span>Home</span></Link>
-        <Link href="/chats" className={view === "chats" ? "active" : ""} aria-current={view === "chats" ? "page" : undefined}><Users size={30} weight={view === "chats" ? "fill" : "regular"} /><span>Groups</span></Link>
-        <Link href="/profile" className={view === "profile" ? "active" : ""} aria-current={view === "profile" ? "page" : undefined}><User size={29} weight={view === "profile" ? "fill" : "regular"} /><span>Profile</span></Link>
-      </nav>
+      <BottomNavigation view={view} />
 
       <dialog
         className={pending ? "join-dialog" : "camera-dialog"}
