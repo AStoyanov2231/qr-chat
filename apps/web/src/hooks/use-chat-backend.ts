@@ -1,14 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createChatApi, watchChanges, type ConnectionState, type Tables } from "@qr-chat/api";
+import { createChatApi, watchChanges, loadChatSnapshot, loadDirectSnapshot, emptySnapshot, type ChatSnapshot, type ConnectionState, type Tables } from "@qr-chat/api";
 import { createClient } from "@/lib/supabase/client";
 import { z } from "@qr-chat/validation";
-import type { Group, Session, Message } from "@/lib/chat-view";
 
 type Api = ReturnType<typeof createChatApi>;
-type Friends = Awaited<ReturnType<Api["friends"]>>;
-type Snapshot = { session: Session | null; group: Group | null; friends: Friends; expiresAt: string | null };
-const empty: Snapshot = { session: null, group: null, friends: [], expiresAt: null };
+const empty = emptySnapshot;
 export function errorMessage(error: unknown) {
   if (error instanceof z.ZodError) return "Check your input and try again.";
   return error instanceof Error ? error.message : "Could not connect. Please try again.";
@@ -16,7 +13,7 @@ export function errorMessage(error: unknown) {
 
 export function useChatBackend() {
   const [api] = useState(() => createChatApi(createClient()));
-  const [snapshot, setSnapshot] = useState<Snapshot>(empty);
+  const [snapshot, setSnapshot] = useState<ChatSnapshot>(empty);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<ConnectionState>("connecting");
@@ -28,38 +25,10 @@ export function useChatBackend() {
   const refresh = useCallback(async () => {
     const ticket = ++generation.current;
     try {
-      const id = await api.userId();
-      const [profile, membership, friends] = await Promise.all([api.profile(), api.currentMembership(), api.friends()]);
-      let group: Group | null = null;
-      if (membership?.qr_groups?.qr_codes) {
-        const room = membership.qr_groups;
-        const code = room.qr_codes!;
-        if (pages.current.groupId !== room.id) pages.current = { groupId: room.id, count: 1 };
-        const members = await api.members(room.id);
-        const messages: Message[] = [];
-        let before: number | undefined;
-        let nextCursor: number | null = null;
-        for (let page = 0; page < pages.current.count; page++) {
-          const data = await api.groupMessages(room.id, { before });
-          messages.push(...data.items.map((message) => ({
-            id: String(message.id), user: message.sender_id ?? "deleted", name: message.profiles?.display_name ?? "Former participant",
-            text: message.body, time: Date.parse(message.created_at),
-          })));
-          nextCursor = data.nextCursor;
-          if (nextCursor === null) break;
-          before = nextCursor;
-        }
-        // Recheck authorization after a multi-query snapshot, including group switches in another tab.
-        const current = await api.currentMembership();
-        if (current?.group_id === room.id) group = {
-          id: room.id,
-          venue: { id: room.id, name: code.display_name ?? code.code_key, codes: [code.code_key], kind: "place", label: "A conversation for this QR code." },
-          members: members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? "Participant" })),
-          messages: messages.reverse(), nextCursor,
-        };
-      }
+      const next = await loadChatSnapshot(api, pages.current);
       if (!alive.current || ticket !== generation.current) return;
-      setSnapshot({ session: { id, name: profile?.display_name ?? "", avatarUrl: profile?.avatar_url ?? null, hidden: [] }, group, friends, expiresAt: membership?.expires_at ?? null });
+      if (pages.current.groupId !== (next.group?.id ?? "")) pages.current = { groupId: next.group?.id ?? "", count: 1 };
+      setSnapshot(next);
       setError("");
       setReady(true);
     } catch (reason) {
@@ -156,21 +125,10 @@ export function useDirectMessages(api: Api, connectionId: string | null) {
       const request = ++ticket;
       if (!connectionId) return;
       try {
-        const friends = await api.friends();
-        if (!friends.some((friend) => friend.id === connectionId && friend.accepted_at)) throw new Error("This friendship is no longer available.");
-        const rows: Tables<"direct_messages">[] = [];
-        let before: number | undefined;
-        let cursor: number | null = null;
-        for (let i = 0; i < pages.current; i++) {
-          const page = await api.directMessages(connectionId, { before });
-          rows.push(...page.items);
-          cursor = page.nextCursor;
-          if (cursor === null) break;
-          before = cursor;
-        }
+        const next = await loadDirectSnapshot(api, connectionId, pages.current);
         if (stopped || request !== ticket) return;
         setLoadedFor(connectionId);
-        setMessages(rows.reverse()); setNextCursor(cursor); setError(""); setLoading(false);
+        setMessages(next.messages); setNextCursor(next.nextCursor); setError(""); setLoading(false);
       } catch (reason) {
         if (stopped || request !== ticket) return;
         setMessages([]); setNextCursor(null); setError(errorMessage(reason)); setLoading(false);

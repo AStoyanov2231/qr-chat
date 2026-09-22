@@ -1,0 +1,82 @@
+import { useRef, useState, type ReactNode } from 'react';
+import { FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import type { Message } from '@qr-chat/domain';
+import { Copy, ErrorNotice, Icon, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
+
+type Props = {
+  messages: Message[];
+  userId: string;
+  loading?: boolean;
+  error: string;
+  available: boolean;
+  connected: boolean;
+  nextCursor: number | null;
+  loadOlder: () => Promise<void>;
+  refresh: () => Promise<void>;
+  send: (body: string) => Promise<unknown>;
+  unavailable: string;
+  avatars?: boolean;
+  intro?: ReactNode;
+  endedAction?: ReactNode;
+  messageAction?: (message: Message) => ReactNode;
+};
+
+export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, intro, endedAction, messageAction }: Props) {
+  const [draft, setDraft] = useState('');
+  const action = useAction();
+  const list = useRef<FlatList<Message>>(null);
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const sendDisabled = action.busy || loading || !!error || !draft.trim();
+
+  async function submit() {
+    await action.run(async () => {
+      await send(draft);
+      setDraft('');
+      await refresh();
+      list.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+  }
+
+  return <KeyboardAvoidingView style={styles.screen} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={headerHeight}>
+    <View style={{ paddingHorizontal: 22, gap: 8 }}>
+      <ErrorNotice message={error || action.error} retry={() => { void action.run(refresh); }} />
+      {!connected && available && !error && <Copy accessibilityLiveRegion="polite" style={styles.muted}>Reconnecting…</Copy>}
+    </View>
+    {loading ? <View style={{ flex: 1, padding: 22 }}><Skeleton view="messages" /></View> : <FlatList
+      ref={list}
+      inverted
+      data={available ? [...messages].reverse() : []}
+      keyExtractor={(message) => message.id}
+      contentInsetAdjustmentBehavior="automatic"
+      keyboardDismissMode={process.env.EXPO_OS === 'ios' ? 'interactive' : 'on-drag'}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingHorizontal: 22, paddingVertical: 24, gap: 12, flexGrow: 1, justifyContent: !available || !messages.length ? 'flex-end' : undefined }}
+      maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 100 }}
+      ListEmptyComponent={<Copy style={[styles.muted, { padding: 20, textAlign: 'center' }]}>{available ? 'Be the first to say hello.' : unavailable}</Copy>}
+      ListFooterComponent={<View style={{ gap: 16 }}>{intro}{available && nextCursor !== null && <TextButton label="Load older messages" disabled={action.busy} onPress={() => { void action.run(loadOlder); }} />}</View>}
+      renderItem={({ item }) => {
+        const own = item.user === userId;
+        return <View style={{ flexDirection: own ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 10 }}>
+          {avatars && <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: own ? colors.blue : '#eceef3', alignItems: 'center', justifyContent: 'center' }}><Copy style={{ fontSize: 10, fontWeight: '700' }}>{item.name.slice(0, 2).toUpperCase()}</Copy></View>}
+          <View style={{ maxWidth: '74%', gap: 4 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: own ? 'flex-end' : 'flex-start' }}>
+              <Copy style={{ fontSize: 12, color: colors.muted }}>{own ? 'You' : item.name}</Copy>
+              {!own && messageAction?.(item)}
+            </View>
+            <View style={{ paddingHorizontal: 14, paddingVertical: 11, borderRadius: 17, borderTopRightRadius: own ? 6 : 17, borderTopLeftRadius: own ? 17 : 6, backgroundColor: own ? colors.blue : colors.soft }}><Copy style={{ fontSize: 14, lineHeight: 21 }}>{item.text}</Copy></View>
+            <Copy style={{ fontSize: 11, color: colors.muted, textAlign: 'right' }}>{new Date(item.time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</Copy>
+          </View>
+        </View>;
+      }}
+    />}
+    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 12) }}>
+      {available ? <View style={[styles.row, { padding: 8, borderRadius: 18, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.line }]}>
+        <TextInput accessibilityLabel="Message" placeholder="Message…" placeholderTextColor={colors.muted} value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy} style={{ flex: 1, minHeight: 48, maxHeight: 150, paddingHorizontal: 8, paddingVertical: 12, fontSize: 16, color: colors.ink }} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Send message" accessibilityState={{ disabled: !!sendDisabled }} disabled={sendDisabled} style={[styles.iconButton, { backgroundColor: colors.ink, opacity: sendDisabled ? 0.4 : 1 }]} onPress={() => { void submit(); }}><Icon name="arrow" color="#fff" size={20} /></Pressable>
+      </View> : !loading && endedAction}
+    </View>
+  </KeyboardAvoidingView>;
+}

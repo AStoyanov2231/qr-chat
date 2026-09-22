@@ -9,6 +9,10 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "dist/**"]
     },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": []
+    },
     "lint": {
       "dependsOn": ["^lint"]
     },
