@@ -65,12 +65,12 @@ test('the newest QR event wins over a delayed initial link and OAuth callbacks c
   assert.equal(fixture.auth.pendingCode, 'Newest');
 });
 
-test('a pending external QR replaces the router destination without stacking a second join sheet', async (t) => {
+test('a pending external QR opens the scanner', async (t) => {
   reset();
   const code = 'com.qrchat.mobile://expo-development-client/?url=http%3A%2F%2F192.168.100.56%3A8081';
   state.auth = { ...state.auth, pendingCode: code, clearPendingCode: () => { state.auth.pendingCode = null; } };
   const screen = await render(t, AppLayout);
-  assert.deepEqual(state.navigation, [['replace', { pathname: '/join', params: { code } }]]);
+  assert.deepEqual(state.navigation, [['replace', '/scan']]);
   assert.equal(state.auth.pendingCode, null);
   await screen.update();
   assert.equal(state.navigation.length, 1);

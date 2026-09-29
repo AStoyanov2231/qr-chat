@@ -55,7 +55,15 @@
           "microphonePermission": false
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow QR Chat to choose your profile photo.",
+          "cameraPermission": "Allow QR Chat to scan QR codes with your camera.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

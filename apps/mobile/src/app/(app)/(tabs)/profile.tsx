@@ -9,7 +9,7 @@ const rows: { label: string; icon: IconName; detail: string }[] = [
   { label: 'Saved Places', icon: 'bookmark', detail: 'Saving places is not available yet. Scan a place’s QR code to join its group.' },
   { label: 'Notifications', icon: 'bell', detail: 'Group messages appear live while the chat is open. Push notifications are not available yet.' },
   { label: 'Privacy', icon: 'lock', detail: 'Only members of your current group can read its messages. Direct messages are shared with your accepted friends.' },
-  { label: 'Help & Feedback', icon: 'help', detail: 'Tap Home to scan or enter a QR code, then join the group. Camera access can be enabled in your device settings.' },
+  { label: 'Help & Feedback', icon: 'help', detail: 'Tap Home to scan a QR code, then join the group. Camera access can be enabled in your device settings.' },
 ];
 export default function ProfileScreen() {
   const chat = useChat();

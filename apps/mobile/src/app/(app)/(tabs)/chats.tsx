@@ -6,6 +6,7 @@ import { Copy, Empty, ErrorNotice, Icon, IconButton, Screen, Skeleton, TextButto
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { roomRoute } from '@/lib/room-route';
+import { Avatar } from '@/components/avatar';
 
 export default function GroupsScreen() {
   const chat = useChat();
@@ -38,6 +39,7 @@ export default function GroupsScreen() {
           const incoming = friend.requested_by_id !== userId;
           const remove = () => { void action.run(async () => { await api!.removeFriend(friend.id); await chat.refresh(); }); };
           return <View key={friend.id} style={[styles.row, { flexWrap: 'wrap', gap: 4, paddingVertical: 10, borderBottomWidth: 1, borderColor: colors.line }]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`View ${peer?.display_name ?? 'friend'}'s profile`} onPress={() => router.push({ pathname: '/person/[id]', params: { id: friend.user_a_id === userId ? friend.user_b_id : friend.user_a_id } })} style={{ minWidth: 44, minHeight: 44 }}><Avatar name={peer?.display_name ?? 'Friend'} url={peer?.avatar_url} /></Pressable>
             <View style={{ flex: 1, minWidth: 100, gap: 3 }}>
               <Copy style={{ fontSize: 14, fontWeight: '600' }}>{peer?.display_name ?? 'Participant'}</Copy>
               <Copy style={{ color: colors.muted, fontSize: 12 }}>{friend.accepted_at ? 'Friend' : incoming ? 'Wants to be friends' : 'Request sent'}</Copy>

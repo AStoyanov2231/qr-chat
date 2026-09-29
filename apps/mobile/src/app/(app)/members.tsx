@@ -1,6 +1,7 @@
-import { Alert, View } from 'react-native';
+import { Alert, Pressable } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Button, Copy, ErrorNotice, Screen, TextButton, colors, styles, useAction } from '@/components/chat-ui';
+import { Button, Copy, ErrorNotice, Icon, Screen, colors, styles, useAction } from '@/components/chat-ui';
+import { Avatar } from '@/components/avatar';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -12,10 +13,9 @@ export default function MembersScreen() {
   const action = useAction();
   return <Screen><ErrorNotice message={action.error || chat.error} />
     {!group && <Copy>Your membership has ended.</Copy>}
-    {group?.members.filter((member) => member.id !== userId).map((member) => {
-      const friend = chat.friends.find((friend) => friend.user_a_id === member.id || friend.user_b_id === member.id);
-      return <View key={member.id} style={[styles.row, { paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.line }]}><Copy style={{ flex: 1 }}>{member.name}</Copy><TextButton label={friend ? friend.accepted_at ? 'Friend' : 'Requested' : 'Add friend'} disabled={!!friend || action.busy} onPress={() => { void action.run(async () => { await api!.requestFriend(member.id); await chat.refresh(); }); }} /></View>;
-    })}
+    {group?.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } })} style={[styles.row, { minHeight: 60, paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.line }]}>
+      <Avatar name={member.name} url={member.avatarUrl} /><Copy style={{ flex: 1 }}>{member.id === userId ? 'You' : member.name}</Copy><Icon name="chevron" size={18} />
+    </Pressable>)}
     {group && <Button label="Leave group" danger subtle disabled={action.busy} onPress={() => Alert.alert('Leave this group?', 'You can join again by scanning its QR code.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(); await chat.refresh(); router.dismissTo('/chats'); }); } }])} />}
   </Screen>;
 }

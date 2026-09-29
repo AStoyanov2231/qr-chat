@@ -36,11 +36,14 @@ for (const platform of ['ios', 'android']) {
       await join.press('Join chat');
       assert.deepEqual(calls, [['join_qr_group', { p_code_key: resolveCode(code, origin).codes[0] }]], code);
 
-      // A stale room must preserve the original opaque key when it offers rejoin.
+      // A stale room requires a fresh camera scan before joining again.
       navigate(state.navigation.at(-1)[1]);
       const room = await render(t, Room);
       assert.ok(room.text().includes(code), 'Fallback title preserves the QR text');
-      await room.press('Rejoin conversation');
+      await room.press('Scan to rejoin');
+      assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
+      const rescan = await render(t, Scan);
+      await act(async () => { rescan.root.findByType('CameraView').props.onBarcodeScanned({ data: code }); });
       navigate(state.navigation.at(-1)[1]);
       const rejoin = await render(t, Join);
       await rejoin.press('Join chat');
@@ -49,15 +52,12 @@ for (const platform of ['ios', 'android']) {
       // Opening an existing room from Groups follows the same route contract.
       navigate(roomRoute({ id: groupId, venue: { codes: [code], name: code } }));
       const reopened = await render(t, Room);
-      await reopened.press('Rejoin conversation');
-      navigate(state.navigation.at(-1)[1]);
-      const fromGroups = await render(t, Join);
-      await fromGroups.press('Join chat');
-      assert.equal(calls.at(-1)[1].p_code_key, code);
+      await reopened.press('Scan to rejoin');
+      assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
     }
   });
 
-  test(`${platform}: web and native handoff links preserve percent escapes in the joined key`, async (t) => {
+  test(`${platform}: handoff links cannot join until the QR is scanned, preserving percent escapes`, async (t) => {
     process.env.EXPO_OS = platform;
     for (const base of [`${origin}/chats`, 'qrchat://join']) {
       reset();
@@ -68,7 +68,13 @@ for (const platform of ['ios', 'android']) {
       let joined;
       state.auth.api = { saveProfile: async () => {}, joinGroup: async value => { joined = value; return { group_id: groupId }; } };
       const screen = await render(t, Join);
-      await screen.press('Join chat');
+      assert.equal(joined, undefined);
+      assert.deepEqual(state.navigation.at(-1), ['replace', '/scan']);
+      const scanner = await render(t, Scan);
+      await act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ data: `${origin}/chats?code=${encodeURIComponent(code)}` }); });
+      navigate(state.navigation.at(-1)[1]);
+      const scannedJoin = await render(t, Join);
+      await scannedJoin.press('Join chat');
       assert.equal(joined, resolveCode(`${origin}/chats?code=${encodeURIComponent(code)}`, origin).codes[0]);
     }
   });

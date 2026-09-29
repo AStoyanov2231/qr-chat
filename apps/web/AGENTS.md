@@ -8,48 +8,32 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Web Scope
+# Web Rules
 
-Read the repository root `AGENTS.md` first.
-This application provides the interactive mobile-web client at widths up to 767px.
-Desktop web is the marketing homepage and QR handoff surface, not a chat client.
-Do not expand chat to desktop without explicit product approval.
+## Overview
 
-Use `Design1.png` at the repository root as the only visual source of truth for the mobile experience.
-Preserve concise copy, responsive containment, safe areas, keyboard behavior, and accessible states.
+Next.js mobile web client at widths ≤767px. Desktop is marketing and QR handoff. Follow [root rules](../../AGENTS.md).
 
-## Architecture
+## Behaviour
 
-Keep route handlers, layouts, and server actions thin.
-Use `@qr-chat/api`, `@qr-chat/domain`, `@qr-chat/types`, and `@qr-chat/validation` rather than creating web-only business logic.
-Do not query Supabase directly from reusable presentation components.
-Use the existing browser Supabase adapter and cookie-based SSR flow.
+- Architecture/code: follow [ARCHITECTURE.md](../../ARCHITECTURE.md); keep routes and UI thin, reuse shared packages.
+- Design: follow [DESIGN.md](../../DESIGN.md) and its skill routing.
+- Auth: server claims protect routes; validate same-origin OAuth return paths. Viewport checks never authorize access.
+- Preserve keyboard/focus, labels, safe areas, and responsive layout.
+- Update affected docs with each change; run only required checks.
 
-Canonical references:
+## Navigation
 
-- Protected routing: `src/proxy.ts` and `src/app/(protected)/layout.tsx`
-- Server and browser clients: `src/lib/supabase/`
-- Safe OAuth destinations: `src/lib/auth/redirect.ts`
-- PKCE callback exchange: `src/app/auth/callback/route.ts`
-- Shared backend orchestration: `src/hooks/use-chat-backend.ts`
-- Mobile interface: `src/components/mobile-chat.tsx`
-- Authentication regression tests: `tests/auth-redirect.test.mjs`
-- Backend browser E2E: `tests/backend.e2e.mjs`
+Paths below are relative to `apps/web`.
 
-Use `supabase.auth.getClaims()` for server-side route protection.
-Validate every post-authentication destination as a safe same-origin application path.
-Never treat the viewport gate in `src/components/mobile-only.tsx` as an authorization boundary.
+| Change | Inspect |
+| --- | --- |
+| Routes/auth | `src/proxy.ts`, `src/app/(protected)/layout.tsx`, `src/lib/supabase/` |
+| OAuth/redirects | `src/app/auth/callback/route.ts`, `src/lib/auth/redirect.ts` |
+| Chat state | `src/hooks/use-chat-backend.ts` |
+| UI/styles | `src/components/mobile-chat.tsx`, `src/app/globals.css` |
+| Setup/tests | `README.md`, `package.json`, `tests/` |
 
-## Web Commands
+## Commands
 
-Run these from the repository root:
-
-- Development: `pnpm --filter web dev`
-- Unit tests: `pnpm --filter web test`
-- Lint: `pnpm --filter web lint`
-- Type check: `pnpm --filter web typecheck`
-- Production build: `pnpm --filter web build`
-- Approved automated E2E: `pnpm --filter web test:e2e`
-
-Do not use computer-use agents for browser testing.
-Leave subjective visual and interaction verification to the user and provide a manual checklist.
+Run from the repository root using root commands. Scope web scripts with `pnpm --filter web <script>`; available scripts are in `package.json`. Setup/build details: [README.md](README.md).

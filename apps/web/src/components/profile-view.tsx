@@ -1,7 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { AvatarUpload } from "@qr-chat/api";
+import { Avatar } from "./avatar";
+import { prepareAvatar } from "@/lib/avatar";
 import { Bell, BookmarkSimple, CaretRight, Gear, LockSimple, PencilSimple, Question, User, X } from "@phosphor-icons/react";
 import type { Group, Session } from "@/lib/chat-view";
 
@@ -10,7 +13,7 @@ type Props = {
   group: Group | null;
   ready: boolean;
   busy: boolean;
-  onSave: (name: string) => Promise<boolean | undefined>;
+  onSave: (name: string, photo?: AvatarUpload | null) => Promise<boolean | undefined>;
   onLeave: () => void;
   onSignOut: () => void;
 };
@@ -20,8 +23,22 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
   const [saveFailed, setSaveFailed] = useState(false);
   const [panel, setPanel] = useState("");
   const [name, setName] = useState("");
+  const [photo, setPhoto] = useState<Blob | null | undefined>();
+  const [preview, setPreview] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState("");
+  const [preparing, setPreparing] = useState(false);
+  const selection = useRef(0);
+  const submitting = useRef(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    return () => { if (preview) URL.revokeObjectURL(preview); };
+  }, [preview]);
+  useEffect(() => () => { ++selection.current; }, []);
+  const avatar = photo === undefined ? session?.avatarUrl : photo === null ? null : preview;
+  const saving = busy || preparing;
   function open(title: string) {
+    ++selection.current;
+    setPhoto(undefined); setPreview(null); setPhotoError(""); setPreparing(false);
     setSaveFailed(false);
     setPanel(title);
     setName(session?.name ?? "");
@@ -47,11 +64,36 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
     </div>
     <button className="profile-menu-row edit-profile-row" onClick={() => open("Edit Profile")}><User size={25} /><span>Edit Profile</span><CaretRight size={19} /></button>
     <div className="profile-menu">{rows.map(({ label, icon: RowIcon }) => <button key={label} className="profile-menu-row" onClick={() => open(label)}><RowIcon size={25} /><span>{label}</span><CaretRight size={19} /></button>)}</div>
-    <dialog ref={dialog} className="profile-dialog" aria-label={panel} onClick={(event) => { if (event.target === dialog.current) dialog.current?.close(); }}>
+    <dialog ref={dialog} className="profile-dialog" aria-label={panel} onCancel={(event) => { if (saving) event.preventDefault(); }} onClick={(event) => { if (event.target === dialog.current && !saving) dialog.current?.close(); }}>
       <div className="entry-panel">
-        <button className="modal-close" aria-label="Close" onClick={() => dialog.current?.close()}><X size={20} /></button>
+        <button className="modal-close" aria-label="Close" disabled={saving} onClick={() => dialog.current?.close()}><X size={20} /></button>
         <h2>{panel}</h2>
-        {panel === "Edit Profile" && <form className="profile-form" onSubmit={async (event) => { event.preventDefault(); setSaveFailed(false); if (await onSave(name)) dialog.current?.close(); else setSaveFailed(true); }}><label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || busy} required /><button className="scan-primary" disabled={!ready || busy || !name.trim()}>Save profile</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}</form>}
+        {panel === "Edit Profile" && <form className="profile-form" onSubmit={async (event) => {
+          event.preventDefault(); if (saving || submitting.current) return;
+          submitting.current = true; setPreparing(true); setSaveFailed(false); setPhotoError("");
+          try {
+            const upload = photo ? { uploadId: crypto.randomUUID(), data: await photo.arrayBuffer() } : photo;
+            if (await onSave(name, upload)) { setPhoto(undefined); setPreview(null); dialog.current?.close(); } else setSaveFailed(true);
+          } catch { setPhotoError("Could not read this photo. Please choose it again."); }
+          finally { submitting.current = false; setPreparing(false); }
+        }}>
+          <div className="avatar-editor"><Avatar name={name} url={avatar} size={100} />
+            <label htmlFor="profile-photo">Choose photo</label>
+            <input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={!ready || saving} onChange={async (event) => {
+              const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
+              const ticket = ++selection.current;
+              setPreparing(true); setPhotoError("");
+              try { const prepared = await prepareAvatar(file); if (ticket === selection.current) { setPhoto(prepared); setPreview(URL.createObjectURL(prepared)); } }
+              catch (reason) { if (ticket === selection.current) setPhotoError(reason instanceof Error ? reason.message : "Could not open this photo."); }
+              finally { if (ticket === selection.current) setPreparing(false); }
+            }} />
+            {avatar && <button type="button" className="text-button" disabled={saving} onClick={() => { setPhoto(null); setPreview(null); }}>Remove photo</button>}
+            <small>{preparing ? "Preparing photo…" : "Your photo appears in chats and profiles."}</small>
+            {photoError && <p className="form-error" role="alert">{photoError}</p>}
+          </div>
+          <label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required />
+          <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
+        </form>}
         {panel === "Settings" && <div className="settings-actions">{group && <button className="profile-action danger" disabled={busy} onClick={onLeave}>Leave current chat<CaretRight size={18} /></button>}<button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button></div>}
         {panel === "Saved Places" && <p>Saving places is not available yet. Scan a place’s QR code to join its group.</p>}
         {panel === "Notifications" && <p>No new notifications. Group messages appear live while you have the chat open.</p>}

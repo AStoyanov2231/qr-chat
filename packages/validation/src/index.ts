@@ -14,6 +14,16 @@ export const profileSchema = z.strictObject({
   display_name: displayNameSchema,
   avatar_url: z.url().max(2048).refine((url) => url.startsWith("https://")).nullable().optional(),
 });
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+export const avatarUploadSchema = z.strictObject({
+  uploadId: userIdSchema,
+  data: z.instanceof(ArrayBuffer)
+    .refine((data) => data.byteLength > 0 && data.byteLength <= AVATAR_MAX_BYTES, 'Choose a photo smaller than 2 MB.')
+    .refine((data) => {
+      const bytes = new Uint8Array(data);
+      return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    }, 'Choose a valid JPEG photo.'),
+});
 export const pageSchema = z.strictObject({
   before: z.number().int().positive().safe().optional(),
   limit: z.number().int().min(1).max(100).default(50),
