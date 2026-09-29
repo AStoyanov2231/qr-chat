@@ -1,41 +1,24 @@
-# QR Chat Product
+# Product Contract
 
-QR Chat is a mobile-first authenticated social app for joining temporary venue-based conversations through physical QR codes.
-Users scan or enter a QR value, join its current room, exchange group messages, become friends, and continue accepted relationships through direct messages.
+Shared by mobile web, iOS, Android. Authenticated QR venue groups, profiles, friendships, and DMs. Desktop: marketing/handoff; interactive web width ≤767px.
 
-Supabase Auth and PostgreSQL are authoritative for identity, membership, messages, friendships, and authorization.
-Row Level Security and transactional RPCs protect data regardless of client behavior.
+## Lifecycle
 
-## Clients
+- One active group per user; membership expires 24 hours after joining.
+- Joining another group leaves the previous one.
+- Removing/expiring the final membership deletes the room and group messages.
+- Friendships and DMs persist beyond venue membership.
+- Removing a friendship deletes its DM history.
+- Account deletion removes profile, memberships, and friendships through database relationships.
+- QR keys remain opaque and case-sensitive.
 
-Mobile web, native iOS, and native Android are active implementation targets with behavioral parity.
-They share domain logic, API operations, validation, and data contracts while using platform-native presentation and navigation.
+## Access and scope
 
-The interactive web client is available at widths up to 767px.
-Desktop web is a marketing homepage and QR handoff surface rather than a chat client.
+- Profiles, rooms, messages, friendships, and DMs require authentication; no guest chat.
+- Public: desktop marketing, sign-in, OAuth callback, explicitly public legal/support pages.
+- Google/Apple appear only when configured and tested on the platform.
+- PostgreSQL/RLS/RPCs authorize access; client state never does.
+- Server-backed reporting/blocking is required before launch and currently unimplemented. Local hiding does not enforce moderation.
+- Nearby discovery, group history, saved places, notifications, usernames, venue media, and lifetime statistics require approved product/database work.
 
-## Current Product Rules
-
-- Authentication is required for profiles, groups, messages, friendships, and direct messages.
-- Google and Apple are the supported identity providers when fully configured on the current platform.
-- A user can belong to one active QR group at a time.
-- Group membership expires 24 hours after joining.
-- Joining a new QR group leaves the previous group.
-- A room and its group messages are deleted after the final membership leaves or expires.
-- Friendships and direct messages persist beyond the temporary venue session.
-- Removing a friendship deletes its direct-message history.
-- Clients connect directly to Supabase with public credentials and never hold privileged database keys.
-
-## Product Safety
-
-Server-backed reporting and blocking are required before public launch but are not implemented in the current schema.
-Local hiding may provide immediate presentation relief, but it is not moderation or authorization enforcement.
-Private message content and credentials must not be sent to ordinary analytics or application logs.
-
-## Design and Future Concepts
-
-`Design1.png` at the repository root is the only visual source of truth.
-It is not an automatic feature specification.
-
-Nearby discovery, multiple or historical groups, saved places, notifications, usernames, venue media, and lifetime statistics remain future concepts.
-They require separate product and data-model approval before implementation.
+Design: [DESIGN.md](../../DESIGN.md). Architecture: [ARCHITECTURE.md](../../ARCHITECTURE.md).
