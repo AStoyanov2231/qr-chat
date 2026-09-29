@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
-import { codeKeySchema, qrNameSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema } from "@qr-chat/validation";
+import { codeKeySchema, qrNameSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
+export type AvatarUpload = { uploadId: string; data: ArrayBuffer };
 export { watchChanges } from "./realtime.ts";
 export type { ConnectionState, ChangeFilter } from "./realtime.ts";
 export type { Database, Tables } from "@qr-chat/types";
@@ -28,14 +29,14 @@ async function result<T>(request: PromiseLike<{ data: T; error: { message: strin
   return data;
 }
 
-/** Inject an authenticated public client. Storage and auth lifecycle belong to the host platform. */
+/** Inject an authenticated public client. Session storage and auth lifecycle belong to the host platform. */
 export function createChatApi(client: SupabaseClient<Database>) {
   async function userId() {
     const { data, error } = await client.auth.getUser();
     if (error || !data.user) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
     return data.user.id;
   }
-  return {
+  const api = {
     client,
     userId,
     async profile(): Promise<Tables<"profiles"> | null> {
@@ -52,6 +53,34 @@ export function createChatApi(client: SupabaseClient<Database>) {
         if (inserted.error.code !== "23505") throw new ChatApiError(inserted.error.message, inserted.error.code);
       }
       return result(client.from("profiles").update(profile).eq("id", id).select().single());
+    },
+    /** undefined keeps the current photo; null removes it. Uploads use immutable keys. */
+    async saveProfileWithAvatar(name: string, photo?: AvatarUpload | null): Promise<Tables<"profiles">> {
+      const display_name = displayNameSchema.parse(name);
+      const upload = photo ? avatarUploadSchema.parse(photo) : photo;
+      if (upload === undefined) return api.saveProfile({ display_name });
+      const id = await userId();
+      const previous = await api.profile();
+      const bucket = client.storage.from("avatars");
+      let avatar_url: string | null = null;
+      if (upload) {
+        const path = `${id}/${upload.uploadId}.jpg`;
+        await result(bucket.upload(path, upload.data, { contentType: "image/jpeg", cacheControl: "3600", upsert: false }));
+        avatar_url = bucket.getPublicUrl(path).data.publicUrl;
+      }
+      // A failed response can follow a committed write. Retain the upload on failure
+      // rather than deleting an image the profile may now reference.
+      if (await userId() !== id) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
+      const saved = await api.saveProfile({ display_name, avatar_url });
+      const prefix = bucket.getPublicUrl(`${id}/`).data.publicUrl;
+      if (previous?.avatar_url !== avatar_url && previous?.avatar_url?.startsWith(prefix)) {
+        const filename = previous.avatar_url.slice(prefix.length);
+        if (/^[0-9a-f-]{36}\.jpg$/i.test(filename)) {
+          // Cleanup failure must not turn a committed profile save into a failed form.
+          try { await bucket.remove([`${id}/${filename}`]); } catch { /* best effort */ }
+        }
+      }
+      return saved;
     },
     async joinGroup(code: unknown, name?: unknown) {
       const data = await result(client.rpc("join_qr_group", {
@@ -72,7 +101,7 @@ export function createChatApi(client: SupabaseClient<Database>) {
     },
     async groupMessages(groupId: string, options: { before?: number; limit?: number } = {}) {
       const { before, limit } = pageSchema.parse(options);
-      let query = client.from("group_messages").select("*, profiles(display_name)")
+      let query = client.from("group_messages").select("*, profiles(display_name, avatar_url)")
         .eq("group_id", userIdSchema.parse(groupId)).order("id", { ascending: false }).limit(limit + 1);
       if (before !== undefined) query = query.lt("id", before);
       const rows = await result(query);
@@ -119,5 +148,6 @@ export function createChatApi(client: SupabaseClient<Database>) {
       await client.removeAllChannels();
     },
   };
+  return api;
 }
 export type ChatApi = ReturnType<typeof createChatApi>;

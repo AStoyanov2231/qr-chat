@@ -1,6 +1,5 @@
 import { Alert, Pressable, View } from 'react-native';
 import { router, Stack } from 'expo-router';
-import { codeKeySchema } from '@qr-chat/validation';
 import { Conversation } from '@/components/conversation';
 import { Button, Copy, ErrorNotice, Icon, TextButton, colors, styles, useAction } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
@@ -8,7 +7,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { useRoomParams } from '@/hooks/use-room-params';
 
 export default function RoomScreen() {
-  const { groupId, code, name } = useRoomParams();
+  const { groupId, name } = useRoomParams();
   const chat = useChat();
   const { api, userId } = useAuth();
   const action = useAction();
@@ -48,8 +47,9 @@ export default function RoomScreen() {
         {group && <TextButton label={`${group.members.length} members`} onPress={openMembers} />}
         <ErrorNotice message={action.error} />
       </View>}
-      messageAction={(message) => group?.members.some((member) => member.id === message.user) ? <TextButton label="Add friend" disabled={action.busy || chat.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user)} onPress={() => { void action.run(async () => { await api!.requestFriend(message.user); await chat.refresh(); }); }} /> : null}
-      endedAction={chat.ready && !group && codeKeySchema.safeParse(code).success ? <Button label="Rejoin conversation" onPress={() => router.push({ pathname: '/join', params: { code: code! } })} /> : undefined}
+      canOpenProfile={(message) => !!group?.members.some((member) => member.id === message.user) || chat.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user)}
+      openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
+      endedAction={chat.ready && !group ? <Button label="Scan to rejoin" onPress={() => router.push('/scan')} /> : undefined}
     />
   </>;
 }

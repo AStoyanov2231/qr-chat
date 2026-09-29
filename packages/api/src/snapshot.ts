@@ -26,7 +26,7 @@ export async function loadChatSnapshot(api: ChatApi, pages: { groupId: string; c
     for (let page = 0; page < count; page++) {
       const data = await api.groupMessages(room.id, { before });
       messages.push(...data.items.map((message) => ({
-        id: String(message.id), user: message.sender_id ?? "deleted", name: message.profiles?.display_name ?? "Former participant",
+        id: String(message.id), user: message.sender_id ?? "deleted", name: message.profiles?.display_name ?? "Former participant", avatarUrl: message.profiles?.avatar_url ?? null,
         text: message.body, time: Date.parse(message.created_at),
       })));
       nextCursor = data.nextCursor;
@@ -39,7 +39,7 @@ export async function loadChatSnapshot(api: ChatApi, pages: { groupId: string; c
       group = {
         id: room.id,
         venue: { id: room.id, name: code.display_name ?? code.code_key, codes: [code.code_key], kind: "place", label: "A conversation for this QR code." },
-        members: members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? "Participant" })),
+        members: members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? "Participant", avatarUrl: member.profiles?.avatar_url ?? null })),
         messages: messages.reverse(), nextCursor,
       };
     }

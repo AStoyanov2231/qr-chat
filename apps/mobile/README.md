@@ -36,13 +36,16 @@ Run only required commands. Physical install needs a trusted device, Developer M
 - Xcode 27 / Expo 57 requires `ios.enableSceneSupport`; keep the configured scene support. Regenerate stale iOS projects with `pnpm --filter mobile exec expo prebuild --platform ios` when required.
 - Expo owns generated projects/routes. Stale typed routes require an Expo start, not manual edits.
 - Sessions/PKCE use secure storage; background stops refresh/subscriptions, foreground reconciles. Camera mounts only when focused/foreground.
-- QR codes preserve percent escapes: `Room%2FA` differs from `Room/A`. Pending joins survive sign-in without automatically joining.
+- QR codes preserve percent escapes: `Room%2FA` differs from `Room/A`. Incoming join links survive sign-in and open the scanner; joining/rejoining requires a camera scan. Manual entry is removed.
+- Photo picking uses Expo ImagePicker/ImageManipulator/FileSystem. Rebuild installed native binaries after these dependency/config changes. The system photo picker supplies images; profile editing previews/replaces/removes photos before saving to Supabase Storage.
 
 ## Manual checks
 
 - Home/Groups/Profile, native tabs/back/modal gestures, safe areas, large text, VoiceOver/TalkBack.
 - Configured login/cancel/relaunch/sign-out; camera permission denial/recovery and background shutdown.
 - With two accounts, join the same exact QR; send web/native both ways; test group switch/expiry, friendships/DMs, pagination.
+- Tap a member's avatar/name and member-list row; test request/accept/decline/cancel and Message after acceptance. Verify accepted friends remain available after leaving a group.
+- Choose/cancel/replace/remove a profile photo, deny/recover permissions where prompted, fail/retry upload, and check avatars on the other client. Open a join link and expired room to confirm both require scanning.
 - Keyboard, failed-send draft retention, airplane mode, background/resume. On one phone, verify delivery after returning to the backgrounded client.
 
 Evidence: [VERIFICATION.md](VERIFICATION.md). Provider setup and physical-device behavior need live verification. Signing help: [Expo](https://expo.fyi/setup-xcode-signing); scene support: [SDK 57 guide](https://github.com/expo/fyi/blob/main/ios-scene-lifecycle.md#staying-on-sdk-57-with-xcode-27).

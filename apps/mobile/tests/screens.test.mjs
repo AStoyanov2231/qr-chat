@@ -10,6 +10,7 @@ const { default: Groups } = await import('../src/app/(app)/(tabs)/chats.tsx');
 const { default: Members } = await import('../src/app/(app)/members.tsx');
 const { default: EditProfile } = await import('../src/app/(app)/edit-profile.tsx');
 const { default: Direct } = await import('../src/app/(app)/direct/[id].tsx');
+const { default: Person } = await import('../src/app/(app)/person/[id].tsx');
 const { useDirectMessages } = await import('../src/hooks/use-direct-messages.ts');
 const group = { id: 'room-one', venue: { id: 'room-one', name: 'Cafe', codes: ['Cafe-A'], label: 'A conversation for this QR code.' }, members: [{ id: 'me', name: 'Andy' }, { id: 'peer', name: 'Sam' }], messages: [], nextCursor: null };
 const friendId = '11111111-1111-4111-8111-111111111111';
@@ -27,6 +28,7 @@ for (const platform of ['ios', 'android']) {
 
   test(`${platform}: joining waits for the profile and replaces the modal with the joined room`, async (t) => {
     reset(); process.env.EXPO_OS = platform; state.params = { code: 'New-Room' };
+    state.chat.scannedCode = 'New-Room';
     state.chat.ready = false; state.chat.session = null;
     const calls = [];
     state.auth.api = { saveProfile: async value => calls.push(value), joinGroup: async code => { calls.push(code); return { group_id: 'room-two' }; } };
@@ -48,8 +50,8 @@ for (const platform of ['ios', 'android']) {
     await screen.update();
     assert.doesNotMatch(screen.text(), /different-room-private-text/);
     assert.equal(screen.root.findAllByType('TextInput').length, 0);
-    await screen.press('Rejoin conversation');
-    assert.deepEqual(state.navigation.at(-1), ['push', { pathname: '/join', params: { code: 'Cafe-A' } }]);
+    await screen.press('Scan to rejoin');
+    assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
   });
 
   test(`${platform}: scanner rejects invalid input, handles permission recovery, and stops in the background`, async (t) => {
@@ -62,16 +64,16 @@ for (const platform of ['ios', 'android']) {
     state.permission = { granted: true, canAskAgain: true };
     await screen.update();
     assert.equal(screen.root.findAllByType('CameraView').length, 1);
+    await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({data:'x'.repeat(513)}); });
+    assert.match(screen.text(), /QR code is invalid/);
+    assert.equal(screen.root.findAllByType('TextInput').length, 0);
+    assert.doesNotMatch(screen.text(), /Enter a code/);
     state.auth.active = false;
     await screen.update();
     assert.equal(screen.root.findAllByType('CameraView').length, 0);
-    await screen.press('Enter a code');
-    await screen.type('QR code', 'x'.repeat(513));
-    await screen.press('Continue');
     assert.deepEqual(state.navigation, []);
-    assert.match(screen.text(), /valid QR value/);
-    await screen.type('QR code', 'Case-Sensitive');
-    await screen.press('Continue');
+    state.auth.active = true; await screen.update();
+    await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({data:'Case-Sensitive'}); });
     assert.deepEqual(state.navigation, [['replace', { pathname: '/join', params: { code: 'Case-Sensitive' } }]]);
   });
 
@@ -104,8 +106,9 @@ for (const platform of ['ios', 'android']) {
     const calls = [];
     state.auth.api = { requestFriend: async id => calls.push(['request', id]), leaveGroup: async () => calls.push(['leave']) };
     const screen = await render(t, Members);
-    await screen.press('Add friend');
-    assert.deepEqual(calls, [['request', 'peer']]);
+    await screen.press("View Sam's profile");
+    assert.deepEqual(state.navigation.at(-1), ['push', {pathname:'/person/[id]',params:{id:'peer'}}]);
+    assert.deepEqual(calls, []);
     await screen.press('Leave group');
     await act(async () => { state.alerts.at(-1)[2].find(button => button.text === 'Leave').onPress(); });
     assert.deepEqual(state.navigation.at(-1), ['dismissTo', '/chats']);
@@ -117,13 +120,60 @@ for (const platform of ['ios', 'android']) {
   test(`${platform}: editing a profile preserves a failed save and closes after success`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     let fail = true; const names = [];
-    state.auth.api.saveProfile = async ({display_name}) => { if(fail) throw new Error('Offline'); names.push(display_name); };
+    state.auth.api.saveProfileWithAvatar = async (display_name) => { if(fail) throw new Error('Offline'); names.push(display_name); };
     const screen = await render(t, EditProfile);
     await screen.type('Display name', 'New name'); await screen.press('Save profile');
     assert.match(screen.text(), /Offline/); assert.equal(state.navigation.length, 0);
     assert.equal(screen.root.findByType('TextInput').props.value, 'New name');
     fail = false; await screen.press('Save profile');
     assert.deepEqual(names, ['New name']); assert.deepEqual(state.navigation, [['back']]);
+  });
+
+  test(`${platform}: a member profile supports requesting, accepting and messaging with live relationship changes`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.params={id:'peer'}; state.chat.group=group;
+    const friend = {id:friendId,user_a_id:'me',user_b_id:'peer',requested_by_id:'me',accepted_at:null,user_b:{id:'peer',display_name:'Sam',avatar_url:null}};
+    const calls=[];
+    state.auth.api={requestFriend:async id=>{calls.push(['request',id]);state.chat.friends=[friend];},removeFriend:async id=>{calls.push(['remove',id]);state.chat.friends=[];},acceptFriend:async id=>{calls.push(['accept',id]);friend.accepted_at='2026-09-30';}};
+    const screen=await render(t,Person);
+    await screen.press('Add friend');
+    assert.match(screen.text(),/Request sent/);
+    assert.doesNotMatch(screen.text(), /"children":"Message"/);
+    await screen.press('Cancel request');
+    friend.requested_by_id='peer';state.chat.friends=[friend];await screen.update();
+    await screen.press('Accept');
+    await screen.press('Message');
+    assert.deepEqual(calls,[['request','peer'],['remove',friendId],['accept',friendId]]);
+    assert.deepEqual(state.navigation.at(-1),['dismissTo',{pathname:'/direct/[id]',params:{id:friendId}}]);
+    state.chat.group=null;await screen.update();
+    assert.match(screen.text(),/Sam/,'An existing friendship remains visible after leaving the venue');
+    state.chat.friends=[];await screen.update();
+    assert.match(screen.text(),/profile is no longer available/);
+  });
+
+  test(`${platform}: selecting a photo normalizes it, keeps preview on failed save, and removal is explicit`, async (t) => {
+    reset(); process.env.EXPO_OS=platform;
+    state.pickerResult={canceled:false,assets:[{uri:'file:///source.png',width:1200,height:800}]};
+    let fail=true;const saved=[];
+    state.auth.api.saveProfileWithAvatar=async (name,photo)=>{if(fail)throw new Error('Offline');saved.push([name,photo]);};
+    const screen=await render(t,EditProfile);
+    await screen.press('Choose photo');
+    assert.deepEqual(state.pickerOptions.mediaTypes,['images']);
+    assert.ok(state.imageActions.some(([op,size])=>op==='resize'&&size.width===512&&size.height===512));
+    await screen.press('Save profile');
+    assert.match(screen.text(),/file:\/\/\/prepared.jpg/);
+    assert.equal(state.navigation.length,0);
+    fail=false;await screen.press('Save profile');
+    assert.equal(saved[0][0],'Andy');assert.ok(saved[0][1].data instanceof ArrayBuffer);
+    await screen.press('Remove photo');await screen.press('Save profile');
+    assert.equal(saved[1][1],null);
+  });
+
+  test(`${platform}: opening a join link without a scan opens the camera without joining`, async (t) => {
+    reset(); process.env.EXPO_OS=platform;state.params={code:'Room-A'};
+    state.auth.api.joinGroup=()=>assert.fail('A link cannot start a new join');
+    const screen=await render(t,Join);
+    assert.deepEqual(state.navigation,[['replace','/scan']]);
+    assert.equal(screen.root.findAllByType('TextInput').length,0);
   });
 
   test(`${platform}: removing a friendship clears its direct conversation and composer`, async (t) => {

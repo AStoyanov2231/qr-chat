@@ -11,6 +11,9 @@ Shared by mobile web, iOS, Android. Authenticated QR venue groups, profiles, fri
 - Removing a friendship deletes its DM history.
 - Account deletion removes profile, memberships, and friendships through database relationships.
 - QR keys remain opaque and case-sensitive.
+- Joining or rejoining a group starts with a camera scan. No typed/pasted code entry; external join links open the scanner. Opening an active group from Groups does not rejoin it.
+- Tap a group member's name/avatar or member-list row to open their profile. Send/cancel a request, accept/decline an incoming request, or message an accepted friend. Requests still require a shared active group; accepted friends can message after leaving.
+- Edit Profile supports choosing, previewing, replacing, and removing a photo. Photos appear in member profiles, group messages, friends, and DM headers. Avatar image URLs are public; only the owner can upload/delete their files.
 
 ## Access and scope
 

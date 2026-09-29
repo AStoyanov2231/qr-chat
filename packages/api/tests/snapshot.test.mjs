@@ -29,6 +29,15 @@ test('switching group resets the old conversation pagination budget', async () =
   await loadChatSnapshot(api, { groupId: 'previous', count: 8 });
   assert.deepEqual(calls, [undefined]);
 });
+test('profile photos are included in group members and message authors', async () => {
+  const {api}=fixture();
+  const url='https://project.supabase.co/storage/v1/object/public/avatars/self/photo.jpg';
+  api.members=async()=>[{user_id:'self',profiles:{display_name:'Andy',avatar_url:url}}];
+  api.groupMessages=async()=>({items:[{id:1,sender_id:'self',profiles:{display_name:'Andy',avatar_url:url},body:'Hi',created_at:'2026-09-30'}],nextCursor:null});
+  const snapshot=await loadChatSnapshot(api,{groupId:'',count:1});
+  assert.equal(snapshot.group.members[0].avatarUrl,url);
+  assert.equal(snapshot.group.messages[0].avatarUrl,url);
+});
 test('leaving during a snapshot cannot publish the previous room messages', async () => {
   const { api, membership } = fixture();
   let call = 0;

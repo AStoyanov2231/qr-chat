@@ -13,6 +13,9 @@ function useBackend() {
   const [error, setError] = useState('');
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [roomConnection, setRoomConnection] = useState<ConnectionState>('connecting');
+  // Only the camera scanner supplies a code for a new join.
+  const [scannedCode, acceptScan] = useState<string | null>(null);
+  const clearScan = useCallback(() => acceptScan(null), []);
   const generation = useRef(0);
   const invalidate = useCallback(() => { ++generation.current; }, []);
   const alive = useRef(false);
@@ -57,7 +60,7 @@ function useBackend() {
     const timer = setTimeout(() => { void refresh().catch(() => {}); }, Math.max(1000, Date.parse(snapshot.expiresAt) - Date.now() + 100));
     return () => clearTimeout(timer);
   }, [active, snapshot.expiresAt, refresh]);
-  return { ...snapshot, ready, error, refresh, connection: active && connection === 'connected' && (!groupId || roomConnection === 'connected') ? 'connected' : 'reconnecting',
+  return { ...snapshot, ready, error, refresh, scannedCode, acceptScan, clearScan, connection: active && connection === 'connected' && (!groupId || roomConnection === 'connected') ? 'connected' : 'reconnecting',
     async loadOlder() { const previous = pages.current.count; pages.current.count++; try { await refresh(); } catch (error) { pages.current.count = previous; throw error; } },
   };
 }

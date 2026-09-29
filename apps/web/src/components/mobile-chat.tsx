@@ -14,6 +14,8 @@ import {
 } from "react";
 import { Bell, CornersOut, Lightbulb, CaretRight, House, Users, User, MagnifyingGlass } from "@phosphor-icons/react";
 import { ProfileView } from "@/components/profile-view";
+import { Avatar } from "@/components/avatar";
+import { MemberProfile } from "@/components/member-profile";
 import { Icon } from "@/components/icon";
 import { resolveCode, type Venue } from "@/lib/chat-view";
 import { useChatBackend, useDirectMessages, errorMessage } from "@/hooks/use-chat-backend";
@@ -132,6 +134,12 @@ export default function QrChatApp() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [personId, setPersonId] = useState<string | null>(null);
+  const [personError, setPersonError] = useState("");
+  const personFriend = backend.friends.find((friend) => friend.user_a_id === personId || friend.user_b_id === personId);
+  const personPeer = personFriend?.user_a_id === session?.id ? personFriend?.user_b : personFriend?.user_a;
+  const personMember = backend.group?.members.find((member) => member.id === personId);
+  const person = personMember ?? (personPeer ? { id: personPeer.id, name: personPeer.display_name ?? 'Participant', avatarUrl: personPeer.avatar_url } : null);
 
   const [cameraState, setCameraState] = useState<
     "idle" | "starting" | "active" | "error"
@@ -191,7 +199,12 @@ export default function QrChatApp() {
     return accepted;
   }
 
-  const openInitialCode = useEffectEvent((value: string) => openCode(value));
+  const openInitialCode = useEffectEvent((value: string) => {
+    // External links can open an authorized current group. New joins require the camera.
+    const current = backend.group;
+    if (current?.venue.codes[0] === value) openConversation(current.venue);
+    else startEntry();
+  });
   const openScannedCode = useEffectEvent((value: string) => openCode(value));
 
   useEffect(() => {
@@ -284,6 +297,19 @@ export default function QrChatApp() {
     setCameraError("");
     scanLocked.current = false;
     setEntry(true);
+  }
+
+  function openPerson(id: string) {
+    if (id === session?.id) { router.push("/profile"); return; }
+    setPersonError(""); setPersonId(id);
+  }
+
+  async function changeFriend(action: () => Promise<unknown>) {
+    setPersonError("");
+    await perform(async () => {
+      try { await action(); await backend.refresh(); }
+      catch (reason) { setPersonError(errorMessage(reason)); throw reason; }
+    });
   }
 
   function join(event: FormEvent) {
@@ -387,7 +413,8 @@ export default function QrChatApp() {
                 const other = friend.user_a_id === session?.id ? friend.user_b : friend.user_a;
                 const incoming = friend.requested_by_id !== session?.id;
                 return <div className="friend-row" key={friend.id}>
-                  <span><strong>{other?.display_name ?? "Participant"}</strong><small>{friend.accepted_at ? "Friend" : incoming ? "Wants to be friends" : "Request sent"}</small></span>
+                  <Avatar name={other?.display_name ?? "Participant"} url={other?.avatar_url} />
+                  <span><button className="person-link" onClick={() => openPerson(other?.id ?? (friend.user_a_id === session?.id ? friend.user_b_id : friend.user_a_id))}><strong>{other?.display_name ?? "Participant"}</strong></button><small>{friend.accepted_at ? "Friend" : incoming ? "Wants to be friends" : "Request sent"}</small></span>
                   {friend.accepted_at ? <button className="text-button" onClick={() => { setDirectId(friend.id); setDraft(""); }}>Message</button> : incoming && <button className="text-button" disabled={busy} onClick={() => void perform(async () => { await api.acceptFriend(friend.id); await backend.refresh(); })}>Accept</button>}
                   <button className="text-button" disabled={busy} onClick={() => void perform(async () => { await api.removeFriend(friend.id); await backend.refresh(); })}>{friend.accepted_at ? "Remove" : incoming ? "Decline" : "Cancel"}</button>
                 </div>;
@@ -463,7 +490,7 @@ export default function QrChatApp() {
               {group && <details className="participants">
                 <summary>{group.members.length} members</summary>
                 {group.members.filter((member) => member.id !== session?.id).map((member) => (
-                  <div className="friend-row" key={member.id}><span>{member.name}</span><button className="text-button" disabled={busy || backend.friends.some((friend) => friend.user_a_id === member.id || friend.user_b_id === member.id)} onClick={() => void perform(async () => { await api.requestFriend(member.id); await backend.refresh(); setNotice("Friend request sent."); })}>Add friend</button></div>
+                  <button className="member-row" key={member.id} aria-label={`View ${member.name}'s profile`} onClick={() => openPerson(member.id)}><Avatar name={member.name} url={member.avatarUrl} /><span>{member.name}</span><CaretRight size={18} /></button>
                 ))}
               </details>}
               {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
@@ -472,20 +499,17 @@ export default function QrChatApp() {
               )}
               {group?.messages
                 .filter((message) => !hiddenUsers.has(message.user))
-                .map((message) => (
+                .map((message) => {
+                  const profileAvailable = message.user === session?.id || group.members.some((member) => member.id === message.user) || backend.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user);
+                  return (
                   <article
                     key={message.id}
                     className={message.user === session?.id ? "own" : ""}
                   >
-                    <span className="message-avatar">
-                      {message.name.slice(0, 2).toUpperCase()}
-                    </span>
+                    <button className="message-profile" aria-label={`View ${message.name}'s profile`} disabled={!profileAvailable} onClick={() => openPerson(message.user)}><Avatar name={message.name} url={message.avatarUrl} size={32} /></button>
                     <div>
                       <span className="message-meta">
-                        {message.user === session?.id ? "You" : message.name}
-                        {message.user !== session?.id && group.members.some((member) => member.id === message.user) && (
-                          <button className="friend-request-button" disabled={busy || backend.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user)} onClick={() => void perform(async () => { await api.requestFriend(message.user); await backend.refresh(); setNotice("Friend request sent."); })}>Add friend</button>
-                        )}
+                        <button className="person-link" disabled={!profileAvailable} onClick={() => openPerson(message.user)}>{message.user === session?.id ? "You" : message.name}</button>
                       </span>
                       <p>{message.text}</p>
                       <time>
@@ -496,7 +520,7 @@ export default function QrChatApp() {
                       </time>
                     </div>
                   </article>
-                ))}
+                ); })}
               <div ref={bottom} />
             </div>
 
@@ -526,9 +550,9 @@ export default function QrChatApp() {
                 type="button"
                 className="scan-primary rejoin"
                 disabled={!ready || busy}
-                onClick={() => openCode(active.codes[0])}
+                onClick={startEntry}
               >
-                Rejoin conversation
+                Scan to rejoin
               </button>
             )}
           </section>
@@ -538,6 +562,7 @@ export default function QrChatApp() {
           <section className="conversation-view">
             <header className="conversation-header">
               <button aria-label="Back to chats" onClick={() => { setDirectId(null); setDraft(""); }}>‹</button>
+              <Avatar name={peer?.display_name ?? "Friend"} url={peer?.avatar_url} />
               <span><strong>{peer?.display_name ?? "Direct message"}</strong><small>{direct.connection === "connected" ? "Friends" : "Reconnecting…"}</small></span>
             </header>
             {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
@@ -559,10 +584,16 @@ export default function QrChatApp() {
           </section>
         )}
 
-        {view === "profile" && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name) => perform(async () => { await api.saveProfile({ display_name }); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
+        {view === "profile" && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
       </main>
 
       <BottomNavigation view={view} />
+
+      {personId && session && <MemberProfile key={personId} person={person} friend={personFriend} userId={session.id} canRequest={!!personMember} busy={busy} error={personError || backend.error} onClose={() => setPersonId(null)}
+        onRequest={() => { if (personMember) void changeFriend(() => api.requestFriend(personMember.id)); }}
+        onAccept={() => { if (personFriend) void changeFriend(() => api.acceptFriend(personFriend.id)); }}
+        onRemove={() => { if (personFriend) void changeFriend(() => api.removeFriend(personFriend.id)); }}
+        onMessage={() => { if (!personFriend?.accepted_at) return; setPersonId(null); setActive(null); setDirectId(personFriend.id); setDraft(""); router.push("/chats"); }} />}
 
       <dialog
         className={pending ? "join-dialog" : "camera-dialog"}
@@ -605,7 +636,7 @@ export default function QrChatApp() {
                 </button>
               </form>
               <button type="button" className="text-button" onClick={() => setPending(null)}>
-                Use another code
+                Scan another code
               </button>
             </>
           ) : (

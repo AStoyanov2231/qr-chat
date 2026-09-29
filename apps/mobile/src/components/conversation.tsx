@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import type { Message } from '@qr-chat/domain';
 import { Copy, ErrorNotice, Icon, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
+import { Avatar } from './avatar';
 
 type Props = {
   messages: Message[];
@@ -20,10 +21,11 @@ type Props = {
   avatars?: boolean;
   intro?: ReactNode;
   endedAction?: ReactNode;
-  messageAction?: (message: Message) => ReactNode;
+  openProfile?: (message: Message) => void;
+  canOpenProfile?: (message: Message) => boolean;
 };
 
-export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, intro, endedAction, messageAction }: Props) {
+export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, intro, endedAction, openProfile, canOpenProfile }: Props) {
   const [draft, setDraft] = useState('');
   const action = useAction();
   const list = useRef<FlatList<Message>>(null);
@@ -59,12 +61,12 @@ export function Conversation({ messages, userId, loading, error, available, conn
       ListFooterComponent={<View style={{ gap: 16 }}>{intro}{available && nextCursor !== null && <TextButton label="Load older messages" disabled={action.busy} onPress={() => { void action.run(loadOlder); }} />}</View>}
       renderItem={({ item }) => {
         const own = item.user === userId;
+        const profileAvailable = !!openProfile && !!canOpenProfile?.(item);
         return <View style={{ flexDirection: own ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 10 }}>
-          {avatars && <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: own ? colors.blue : '#eceef3', alignItems: 'center', justifyContent: 'center' }}><Copy style={{ fontSize: 10, fontWeight: '700' }}>{item.name.slice(0, 2).toUpperCase()}</Copy></View>}
+          {avatars && <Pressable accessibilityRole={profileAvailable ? 'button' : undefined} accessibilityLabel={profileAvailable ? `View ${item.name}'s profile` : undefined} disabled={!profileAvailable} onPress={() => openProfile?.(item)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Avatar name={item.name} url={item.avatarUrl} size={32} /></Pressable>}
           <View style={{ maxWidth: '74%', gap: 4 }}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: own ? 'flex-end' : 'flex-start' }}>
-              <Copy style={{ fontSize: 12, color: colors.muted }}>{own ? 'You' : item.name}</Copy>
-              {!own && messageAction?.(item)}
+              <Pressable accessibilityRole={profileAvailable ? 'button' : undefined} accessibilityLabel={profileAvailable ? `Open ${item.name}'s profile` : undefined} disabled={!profileAvailable} onPress={() => openProfile?.(item)} style={{ minHeight: profileAvailable ? 44 : undefined, justifyContent: 'center' }}><Copy style={{ fontSize: 12, color: colors.muted }}>{own ? 'You' : item.name}</Copy></Pressable>
             </View>
             <View style={{ paddingHorizontal: 14, paddingVertical: 11, borderRadius: 17, borderTopRightRadius: own ? 6 : 17, borderTopLeftRadius: own ? 17 : 6, backgroundColor: own ? colors.blue : colors.soft }}><Copy style={{ fontSize: 14, lineHeight: 21 }}>{item.text}</Copy></View>
             <Copy style={{ fontSize: 11, color: colors.muted, textAlign: 'right' }}>{new Date(item.time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</Copy>

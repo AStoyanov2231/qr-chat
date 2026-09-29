@@ -5,6 +5,7 @@
 ## Operations and invariants
 
 - Profiles/current membership may return `null`; mutations reject validation errors or `ChatApiError`.
+- `saveProfileWithAvatar(name, photo?)`: omit photo to keep it, pass `null` to remove it, or supply JPEG `ArrayBuffer` bytes and a fresh UUID for each save attempt. Platform image preparation stays in the apps. Storage setup, limits, and cleanup behavior: [AVATARS.md](AVATARS.md).
 - Membership/friendship mutations use transactional RPCs; profile writes use allowed columns, message sender is authenticated.
 - QR keys are opaque/case-sensitive. Joining replaces membership; repeated sole-member joins can recreate the room. Open a current room without rejoining.
 - Never automatically retry mutations after ambiguous failures. Empty results never authorize direct membership/friend inserts.

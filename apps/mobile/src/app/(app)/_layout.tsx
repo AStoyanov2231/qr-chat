@@ -8,9 +8,8 @@ export default function AppLayout() {
   const { userId, pendingCode, clearPendingCode } = useAuth();
   useEffect(() => {
     if (!pendingCode) return;
-    // Expo already routes incoming links. Replace that destination with the
-    // validated opaque code instead of stacking a second join sheet above it.
-    router.replace({ pathname: '/join', params: { code: pendingCode } });
+    // A handoff opens the camera; only a scan can supply a new join destination.
+    router.replace('/scan');
     clearPendingCode();
   }, [pendingCode, clearPendingCode]);
   const modal = { presentation: 'modal' as const, headerRight: () => <IconButton name="close" label="Close" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} /> };
@@ -20,6 +19,7 @@ export default function AppLayout() {
     <Stack.Screen name="join" options={{ ...modal, title: 'Join the room' }} />
     <Stack.Screen name="room" options={{ title: 'Group' }} />
     <Stack.Screen name="members" options={{ ...modal, title: 'Members' }} />
+    <Stack.Screen name="person/[id]" options={{ ...modal, title: 'Profile' }} />
     <Stack.Screen name="direct/[id]" options={{ title: 'Direct message' }} />
     <Stack.Screen name="edit-profile" options={{ ...modal, title: 'Edit Profile' }} />
     <Stack.Screen name="settings" options={{ ...modal, title: 'Settings' }} />

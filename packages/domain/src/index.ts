@@ -1,7 +1,15 @@
 export type Venue = { id: string; name: string; label: string; codes: string[]; kind: string };
 export type Session = { id: string; name: string; avatarUrl?: string | null; hidden: string[] };
-export type Message = { id: string; user: string; name: string; text: string; time: number };
-export type Group = { id: string; venue: Venue; members: { id: string; name: string }[]; messages: Message[]; nextCursor: number | null };
+export type Member = { id: string; name: string; avatarUrl?: string | null };
+export type Message = { id: string; user: string; name: string; avatarUrl?: string | null; text: string; time: number };
+export type Group = { id: string; venue: Venue; members: Member[]; messages: Message[]; nextCursor: number | null };
+
+export type FriendshipState = 'none' | 'incoming' | 'outgoing' | 'accepted';
+export function friendshipState(connection: { accepted_at: string | null; requested_by_id: string } | undefined, userId: string): FriendshipState {
+  if (!connection) return 'none';
+  if (connection.accepted_at) return 'accepted';
+  return connection.requested_by_id === userId ? 'outgoing' : 'incoming';
+}
 
 /** Only first-party QR handoff URLs are unwrapped. Other URLs remain opaque QR keys. */
 export function unwrapQrCode(input: string, origin: string): string {

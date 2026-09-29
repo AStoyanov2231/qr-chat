@@ -32,6 +32,8 @@ Values are extracted, not verified contrast results. Web uses CSS pixels; native
 - Label inputs; preserve drafts/values on failure; show pending/error/retry states and prevent duplicate submits.
 - Skeletons match real readiness and layout. Empty, offline, reconnect, and revoked-access states stay explicit.
 - Identify the conversation before sending. Confirm destructive consequences, including friendship/DM deletion.
+- Group names/avatars and member rows open a profile. The primary action follows friendship state: Add friend, Accept, or Message; outgoing requests show Request sent with Cancel request. Incoming requests also offer Decline.
+- Edit Profile previews a chosen photo before Save profile, with Choose photo and Remove photo controls. Failed saves retain the selection; failed image loads use initials. Camera failures offer permission recovery/retry; joining and rejoining use the scanner.
 - WCAG 2.2 AA: contrast, focus, keyboard, labels, screen readers, safe areas, scalable text, reduced motion; native targets ≥44 points. Status never relies only on color.
 
 ## Skills

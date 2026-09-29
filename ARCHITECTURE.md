@@ -26,6 +26,8 @@ Shared packages never import apps. Domain excludes frameworks, platform APIs, st
 - Web uses SSR cookies, server claims, PKCE callbacks, and validated return paths.
 - Native uses secure storage, PKCE app callbacks, and foreground/background refresh; data connects directly to Supabase.
 - QR values are opaque and case-sensitive; only first-party handoff URLs unwrap through shared domain logic.
+- New joins originate from camera scans. Native keeps a transient scanned value in its chat provider; web creates a join preview only from the scanner callback. Incoming links cannot initiate a new join. This governs client navigation; it does not prove camera use to PostgreSQL.
+- Supabase Storage's public `avatars` bucket holds JPEG photos under `<auth-user-id>/<upload-id>.jpg`, with owner folder policies and a 2 MB limit. Platforms crop/resize photos; shared API uploads, saves the profile URL, and cleans up previous custom photos. See [avatar storage](packages/api/AVATARS.md).
 
 ## Contracts and runtime
 

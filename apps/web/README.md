@@ -24,4 +24,6 @@ Run from the root. Open `http://localhost:3000`; phones use the network origin p
 
 Full unit suite for logic changes: `pnpm test`. E2E credentials/cleanup: [API README](../../packages/api/README.md). Manual: affected flow, loading/error states, keyboard/focus, small viewport, safe areas, reduced motion.
 
+Member profiles open from group avatars/names and member rows; accepted friendships enable private messaging. Edit Profile supports photo selection, preview, replacement, and removal. Images are normalized in the browser and uploaded through the shared API; [avatar storage](../../packages/api/AVATARS.md) documents permissions and limits. New joins/rejoins require a camera scan; incoming links can open an existing active group or open the scanner.
+
 Navigation: [scoped instructions](AGENTS.md), [architecture](../../ARCHITECTURE.md), [product](PRODUCT.md), [design](../../DESIGN.md).

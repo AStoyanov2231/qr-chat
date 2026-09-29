@@ -27,7 +27,7 @@ for (const platform of ['ios', 'android']) {
     await screen.update();
     assert.doesNotMatch(screen.text(), /private room message/);
     assert.equal(screen.root.findAllByType('TextInput').length, 0);
-    await screen.press('Rejoin conversation');
-    assert.deepEqual(state.navigation.at(-1), ['push', { pathname: '/join', params: { code: 'Cafe-A' } }]);
+    await screen.press('Scan to rejoin');
+    assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
   });
 }

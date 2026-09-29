@@ -50,6 +50,20 @@ const mocks = {
     const Trigger=({children,...props})=>React.createElement('NativeTabTrigger',props,children);
     Trigger.Label='NativeTabLabel'; Trigger.Icon='NativeTabIcon'; NativeTabs.Trigger=Trigger;`,
   'expo-image': "export const Image='Image';",
+  'expo-crypto': "export const randomUUID=()=> '22222222-2222-4222-8222-222222222222';",
+  'expo-image-picker': `export async function launchImageLibraryAsync(options) {
+    const state=globalThis.__qrChatNativeTest; state.pickerOptions=options;
+    if(state.pickerError) throw new Error(state.pickerError);
+    return state.pickerResult ?? {canceled:true,assets:null};
+  }`,
+  'expo-file-system': `export class File { constructor(uri) {this.uri=uri;} async arrayBuffer(){return new Uint8Array([255,216,255,1]).buffer;} }`,
+  'expo-image-manipulator': `export const SaveFormat={JPEG:'jpeg'};
+    export const ImageManipulator={manipulate(uri){
+      const state=globalThis.__qrChatNativeTest; state.imageActions=[['source',uri]];
+      const context={crop(rect){state.imageActions.push(['crop',rect]);return context;},resize(size){state.imageActions.push(['resize',size]);return context;},
+        async renderAsync(){return {async saveAsync(options){state.imageActions.push(['save',options]);return {uri:'file:///prepared.jpg'};},release(){}};},release(){}};
+      return context;
+    }};`,
   'expo-symbols': "export const SymbolView='SymbolView';",
   'expo-camera': `export const CameraView='CameraView'; const request=async()=>{globalThis.__qrChatNativeTest.permissionRequested=true;}; const get=async()=>{globalThis.__qrChatNativeTest.permissionChecked=true;}; export const useCameraPermissions=()=>[globalThis.__qrChatNativeTest.permission,request,get];`,
   '@/providers/auth-provider': 'export const useAuth=()=>globalThis.__qrChatNativeTest.auth;',
@@ -105,7 +119,7 @@ export function reset() {
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
     auth: { userId: 'me', active: true, api: {} },
-    chat: { ready: true, error: '', session: { id: 'me', name: 'Andy' }, group: null, friends: [], connection: 'connected', refresh: async () => {}, loadOlder: async () => {} },
+    chat: { ready: true, error: '', session: { id: 'me', name: 'Andy' }, group: null, friends: [], connection: 'connected', refresh: async () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
   });
 }
 

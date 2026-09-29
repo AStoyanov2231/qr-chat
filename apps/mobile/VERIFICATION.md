@@ -2,6 +2,22 @@
 
 Historical evidence; source/bundle checks do not establish physical-device readiness. Results below belong to separate recorded passes.
 
+## Member profiles, custom avatars, and scanning — 2026-09-30
+
+- Workspace: 74 units passed (domain 2/API 21/mobile 45/web 6), lint/typecheck/whitespace passed. Production web Webpack build and iOS/Android Expo exports passed.
+- Native screen tests exercise member-profile request/cancel/accept/DM actions, photo normalization and failed-save preview retention, photo removal, scan-only join navigation, link rejection without a scan, and expired-room scanning. Controls and image APIs are mocked; these are behavior tests, not device tests.
+- Supabase's public avatar bucket and owner policies were applied through MCP and inspected. No production fixture users/messages or authenticated Storage uploads were used in this pass.
+- New native photo packages/config require a binary rebuild. Device photo-picker/permissions, camera scans, cross-client photo updates, and authenticated upload/removal remain unverified. Follow the [manual checklist](README.md#manual-checks).
+
+## iPhone Release installation — 2026-09-30
+
+- Regenerated the Expo iOS project and installed CocoaPods for the new photo modules. The resulting app declares photo-library and camera usage descriptions.
+- Built Release for the paired physical iPhone 16 using the existing Apple development signing identity: build succeeded with zero errors and one build-phase warning. JavaScript is bundled; Metro is not required to run this build.
+- Installed `com.qrchat.mobile` and confirmed it appears in the device's installed app list. Expo's automatic launch encountered the device lock; a separate `devicectl` launch succeeded, and the QRChat process was confirmed running afterward.
+- This verifies build, installation, and process launch. Camera/photo-picker interaction, authenticated uploads, and friendship/DM behavior on the device were not exercised.
+
+## Historical passes
+
 | Pass | Recorded result |
 | --- | --- |
 | Initial implementation | 55 units passed (domain 2/API 14/mobile 36/web 3); lint/types, iOS/Android bundles, config introspection, iOS Simulator compile, Android debug compile passed |
