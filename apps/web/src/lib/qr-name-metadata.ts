@@ -120,6 +120,26 @@ export function extractVenueName(html: string): string | null {
   return resolveQrPageName(metadata);
 }
 
+/** Use the page's social preview image, resolving relative URLs against the final page. */
+export function extractPageImage(html: string, pageUrl: URL): string | null {
+  const candidates: { priority: number; value: string }[] = [];
+  walk(parse(html), (element) => {
+    if (element.tagName !== "meta") return;
+    const key = (attribute(element, "property") ?? attribute(element, "name") ?? "").toLowerCase();
+    const value = attribute(element, "content");
+    if (value && ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"].includes(key)) {
+      candidates.push({ priority: key === "og:image:secure_url" ? 0 : key === "og:image" ? 1 : 2, value });
+    }
+  });
+  for (const { value } of candidates.sort((a, b) => a.priority - b.priority)) {
+    try {
+      const image = new URL(value, pageUrl);
+      if (image.protocol === "https:" && hostnameForRequest(image) && image.href.length <= 2048) return image.href;
+    } catch { /* invalid preview URLs are ignored */ }
+  }
+  return null;
+}
+
 export function isPublicIpAddress(value: string): boolean {
   if (!ipaddr.isValid(value)) return false;
   let address = ipaddr.parse(value);
@@ -251,10 +271,11 @@ const productionDependencies: MetadataLookupDependencies = {
 };
 
 /** Fetch at most one small public HTML page chain, pinning each validated DNS result. */
-export async function lookupQrPageName(
+async function lookupQrPage<T>(
   input: string,
+  extract: (html: string, url: URL) => T,
   dependencies: MetadataLookupDependencies = productionDependencies,
-): Promise<string | null> {
+): Promise<T | null> {
   let url: URL;
   try { url = new URL(input); } catch { return null; }
   const controller = new AbortController();
@@ -279,7 +300,7 @@ export async function lookupQrPageName(
           || !/^text\/html(?:\s*;|$)/iu.test(response.contentType ?? "")
           || (response.contentEncoding && response.contentEncoding.toLowerCase() !== "identity")) return null;
       if (Buffer.byteLength(response.body, "utf8") > MAX_HTML_BYTES) return null;
-      return extractVenueName(response.body);
+      return extract(response.body, url);
     }
   } catch {
     return null;
@@ -287,4 +308,12 @@ export async function lookupQrPageName(
     clearTimeout(timeout);
   }
   return null;
+}
+
+export function lookupQrPageName(input: string, dependencies?: MetadataLookupDependencies): Promise<string | null> {
+  return lookupQrPage(input, extractVenueName, dependencies);
+}
+
+export function lookupQrPageMetadata(input: string): Promise<{ name: string | null; imageUrl: string | null } | null> {
+  return lookupQrPage(input, (html, url) => ({ name: extractVenueName(html), imageUrl: extractPageImage(html, url) }));
 }

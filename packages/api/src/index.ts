@@ -142,6 +142,31 @@ export function createChatApi(
         p_display_name: qrNameSchema.parse(name),
       }));
     },
+    async resolveQrChatImage(code: unknown, signal?: AbortSignal): Promise<string | null> {
+      if (!qrNameEndpoint) return null;
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      if (signal?.aborted) cancel();
+      else signal?.addEventListener("abort", cancel, { once: true });
+      const timeout = setTimeout(cancel, 5000);
+      try {
+        const { data, error } = await abortable(client.auth.getSession(), controller.signal);
+        if (error || !data.session?.access_token || controller.signal.aborted) return null;
+        const response = await fetcher(qrNameEndpoint, {
+          method: "POST", credentials: "same-origin",
+          headers: { authorization: `Bearer ${data.session.access_token}`, "content-type": "application/json" },
+          body: JSON.stringify({ code: codeKeySchema.parse(code) }),
+          signal: controller.signal,
+        });
+        if (!response.ok) return null;
+        const parsed = qrNameLookupResponseSchema.safeParse(await response.json());
+        return parsed.success ? parsed.data.imageUrl ?? null : null;
+      } catch { return null; }
+      finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", cancel);
+      }
+    },
     async resolveQrChatName(code: unknown, signal?: AbortSignal): Promise<ChatNameResolution> {
       const codeKey = codeKeySchema.parse(code);
       const controller = new AbortController();

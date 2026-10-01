@@ -11,6 +11,7 @@ export function isRouteAuthenticatedApiPath(pathname: string): boolean {
 type Dependencies = {
   createClient: () => Promise<Pick<SupabaseClient<Database>, "auth">>;
   lookupName: (code: string) => Promise<string | null>;
+  lookupMetadata?: (code: string) => Promise<{ name: string | null; imageUrl: string | null } | null>;
 };
 
 async function readBoundedBody(request: Request, maxBytes: number): Promise<string | null> {
@@ -77,6 +78,12 @@ export async function handleQrNamePost(request: Request, dependencies: Dependenc
   const parsed = qrNameLookupRequestSchema.safeParse(value);
   if (!parsed.success) return json({ error: "Invalid QR code" }, 400);
 
+  if (dependencies.lookupMetadata) {
+    let metadata = null;
+    try { metadata = await dependencies.lookupMetadata(parsed.data.code); } catch { /* optional metadata is unavailable */ }
+    const response = qrNameLookupResponseSchema.safeParse(metadata ?? { name: null, imageUrl: null });
+    return json(response.success ? response.data : { name: null, imageUrl: null });
+  }
   let name: string | null = null;
   try { name = await dependencies.lookupName(parsed.data.code); } catch { /* lookup failure asks the participant to name it */ }
   const response = qrNameLookupResponseSchema.safeParse({ name });

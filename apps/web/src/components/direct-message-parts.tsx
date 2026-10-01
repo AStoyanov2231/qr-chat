@@ -28,14 +28,13 @@ export function DirectMessageBubble({
 
   return (
     <article className={own ? "own" : ""}>
-      <button
+      {!own && <button
         className="message-profile"
         aria-label={`View ${authorName}'s profile`}
         disabled={!profileId}
         onClick={() => { if (profileId) onOpenProfile(profileId); }}
-      ><Avatar name={authorName} url={avatarUrl} size={32} /></button>
+      ><Avatar name={authorName} url={avatarUrl} size={44} /></button>}
       <div>
-        <span className="message-meta">{own ? "You" : authorName}</span>
         <p>{message.body}</p>
         <time>{new Date(message.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</time>
       </div>

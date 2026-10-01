@@ -13,7 +13,7 @@ export const qrNameSchema = text(100).refine(
   "Unsupported control character",
 );
 export const qrNameLookupRequestSchema = z.strictObject({ code: codeKeySchema });
-export const qrNameLookupResponseSchema = z.strictObject({ name: qrNameSchema.nullable() });
+export const qrNameLookupResponseSchema = z.strictObject({ name: qrNameSchema.nullable(), imageUrl: z.url().max(2048).refine((url) => url.startsWith("https://")).nullable().optional() });
 export const messageBodySchema = text(4000);
 export const profileSchema = z.strictObject({
   display_name: displayNameSchema,

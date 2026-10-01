@@ -1,9 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { userIdSchema } from '@qr-chat/validation';
 import { Conversation } from '@/components/conversation';
-import { Avatar } from '@/components/avatar';
-import { Copy, colors, styles } from '@/components/chat-ui';
+import { ConversationHeader } from '@/components/conversation-header';
+import { Copy, styles } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { useDirectMessages } from '@/hooks/use-direct-messages';
@@ -38,10 +38,12 @@ export default function DirectScreen() {
     await chat.refresh();
     await direct.refresh();
   }
-  return <><Stack.Screen options={{ title: peerName, headerTitle: peer ? () => <Pressable accessibilityRole="button" accessibilityLabel={`View ${peerName}’s profile`} onPress={() => router.push({ pathname: '/person/[id]', params: { id: peer.id } })} style={[styles.row, { minHeight: 44 }]}><Avatar name={peerName} url={peer.avatar_url} size={34} /><View style={{ minWidth: 0, gap: 0 }}><Copy numberOfLines={1} style={{ fontSize: 16, lineHeight: 21, fontWeight: '600' }}>{peerName}</Copy><Copy style={{ fontSize: 12, lineHeight: 16, color: colors.muted }}>Friend</Copy></View></Pressable> : undefined }} />
+  return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false, statusBarStyle: 'light' }} />
+    <ConversationHeader title={peerName} subtitle={direct.connection === 'connected' ? 'Friend' : 'Reconnecting…'} imageUrl={peer?.avatar_url} settingsLabel="Conversation settings" disabled={!peer} settings={() => { if (peer) router.push({ pathname: '/person/[id]', params: { id: peer.id } }); }} />
     <Conversation
       key={id}
       avatars
+      showNames={false}
       messages={messages}
       userId={userId!}
       loading={(!chat.ready && !chat.error) || (!!friend && direct.loading)}
@@ -58,5 +60,5 @@ export default function DirectScreen() {
       canOpenProfile={(message) => message.user === userId || message.user === peer?.id}
       openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
     />
-  </>;
+  </View>;
 }
