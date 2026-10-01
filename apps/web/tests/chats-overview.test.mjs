@@ -122,15 +122,16 @@ const group = {
   nextCursor: null,
 };
 
-test('Chats loading skeleton follows the group, requests, and direct-message structure without fake controls', () => {
+test('Chats loading skeleton follows the group, requests, and direct-message structure with the persistent header and search placeholder', () => {
   const html = renderOverview({ loading: true });
   assert.match(html, /<h1>Chats<\/h1>/);
-  assert.match(html, /Your group/);
+  assert.match(html, /Active group/);
   assert.match(html, /Friend requests/);
   assert.match(html, /Direct messages/);
   assert.match(html, /Loading chats…/);
   assert.equal((html.match(/class="dm-loading-row"/g) ?? []).length, 3);
-  assert.doesNotMatch(html, /<button|Recent|Nearby|My Groups/);
+  assert.match(html, /aria-label="Open your profile"/);
+  assert.doesNotMatch(html, /Recent|Nearby|My Groups/);
 });
 
 test('active Chats overview shows real group details, collapsed requests, ordered DMs, previews, ages, and avatars', () => {
@@ -152,20 +153,24 @@ test('active Chats overview shows real group details, collapsed requests, ordere
   }));
 
   assert.match(html, /<h1>Chats<\/h1>/);
-  assert.match(html, /Your group/);
+  assert.match(html, /Active group/);
   assert.match(html, /class="group-initials"[^>]*>BC<\/span>/);
   assert.match(html, /Brew &amp; Chat/);
   assert.match(html, /2 members/);
   const groupTitleRow = html.match(/<span class="group-title-row">([\s\S]*?)<\/span>/)?.[1] ?? '';
   assert.match(groupTitleRow, /Brew &amp; Chat/);
-  assert.match(groupTitleRow, /2 members/);
+  assert.doesNotMatch(groupTitleRow, /2 members/);
+  assert.match(html, /class="group-meta"/);
   assert.match(html, /Maya Chen: Anyone here for the workshop\?/);
-  assert.match(html, /18h left/);
+  assert.match(html, /Expires in 18h/);
   assert.match(html, /Your group access ends in 18 hours\./);
   assert.match(html, /group-title-row/);
   assert.match(html, /group-preview-row/);
   assert.match(html, /data-icon="MagnifyingGlass"/);
   assert.match(html, /Friend requests \(2\)/);
+  assert.match(html, /2 pending requests/);
+  assert.match(html, /placeholder="Search groups or people..."/);
+  assert.doesNotMatch(html, /search-toggle/);
   assert.match(html, /Accept Bea Kim&#x27;s friend request/);
   assert.match(html, /Decline Bea Kim&#x27;s friend request/);
   assert.match(html, /Cancel friend request to Kai Tan/);
@@ -315,4 +320,30 @@ test('direct-message bubbles show the actual sender avatar and keep known profil
   assert.equal(deletedElement.props.children[0].props.disabled, true);
   deletedElement.props.children[0].props.onClick();
   assert.deepEqual(opened, [sessionId]);
+});
+
+
+test('legacy chats links reach the single home page without changing the QR key', async () => {
+  const { default: ChatsPage } = await loadTsxModule('../src/app/(protected)/chats/page.tsx');
+  const { getURLFromRedirectError } = requireFromTest('next/dist/client/components/redirect');
+  const code = 'Room%2Fα +&';
+  await assert.rejects(ChatsPage({ searchParams: Promise.resolve({ code }) }), (error) => {
+    const destination = getURLFromRedirectError(error);
+    assert.equal(destination, `/?code=${encodeURIComponent(code)}`);
+    assert.equal(new URL(destination, 'https://chat.example').searchParams.get('code'), code);
+    return true;
+  });
+  await assert.rejects(ChatsPage({ searchParams: Promise.resolve({}) }), (error) => {
+    assert.equal(getURLFromRedirectError(error), '/');
+    return true;
+  });
+});
+
+test('legacy profile links open the profile sheet on the home page', async () => {
+  const { default: ProfilePage } = await loadTsxModule('../src/app/(protected)/profile/page.tsx');
+  const { getURLFromRedirectError } = requireFromTest('next/dist/client/components/redirect');
+  assert.throws(() => ProfilePage(), (error) => {
+    assert.equal(getURLFromRedirectError(error), '/?profile=open');
+    return true;
+  });
 });

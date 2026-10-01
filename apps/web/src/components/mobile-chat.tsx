@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import type { ChatNameResolution } from "@qr-chat/api";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
 import {
   useEffect,
@@ -12,7 +11,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Bell, CornersOut, Lightbulb, CaretRight, House, Users, User } from "@phosphor-icons/react";
+import { CornersOut, QrCode, X, CaretRight } from "@phosphor-icons/react";
 import { ProfileView } from "@/components/profile-view";
 import { ChatsOverview } from "@/components/chats-overview";
 import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty } from "@/components/direct-message-parts";
@@ -30,46 +29,6 @@ function venueIcon(venue: Venue): "coffee" | "sun" | "pin" {
       : "pin";
 }
 
-function LoadingSkeleton({ view }: { view: "scanner" | "profile" }) {
-  if (view === "scanner") {
-    return (
-      <section className="loading-skeleton scanner-skeleton" role="status" aria-label="Loading your chats">
-        <span className="skeleton-block skeleton-toolbar" />
-        <div className="skeleton-copy">
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block skeleton-subtitle" />
-        </div>
-        <span className="skeleton-block skeleton-scan" />
-        <span className="skeleton-block skeleton-tip" />
-      </section>
-    );
-  }
-
-  if (view === "profile") {
-    return (
-      <section className="loading-skeleton profile-skeleton" role="status" aria-label="Loading your profile">
-        <span className="skeleton-block skeleton-avatar" />
-        <span className="skeleton-block skeleton-name" />
-        <span className="skeleton-block skeleton-handle" />
-        <div className="skeleton-stats">
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-        </div>
-        <div className="skeleton-menu">
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-        </div>
-      </section>
-    );
-  }
-
-  return null;
-}
-
 function MessageSkeleton() {
   return (
     <div className="message-skeleton" role="status" aria-label="Loading messages">
@@ -80,22 +39,13 @@ function MessageSkeleton() {
   );
 }
 
-function BottomNavigation({ view }: { view: "scanner" | "chats" | "profile" }) {
-  return (
-    <nav className="bottom-nav" aria-label="Primary navigation">
-      <Link href="/" className={view === "scanner" ? "active" : ""} aria-current={view === "scanner" ? "page" : undefined}><House size={29} weight={view === "scanner" ? "fill" : "regular"} /><span>Home</span></Link>
-      <Link href="/chats" className={view === "chats" ? "active" : ""} aria-current={view === "chats" ? "page" : undefined}><Users size={30} weight={view === "chats" ? "fill" : "regular"} /><span>Groups</span></Link>
-      <Link href="/profile" className={view === "profile" ? "active" : ""} aria-current={view === "profile" ? "page" : undefined}><User size={29} weight={view === "profile" ? "fill" : "regular"} /><span>Profile</span></Link>
-    </nav>
-  );
-}
-
 export default function QrChatApp() {
-  const pathname = usePathname();
   const router = useRouter();
   const backend = useChatBackend();
   const { session, api, ready } = backend;
   const groups = backend.group ? [backend.group] : [];
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileDialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [directId, setDirectId] = useState<string | null>(null);
@@ -196,7 +146,7 @@ export default function QrChatApp() {
           setActive(current.venue);
           setEntry(false);
           setDraft("");
-          router.push(`/chats?code=${encodeURIComponent(venue.codes[0])}`);
+          router.push(`/?code=${encodeURIComponent(venue.codes[0])}`);
         }
       } else {
         setPending(venue);
@@ -220,11 +170,18 @@ export default function QrChatApp() {
   useEffect(() => {
     if (!ready) return;
     const init = window.setTimeout(() => {
-      const query = new URLSearchParams(window.location.search).get("code");
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("profile") === "open") setProfileOpen(true);
+      const query = params.get("code");
       if (query !== null) openInitialCode(query);
     }, 0);
     return () => window.clearTimeout(init);
   }, [ready]);
+
+  useEffect(() => {
+    if (profileOpen) profileDialog.current?.showModal();
+    else profileDialog.current?.close();
+  }, [profileOpen]);
 
   useEffect(() => {
     if (entry) {
@@ -310,7 +267,7 @@ export default function QrChatApp() {
   }
 
   function openPerson(id: string) {
-    if (id === session?.id) { router.push("/profile"); return; }
+    if (id === session?.id) { setProfileOpen(true); return; }
     setPersonError(""); setPersonId(id);
   }
 
@@ -342,7 +299,7 @@ export default function QrChatApp() {
       setEntry(false);
       setPending(null);
       setDraft("");
-      router.push(`/chats?code=${encodeURIComponent(pending.codes[0])}`);
+      router.push(`/?code=${encodeURIComponent(pending.codes[0])}`);
     });
   }
 
@@ -396,7 +353,7 @@ export default function QrChatApp() {
     switchDirectConversation(null);
     setDraft("");
     setDirectSendError("");
-    router.push(`/chats?code=${encodeURIComponent(venue.codes[0])}`);
+    router.push(`/?code=${encodeURIComponent(venue.codes[0])}`);
   }
 
   function openDirectMessage(friendId: string) {
@@ -404,7 +361,7 @@ export default function QrChatApp() {
     switchDirectConversation(friendId);
     setDraft("");
     setDirectSendError("");
-    router.push("/chats");
+    router.push("/");
   }
 
   function leaveCurrentChat() {
@@ -412,57 +369,19 @@ export default function QrChatApp() {
       await api.leaveGroup();
       await backend.refresh();
       setActive(null);
-      router.push("/chats");
+      router.push("/");
     });
   }
 
-  const view =
-    pathname === "/profile"
-      ? "profile"
-      : pathname === "/chats"
-        ? "chats"
-        : "scanner";
-
-  if (!ready && !backend.error) {
-    return (
-      <div className={`qr-app ${view === "scanner" ? "home-screen" : ""}`} aria-busy="true">
-        <main className="app-content">
-          {view === "chats" ? <ChatsOverview loading /> : <LoadingSkeleton view={view} />}
-        </main>
-        <BottomNavigation view={view} />
-      </div>
-    );
-  }
-
   return (
-    <div className={`qr-app ${view === "scanner" ? "home-screen" : ""}`}>
-      {backend.error && view !== "chats" ? (
-        <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>
-      ) : null}
-      <main
-        className={`app-content ${(active || directId) && view === "chats" ? "has-chat" : ""}`}
-      >
-        {view === "scanner" && (
-          <section className="scanner-view">
-            <div className="home-toolbar"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("No new notifications.")}><Bell size={25} /></button></div>
-            <div className="scanner-copy">
-              <h1>Scan.<br />Join.<br />Chat.</h1>
-              <p>Turn any QR code into<br />a group chat.</p>
-            </div>
-            <div className="scan-halo">
-              <button type="button" className="scan-trigger" onClick={startEntry} disabled={!ready} aria-label="Scan a QR code"><CornersOut size={70} weight="bold" /></button>
-              <span>Tap to scan</span>
-            </div>
-            <button className="scan-tip" onClick={startEntry} disabled={!ready}>
-              <span className="tip-icon"><Lightbulb size={29} /></span>
-              <span>See a QR code at a café,<br />venue or event? Scan it and<br />start chatting with people around you.</span>
-              <CaretRight size={18} />
-            </button>
-          </section>
-        )}
-
-        {view === "chats" && !active && !directId && (
+    <div className="qr-app">
+      <main className={`app-content ${active || directId ? "has-chat" : ""}`}>
+        {!ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={() => setProfileOpen(true)} /> : !active && !directId && (
           <ChatsOverview
+            profileName={session?.name}
+            profileAvatarUrl={session?.avatarUrl}
+            connected={backend.connection === "connected"}
+            onOpenOwnProfile={() => setProfileOpen(true)}
             group={backend.group}
             friends={backend.friends}
             directPreviews={backend.directPreviews}
@@ -481,10 +400,10 @@ export default function QrChatApp() {
           />
         )}
 
-        {view === "chats" && backend.error && (active || directId) && (
+        {backend.error && (active || directId) && (
           <section className="conversation-view">
             <header className="conversation-header">
-              <button type="button" aria-label="Back to chats" onClick={() => { setActive(null); switchDirectConversation(null); router.push("/chats"); }}>‹</button>
+              <button type="button" aria-label="Back to chats" onClick={() => { setActive(null); switchDirectConversation(null); router.push("/"); }}>‹</button>
               <span><strong>{active?.name ?? peer?.display_name ?? "Direct message"}</strong><small>Access could not be checked</small></span>
             </header>
             <div className="conversation-load-error" role="alert">
@@ -495,7 +414,7 @@ export default function QrChatApp() {
           </section>
         )}
 
-        {view === "chats" && active && !backend.error && (
+        {active && !backend.error && (
           <section className="conversation-view">
             <header className="conversation-header">
               <button
@@ -503,7 +422,7 @@ export default function QrChatApp() {
                 aria-label="Back to chats"
                 onClick={() => {
                   setActive(null);
-                  router.push("/chats");
+                  router.push("/");
                 }}
               >
                 ‹
@@ -602,7 +521,7 @@ export default function QrChatApp() {
           </section>
         )}
 
-        {view === "chats" && directId && !backend.error && (
+        {directId && !backend.error && (
           <section className="conversation-view">
             <header className="conversation-header direct-conversation-header">
               <button type="button" aria-label="Back to chats" onClick={() => { switchDirectConversation(null); setDraft(""); }}>‹</button>
@@ -634,10 +553,21 @@ export default function QrChatApp() {
           </section>
         )}
 
-        {view === "profile" && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
       </main>
 
-      <BottomNavigation view={view} />
+      {!active && !directId && <div className="scan-overlay">
+        <button type="button" className="floating-scan" aria-label="Scan a QR code" disabled={!ready || !!backend.error} onClick={startEntry}>
+          <span className="scan-symbol" aria-hidden="true"><CornersOut size={34} weight="bold" /><QrCode size={21} weight="bold" /></span>
+        </button>
+      </div>}
+
+      <dialog ref={profileDialog} className="profile-sheet" aria-label="Your profile" onCancel={(event) => { if (event.target === profileDialog.current) setProfileOpen(false); }} onClose={(event) => { if (event.target !== profileDialog.current) return; setProfileOpen(false); if (new URLSearchParams(window.location.search).has("profile")) router.replace("/"); }} onClick={(event) => { if (event.target === profileDialog.current) setProfileOpen(false); }}>
+        <div className="profile-sheet-panel">
+          <span className="sheet-grabber" aria-hidden="true" />
+          <button type="button" className="modal-close" aria-label="Close your profile" onClick={() => setProfileOpen(false)}><X size={20} /></button>
+          {profileOpen && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
+        </div>
+      </dialog>
 
       {personId && session && <MemberProfile key={personId} person={person} friend={personFriend} userId={session.id} canRequest={!!personMember} busy={busy} error={personError || backend.error} onClose={() => setPersonId(null)}
         onRequest={() => { if (personMember) void changeFriend(() => api.requestFriend(personMember.id)); }}

@@ -16,7 +16,7 @@ export default function RoomScreen() {
   const openMembers = () => router.push({ pathname: '/members', params: { groupId } });
   const leave = () => Alert.alert('Leave this group?', 'You can join again by scanning its QR code.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(); await chat.refresh(); router.dismissTo('/chats'); }); } },
+    { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(); await chat.refresh(); router.dismissTo('/'); }); } },
   ]);
   async function sendMessage(body: string) {
     if (!api || !group) throw new Error('Your membership has ended.');

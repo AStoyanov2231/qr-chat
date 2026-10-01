@@ -98,7 +98,7 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
         {panel === "Saved Places" && <p>Saving places is not available yet. Scan a place’s QR code to join its group.</p>}
         {panel === "Notifications" && <p>No new notifications. Group messages appear live while you have the chat open.</p>}
         {panel === "Privacy" && <p>Only members of your current group can read its messages. Direct messages are shared with your accepted friends.</p>}
-        {panel === "Help & Feedback" && <p>Tap Home to scan a QR code, then join the group. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
+        {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code, then join the group. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
       </div>
     </dialog>
   </section>;

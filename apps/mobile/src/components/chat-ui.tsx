@@ -8,7 +8,7 @@ import { errorMessage } from '@/providers/chat-provider';
 export const colors = { paper: '#fdfdfe', ink: '#0d1114', muted: '#626a78', line: '#eeeff2', soft: '#f3f4f6', blue: '#e9eff8', green: '#29bc68', danger: '#b62929' };
 const symbols = {
   qr: ['qrcode', 'qr_code'],
-  scan: ['viewfinder', 'qr_code_scanner'], group: ['person.2', 'group'], user: ['person', 'person'],
+  scan: ['qrcode.viewfinder', 'qr_code_scanner'], group: ['person.2', 'group'], user: ['person', 'person'],
   settings: ['gearshape', 'settings'], edit: ['pencil', 'edit'], search: ['magnifyingglass', 'search'],
   arrow: ['arrow.up', 'arrow_upward'], chevron: ['chevron.right', 'chevron_right'], light: ['lightbulb', 'lightbulb'],
   bell: ['bell', 'notifications'], bookmark: ['bookmark', 'bookmark'], lock: ['lock', 'lock'],
@@ -64,46 +64,36 @@ export function Skeleton({ profile = false, view = 'groups' }: { profile?: boole
     <View style={[styles.skeleton, { width: 145, height: 145, borderRadius: 73, alignSelf: 'center', marginVertical: 38 }]} />
     <View style={[styles.skeleton, { height: 92, marginTop: 'auto' }]} />
   </View>;
-  if (view === 'chats') return <View accessibilityLabel="Loading chats" accessibilityRole="progressbar" style={{ gap: 32, paddingVertical: 8 }}>
-    <View style={{ gap: 10 }}>
-      <Copy style={{ color: colors.muted, fontSize: 20, fontWeight: '600' }}>Your group</Copy>
-      <View style={{ padding: 16, borderRadius: 18, backgroundColor: colors.soft }}>
-        <View style={[styles.row, { alignItems: 'center', gap: 12 }]}>
-          <View style={{ width: 76, alignItems: 'center' }}>
-            <View style={[styles.skeleton, { width: 72, height: 72, borderWidth: 3, borderColor: '#dfe2e8', borderRadius: 36, backgroundColor: colors.blue }]} />
-            <View style={[styles.skeleton, { width: 68, height: 18, marginTop: -6, borderWidth: 3, borderColor: colors.soft, borderRadius: 9 }]} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
-            <View style={[styles.row, { justifyContent: 'space-between', gap: 8 }]}>
-              <View style={[styles.skeleton, { width: '44%', height: 18 }]} />
-              <View style={[styles.skeleton, { width: 58, height: 14 }]} />
-            </View>
-            <View style={[styles.row, { justifyContent: 'space-between', gap: 8 }]}>
-              <View style={[styles.skeleton, { width: '70%', height: 14 }]} />
-              <View style={[styles.skeleton, { width: 28, height: 12 }]} />
-            </View>
+  if (view === 'chats') return <View accessibilityLabel="Loading chats" accessibilityRole="progressbar" style={{ gap: 28 }}>
+    <View style={{ gap: 12 }}>
+      <Copy style={{ fontSize: 19, fontWeight: '700' }}>Active group</Copy>
+      <View style={{ padding: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff' }}>
+        <View style={[styles.row, { gap: 13 }]}>
+          <View style={[styles.skeleton, { width: 72, height: 72, borderWidth: 3, borderColor: '#e4e7ed', borderRadius: 36 }]} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <View style={[styles.skeleton, { width: '55%', height: 18 }]} />
+            <View style={[styles.skeleton, { width: '80%', height: 14 }]} />
+            <View style={[styles.skeleton, { width: '70%', height: 14 }]} />
           </View>
         </View>
       </View>
     </View>
-    <View style={[styles.row, { justifyContent: 'space-between', minHeight: 40 }]}>
-      <Copy style={{ fontSize: 18, fontWeight: '600' }}>Friend requests</Copy>
-      <View style={[styles.skeleton, { width: 36, height: 16 }]} />
+    <View style={{ gap: 12 }}>
+      <Copy style={{ fontSize: 19, fontWeight: '700' }}>Friend requests</Copy>
+      <View style={[styles.skeleton, { height: 68, borderRadius: 17 }]} />
     </View>
-    <View style={{ gap: 4 }}>
-      <View style={[styles.row, { justifyContent: 'space-between', minHeight: 48 }]}>
-        <Copy style={{ fontSize: 18, fontWeight: '600' }}>Direct messages</Copy>
-      </View>
-      {[0, 1, 2].map((index) => <View key={index} style={[styles.row, { minHeight: 76, gap: 12 }]}>
-        <View style={[styles.skeleton, { width: 50, height: 50, borderRadius: 25 }]} />
-        <View style={{ flex: 1, gap: 8, paddingVertical: 12 }}>
-          <View style={[styles.skeleton, { width: '44%', height: 15 }]} />
+    <View style={{ gap: 12 }}>
+      <Copy style={{ fontSize: 19, fontWeight: '700' }}>Direct messages</Copy>
+      {[0, 1, 2].map((index) => <View key={index} style={[styles.row, { minHeight: 72, gap: 17 }]}>
+        <View style={[styles.skeleton, { width: 52, height: 52, borderRadius: 26 }]} />
+        <View style={{ flex: 1, gap: 8 }}>
+          <View style={[styles.skeleton, { width: '44%', height: 18 }]} />
           <View style={[styles.skeleton, { width: '68%', height: 14 }]} />
         </View>
         <View style={[styles.skeleton, { width: 36, height: 14 }]} />
       </View>)}
     </View>
-    <Copy style={[styles.muted, { textAlign: 'center', paddingTop: 8 }]}>Loading chats…</Copy>
+    <Copy style={[styles.muted, { textAlign: 'center' }]}>Loading chats…</Copy>
   </View>;
   if (view === 'messages') return <View accessibilityLabel="Loading messages" accessibilityRole="progressbar" style={{ gap: 16 }}>
     {[0, 1, 2].map((i) => <View key={i} style={[styles.skeleton, { height: 48, width: i === 1 ? '54%' : '68%', alignSelf: i === 1 ? 'flex-end' : 'flex-start' }]} />)}

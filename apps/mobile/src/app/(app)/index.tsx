@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from '@qr-chat/domain';
 import { Avatar } from '@/components/avatar';
 import { Copy, Icon, Screen, Skeleton, colors, styles, useAction } from '@/components/chat-ui';
@@ -30,7 +31,7 @@ function GroupAccessRing({ name, indicator }: { name: string; indicator: ReturnT
   const center = 36;
   const radius = 33;
   const segmentSize = 3;
-  return <View style={{ width: 76, alignItems: 'center' }}>
+  return <View style={{ width: 72, alignItems: 'center' }}>
     <View style={{ width: 72, height: 72, alignItems: 'center', justifyContent: 'center' }}>
       <View pointerEvents="none" style={{ position: 'absolute', width: 72, height: 72 }}>
         <View style={{ position: 'absolute', left: 1.5, top: 1.5, width: 69, height: 69, borderRadius: 34.5, borderWidth: 3, borderColor: '#dfe2e8' }} />
@@ -39,22 +40,21 @@ function GroupAccessRing({ name, indicator }: { name: string; indicator: ReturnT
           const left = center + radius * Math.cos(angle) - segmentSize / 2;
           const top = center + radius * Math.sin(angle) - segmentSize / 2;
           const active = indicator.progress !== null && index / segmentCount < indicator.progress;
-          return <View key={index} style={{ position: 'absolute', left, top, width: segmentSize, height: segmentSize, borderRadius: segmentSize / 2, backgroundColor: active ? '#168a49' : '#dfe2e8' }} />;
+          return <View key={index} style={{ position: 'absolute', left, top, width: segmentSize, height: segmentSize, borderRadius: segmentSize / 2, backgroundColor: active ? '#00bf63' : '#e4e7ed' }} />;
         })}
       </View>
       <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' }}>
         <Copy style={{ color: '#334c72', fontSize: 21, fontWeight: '600' }}>{groupInitials(name)}</Copy>
       </View>
     </View>
-    <Copy style={{ width: 76, marginTop: -6, paddingHorizontal: 5, paddingVertical: 3, borderRadius: 10, borderWidth: 2, borderColor: colors.soft, backgroundColor: colors.paper, color: indicator.state === 'ended' ? '#7b4a4a' : colors.muted, fontSize: 10, lineHeight: 13, fontWeight: '600', textAlign: 'center' }}>{indicator.label}</Copy>
   </View>;
 }
 
 export default function ChatsScreen() {
   const chat = useChat();
+  const insets = useSafeAreaInsets();
   const { api, userId } = useAuth();
   const action = useAction();
-  const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [requestsExpanded, setRequestsExpanded] = useState(false);
   const query = search.trim().toLocaleLowerCase();
@@ -96,55 +96,47 @@ export default function ChatsScreen() {
     void action.run(async () => { await api.removeFriend(friendId); await chat.refresh(); });
   }
 
-  return <Screen contentContainerStyle={{ gap: 32 }}>
+  return <View style={styles.screen}><Screen contentContainerStyle={{ gap: 28, paddingBottom: 160 }}>
     <View style={[styles.row, { justifyContent: 'space-between', paddingTop: 12 }]}>
-      <Copy accessibilityRole="header" style={[styles.title, { flexShrink: 1 }]}>Chats</Copy>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={searchOpen ? 'Close chat search' : 'Search chats'}
-        accessibilityState={{ disabled: !chat.ready || !!chat.error, expanded: searchOpen }}
-        disabled={!chat.ready || !!chat.error}
-        onPress={() => { setSearchOpen((open) => !open); setSearch(''); }}
-        style={({ pressed }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: colors.soft, opacity: !chat.ready || !!chat.error ? 0.45 : pressed ? 0.72 : 1 })}
-      ><Icon name={searchOpen ? 'close' : 'search'} size={23} color={colors.muted} /></Pressable>
+      <Copy accessibilityRole="header" style={homeStyles.title}>Chats</Copy>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={() => router.push('/profile')}
+        style={({ pressed }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.72 : 1 })}>
+        <Avatar name={chat.session?.name ?? 'You'} url={chat.session?.avatarUrl} size={44} />
+        <View style={[homeStyles.connectionDot, { backgroundColor: chat.connection === 'connected' ? '#00bf63' : '#919aac' }]} />
+      </Pressable>
     </View>
-    {searchOpen && <TextInput
-      autoFocus
-      accessibilityLabel="Search chats by name"
-      placeholder="Search chats"
-      placeholderTextColor={colors.muted}
-      value={search}
-      onChangeText={setSearch}
-      editable={!chat.error}
-      returnKeyType="search"
-      style={styles.input}
-    />}
+    <View style={homeStyles.search}>
+      <Icon name="search" size={20} color="#6e7d98" />
+      <TextInput accessibilityLabel="Search chats by name" placeholder="Search groups or people..." placeholderTextColor="#6e7d98"
+        value={search} onChangeText={setSearch} editable={chat.ready && !chat.error} returnKeyType="search" style={homeStyles.searchInput} />
+      {!!search && <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} style={styles.iconButton}><Icon name="close" size={18} color="#6e7d98" /></Pressable>}
+    </View>
     {!!action.error && <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}><Copy style={{ color: colors.danger }}>{action.error}</Copy></View>}
     {chat.error ? <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>
       <Copy style={{ color: colors.danger }}>{`We couldn’t load your chats. ${chat.error}`}</Copy>
       <NativeAction label="Retry" variant="outlined" onPress={() => { void action.run(chat.refresh); }} align="flex-start" />
     </View> : !chat.ready ? <Skeleton view="chats" /> : <>
       {(!query || groupMatches) && <View style={{ gap: 10 }}>
-        {!chat.groupAccessEnded && <Copy style={{ color: colors.muted, fontSize: 20, fontWeight: '600' }}>Your group</Copy>}
+        <Copy accessibilityRole="header" style={homeStyles.sectionTitle}>Active group</Copy>
         {group ? <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}. ${accessIndicator.accessibilityLabel}`}
           onPress={() => router.push(roomRoute(group))}
-          style={{ padding: 16, borderRadius: 18, backgroundColor: colors.soft }}
+          style={homeStyles.groupCard}
         >
           <View style={[styles.row, { alignItems: 'center', gap: 12 }]}>
             <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
-            <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
                 <Copy numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 18, lineHeight: 24, fontWeight: '600' }}>{group.venue.name}</Copy>
-                <Copy style={{ flexShrink: 1, maxWidth: '50%', color: colors.muted, fontSize: 13, textAlign: 'right' }}>{group.members.length} {group.members.length === 1 ? 'member' : 'members'}</Copy>
+                {latestGroupMessage && <Copy style={homeStyles.age}>{messageAge(latestGroupMessage.time)}</Copy>}
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                <Copy numberOfLines={1} style={{ flex: 1, minWidth: 0, color: colors.muted, fontSize: 14 }}>
-                  {latestGroupMessage ? `${latestGroupMessage.name}: ${latestGroupMessage.text}` : 'You’re in. Say hello.'}
-                </Copy>
-                {latestGroupMessage && <Copy style={{ flexShrink: 0, color: colors.muted, fontSize: 12 }}>{messageAge(latestGroupMessage.time)}</Copy>}
-              </View>
+              <Copy numberOfLines={1} style={homeStyles.groupMeta}>
+                {group.members.length} {group.members.length === 1 ? 'member' : 'members'} · <Copy style={[homeStyles.groupMeta, { color: accessIndicator.state === 'remaining' ? '#00bf63' : '#6e7d98', fontWeight: '600' }]}>{accessIndicator.state === 'remaining' ? `Expires in ${accessIndicator.label.replace(' left', '')}` : accessIndicator.label}</Copy>
+              </Copy>
+              <Copy numberOfLines={1} style={{ color: '#6e7d98', fontSize: 14 }}>
+                {latestGroupMessage ? `${latestGroupMessage.user === userId ? 'You' : latestGroupMessage.name}: ${latestGroupMessage.text}` : 'You’re in. Say hello.'}
+              </Copy>
             </View>
           </View>
         </Pressable> : chat.groupAccessEnded ? <View style={[styles.panel, { paddingVertical: 18, backgroundColor: colors.soft, gap: 10 }]}>
@@ -158,16 +150,23 @@ export default function ChatsScreen() {
         </View>}
       </View>}
 
-      <View style={{ gap: 4 }}>
+      <View style={{ gap: 12 }}>
+        <Copy accessibilityRole="header" style={homeStyles.sectionTitle}>Friend requests</Copy>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Toggle friend requests"
           accessibilityState={{ expanded: requestsExpanded }}
           onPress={() => setRequestsExpanded((expanded) => !expanded)}
-          style={[styles.row, { justifyContent: 'space-between', minHeight: 48 }]}
+          style={[styles.row, homeStyles.requestCard]}
         >
-          <Copy style={{ fontSize: 18, fontWeight: '600' }}>{`Friend requests (${pendingRequests.length})`}</Copy>
-          <Icon name="chevron" size={18} color={colors.muted} />
+          <View style={homeStyles.requestAvatars}>
+            {pendingRequests.length ? pendingRequests.slice(0, 3).map((friend, index) => <View key={friend.id} style={{ marginLeft: index ? -13 : 0, borderWidth: 2, borderColor: colors.paper, borderRadius: 20, zIndex: 3 - index }}><Avatar name={nameFor(friend)} url={peerFor(friend)?.avatar_url} size={34} /></View>) : <Icon name="group" size={30} color="#6e7d98" />}
+          </View>
+          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+            <Copy numberOfLines={1} style={{ fontSize: 18, fontWeight: '600' }}>Friend requests</Copy>
+            <Copy style={homeStyles.groupMeta}>{pendingRequests.length ? `${pendingRequests.length} pending ${pendingRequests.length === 1 ? 'request' : 'requests'}` : 'No pending requests'}</Copy>
+          </View>
+          <View style={[homeStyles.requestBadge, !pendingRequests.length && { backgroundColor: '#919aac' }]}><Copy style={{ color: '#fff', fontSize: 14 }}>{pendingRequests.length}</Copy></View>
         </Pressable>
         {requestsExpanded && (pendingRequests.length ? <View style={{ gap: 4 }}>
           {pendingRequests.map((friend) => {
@@ -183,7 +182,7 @@ export default function ChatsScreen() {
                   style={{ minWidth: 50, minHeight: 50, alignItems: 'center', justifyContent: 'center' }}
                 ><Avatar name={peerName} url={peer?.avatar_url} size={46} /></Pressable>
                 <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Copy numberOfLines={1} style={{ fontWeight: '600' }}>{peerName}</Copy>
+                  <Copy numberOfLines={1} style={{ fontWeight: '600', fontSize: 18 }}>{peerName}</Copy>
                   <Copy style={{ color: colors.muted, fontSize: 14 }}>{incoming ? 'Wants to be friends' : 'Request sent'}</Copy>
                 </View>
               </View>
@@ -198,7 +197,7 @@ export default function ChatsScreen() {
 
       <View style={{ gap: 4 }}>
         <View style={[styles.row, { justifyContent: 'space-between', minHeight: 48 }]}>
-          <Copy style={{ fontSize: 18, fontWeight: '600', flexShrink: 1 }}>Direct messages</Copy>
+          <Copy accessibilityRole="header" style={homeStyles.sectionTitle}>Direct messages</Copy>
         </View>
         {noMatches ? <View style={{ paddingVertical: 12, gap: 8 }}>
           <Copy style={styles.muted}>{`No chats match “${search.trim()}”.`}</Copy>
@@ -214,15 +213,15 @@ export default function ChatsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Open chat with ${peerName}`}
               onPress={() => openDirectMessage(friend)}
-              style={[styles.row, { minHeight: 76, alignItems: 'center', gap: 12 }]}
+              style={[styles.row, { minHeight: 72, alignItems: 'center', gap: 17 }]}
             >
-              <Avatar name={peerName} url={peer?.avatar_url} size={50} />
+              <Avatar name={peerName} url={peer?.avatar_url} size={52} />
               <View style={{ flex: 1, minWidth: 0, gap: 3, paddingVertical: 11 }}>
-                <Copy numberOfLines={1} style={{ fontWeight: '600' }}>{peerName}</Copy>
-                <Copy numberOfLines={1} style={{ color: preview?.status === 'error' ? colors.muted : '#344154', fontSize: 14 }}>{previewText}</Copy>
+                <Copy numberOfLines={1} style={{ fontWeight: '600', fontSize: 18 }}>{peerName}</Copy>
+                <Copy numberOfLines={1} style={{ color: '#6e7d98', fontSize: 15 }}>{previewText}</Copy>
                 {index < visibleFriends.length - 1 && <View style={{ position: 'absolute', left: 0, right: -12, bottom: 0, height: 1, backgroundColor: colors.line }} />}
               </View>
-              <Copy style={{ color: colors.muted, fontSize: 12, alignSelf: 'flex-start', paddingTop: 16 }}>
+              <Copy style={{ color: '#6e7d98', fontSize: 13, alignSelf: 'flex-start', paddingTop: 16 }}>
                 {previewMessage ? messageAge(Date.parse(previewMessage.created_at)) : ''}
               </Copy>
             </Pressable>
@@ -235,5 +234,27 @@ export default function ChatsScreen() {
       </View>
     </>}
 
-  </Screen>;
+  </Screen>
+    <View pointerEvents="box-none" style={[homeStyles.scanOverlay, { bottom: insets.bottom + 36 }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Scan a QR code" disabled={!chat.ready || !!chat.error} accessibilityState={{ disabled: !chat.ready || !!chat.error }} onPress={() => router.push('/scan')} style={({ pressed }) => [homeStyles.scanButton, { opacity: !chat.ready || chat.error ? 0.45 : pressed ? 0.8 : 1 }]}>
+        <Icon name="scan" size={30} color="#fff" />
+      </Pressable>
+    </View>
+  </View>;
 }
+
+const homeStyles = StyleSheet.create({
+  title: { flexShrink: 1, fontSize: 38, lineHeight: 46, fontWeight: '700', letterSpacing: -1.2 },
+  connectionDot: { position: 'absolute', right: 2, bottom: 1, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: colors.paper },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 40, paddingLeft: 16, paddingRight: 6, borderRadius: 17, backgroundColor: colors.soft, marginTop: -8 },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 40, paddingVertical: 8, color: colors.ink, fontSize: 14 },
+  sectionTitle: { fontSize: 19, lineHeight: 25, fontWeight: '700', letterSpacing: -0.4 },
+  groupCard: { minHeight: 96, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff', boxShadow: '0 6px 16px #b3bfd51a' },
+  groupMeta: { fontSize: 13, lineHeight: 20, color: '#6e7d98' },
+  age: { color: '#6e7d98', fontSize: 13 },
+  requestCard: { minHeight: 68, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 17, backgroundColor: colors.soft },
+  requestAvatars: { flexDirection: 'row', minWidth: 40, alignItems: 'center' },
+  requestBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ff315f' },
+  scanOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  scanButton: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center', backgroundColor: '#142b40', boxShadow: '0 12px 24px #18334e33' },
+});

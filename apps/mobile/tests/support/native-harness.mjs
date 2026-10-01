@@ -37,23 +37,18 @@ const mocks = {
     export const Host=({children,...props})=>React.createElement('Host',props,children);
     export const Button=({label,...props})=>React.createElement('Button',{...props,title:label});`,
   'expo-router': `
-    import {useEffect} from 'react';
+    import React, {useEffect} from 'react';
     export const router=Object.fromEntries(['push','replace','dismissTo','back'].map(method => [method,(...args) => globalThis.__qrChatNativeTest.navigation.push([method,...args])]));
     router.canGoBack=()=>true;
     export {useLocalSearchParams} from 'expo-router/build/hooks/useLocalSearchParams.js';
     export {useRoute} from 'expo-router/build/react-navigation/core/useRoute.js';
     export const useFocusEffect=useEffect;
     export const Redirect=({href})=>{useEffect(()=>{router.replace(href);},[href]);return null;};
-    export const Stack=({children})=>children;
-    Stack.Screen=()=>null;`,
+    export const Stack=({children,...props})=>React.createElement('NativeStack',props,children);
+    Stack.Screen=props=>React.createElement('NativeStackScreen',props);`,
   'expo-router/react-navigation': 'export const useHeaderHeight=()=>64;',
   'react-native-safe-area-context': 'export const useSafeAreaInsets=()=>({top:24,right:0,bottom:24,left:0});',
   'react-native-screens/experimental': "export const SafeAreaView='NativeSafeAreaView';",
-  'expo-router/unstable-native-tabs': `
-    import React from 'react';
-    export const NativeTabs=({children,...props})=>React.createElement('NativeTabs',props,children);
-    const Trigger=({children,...props})=>React.createElement('NativeTabTrigger',props,children);
-    Trigger.Label='NativeTabLabel'; Trigger.Icon='NativeTabIcon'; NativeTabs.Trigger=Trigger;`,
   'expo-image': "export const Image='Image';",
   'expo-crypto': "export const randomUUID=()=> '22222222-2222-4222-8222-222222222222';",
   'expo-image-picker': `export async function launchImageLibraryAsync(options) {

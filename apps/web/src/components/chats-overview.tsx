@@ -2,7 +2,7 @@
 
 import type { ChatSnapshot } from "@qr-chat/api";
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from "@qr-chat/domain";
-import { CaretRight, MagnifyingGlass, X } from "@phosphor-icons/react";
+import { MagnifyingGlass, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Avatar } from "./avatar";
 
@@ -10,8 +10,14 @@ type FriendConnection = ChatSnapshot["friends"][number];
 type AcceptedFriend = FriendConnection & { accepted_at: string };
 type Peer = { id: string; name: string; avatarUrl: string | null };
 
-type LoadingProps = { loading: true };
-type ReadyProps = {
+type HeaderProps = {
+  profileName?: string;
+  profileAvatarUrl?: string | null;
+  connected?: boolean;
+  onOpenOwnProfile?: () => void;
+};
+type LoadingProps = HeaderProps & { loading: true };
+type ReadyProps = HeaderProps & {
   loading?: false;
   group: ChatSnapshot["group"];
   friends: ChatSnapshot["friends"];
@@ -43,32 +49,40 @@ function LoadingRow() {
   );
 }
 
-function ChatsLoading() {
+function ChatsHeader({ profileName = "You", profileAvatarUrl, connected, onOpenOwnProfile }: HeaderProps) {
+  return <div className="view-heading">
+    <h1>Chats</h1>
+    <button type="button" className="profile-trigger" aria-label="Open your profile" aria-haspopup="dialog" disabled={!onOpenOwnProfile} onClick={onOpenOwnProfile}>
+      <Avatar name={profileName} url={profileAvatarUrl} size={44} />
+      <span className={`profile-connection-dot ${connected ? "connected" : ""}`} aria-hidden="true" />
+    </button>
+  </div>;
+}
+
+function ChatsLoading(props: HeaderProps) {
   return (
     <section className="chats-view chats-loading" aria-busy="true">
-      <div className="view-heading">
-        <h1>Chats</h1>
-        <span className="skeleton-block skeleton-toolbar" aria-hidden="true" />
-      </div>
+      <ChatsHeader {...props} />
+      <div className="chat-search-field skeleton-block" aria-hidden="true" />
       <section className="group-section" aria-labelledby="loading-group-heading">
-        <h2 id="loading-group-heading">Your group</h2>
+        <h2 id="loading-group-heading">Active group</h2>
         <div className="group-card-skeleton">
           <div className="group-card-skeleton-main">
             <span className="group-loading-identity">
               <i className="skeleton-block group-loading-ring" />
-              <i className="skeleton-block group-loading-chip" />
             </span>
             <span className="group-loading-copy">
               <span className="group-loading-title"><i className="skeleton-block" /><i className="skeleton-block" /></span>
-              <span className="group-loading-preview"><i className="skeleton-block" /><i className="skeleton-block" /></span>
+              <span className="skeleton-block group-loading-meta" />
+              <span className="group-loading-preview"><i className="skeleton-block" /></span>
             </span>
           </div>
         </div>
       </section>
-      <div className="request-loading-row" aria-hidden="true">
-        <span>Friend requests</span>
-        <i className="skeleton-block" />
-      </div>
+      <section className="request-section" aria-hidden="true">
+        <h2>Friend requests</h2>
+        <div className="skeleton-block request-loading-card" />
+      </section>
       <section className="direct-section" aria-labelledby="loading-direct-heading">
         <div className="section-heading">
           <h2 id="loading-direct-heading">Direct messages</h2>
@@ -152,7 +166,6 @@ function RequestRow({
 }
 
 export function ChatsOverview(props: LoadingProps | ReadyProps) {
-  const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const countdownExpiry = !props.loading && !props.error && props.group && chatNameMatches(props.group.venue.name, normalizedSearch)
@@ -160,7 +173,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     : null;
   const accessIndicator = useGroupAccessCountdown(countdownExpiry);
 
-  if (props.loading) return <ChatsLoading />;
+  if (props.loading) return <ChatsLoading {...props} />;
 
   const {
     group,
@@ -202,26 +215,13 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
 
   return (
     <section className="chats-view">
-      <div className="view-heading">
-        <h1>Chats</h1>
-        <button
-          type="button"
-          className="icon-button search-toggle"
-          aria-label={searchOpen ? "Close chat search" : "Search chats"}
-          aria-expanded={searchOpen}
-          aria-controls="chat-search"
-          onClick={() => { setSearchOpen((open) => !open); setSearch(""); }}
-        ><MagnifyingGlass size={25} aria-hidden="true" /></button>
+      <ChatsHeader {...props} />
+      <div className="chat-search-field">
+        <MagnifyingGlass size={20} aria-hidden="true" />
+        <label className="sr-only" htmlFor="chat-search">Search groups and direct messages by name</label>
+        <input id="chat-search" type="search" placeholder="Search groups or people..." value={search} onChange={(event) => setSearch(event.target.value)} disabled={!!error} />
+        {search && <button type="button" className="clear-chat-search" aria-label="Clear chat search" onClick={() => setSearch("")}><X size={18} /></button>}
       </div>
-
-      {searchOpen && (
-        <div className="chat-search-field">
-          <MagnifyingGlass size={20} aria-hidden="true" />
-          <label className="sr-only" htmlFor="chat-search">Search groups and direct messages by name</label>
-          <input id="chat-search" type="search" placeholder="Search chats" autoFocus value={search} onChange={(event) => setSearch(event.target.value)} />
-          {search && <button type="button" className="clear-chat-search" aria-label="Clear chat search" onClick={() => setSearch("")}><X size={18} /></button>}
-        </div>
-      )}
 
       {error ? (
         <div className="overview-error" role="alert">
@@ -231,7 +231,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
         </div>
       ) : <>
         {(!query || groupMatches) && <section className="group-section" aria-labelledby="your-group-heading">
-          <h2 id="your-group-heading">Your group</h2>
+          <h2 id="your-group-heading">Active group</h2>
           {group ? (
             groupMatches ? (
               <button type="button" className="group-card" onClick={() => onOpenGroup(group.id)} aria-label={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? "member" : "members"}. ${accessIndicator.accessibilityLabel}`}>
@@ -251,12 +251,16 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                       </svg>
                       <span className="group-initials">{groupInitials(group.venue.name)}</span>
                     </span>
-                    <span className={`group-access-chip ${accessIndicator.state}`}>{accessIndicator.label}</span>
                   </span>
                   <span className="group-copy">
                     <span className="group-title-row">
                       <strong>{group.venue.name}</strong>
-                      <span className="group-member-count">{group.members.length} {group.members.length === 1 ? "member" : "members"}</span>
+                      {latestGroupMessage && <time dateTime={new Date(latestGroupMessage.time).toISOString()}>{messageAge(latestGroupMessage.time)}</time>}
+                    </span>
+                    <span className="group-meta">
+                      <span>{group.members.length} {group.members.length === 1 ? "member" : "members"}</span>
+                      <span aria-hidden="true"> · </span>
+                      <span className={`group-expiry ${accessIndicator.state}`}>{accessIndicator.state === "remaining" ? `Expires in ${accessIndicator.label.replace(" left", "")}` : accessIndicator.label}</span>
                     </span>
                     <span className="group-preview-row">
                       <span className="group-preview">
@@ -264,7 +268,6 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                         ? `${latestGroupMessage.user === sessionId ? "You" : latestGroupMessage.name}: ${latestGroupMessage.text}`
                         : "You’re in. Say hello."}
                       </span>
-                      {latestGroupMessage && <time dateTime={new Date(latestGroupMessage.time).toISOString()}>{messageAge(latestGroupMessage.time)}</time>}
                     </span>
                   </span>
                 </span>
@@ -285,26 +288,32 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
           )}
         </section>}
 
-        <details className="friend-requests">
-          <summary>
-            <span>Friend requests{requests.length > 0 ? ` (${requests.length})` : ""}</span>
-            <CaretRight size={20} aria-hidden="true" />
-          </summary>
-          <div className="friend-request-list">
-            {requestPeers.length ? requestPeers.map(({ friend, peer, incoming }) => (
-              <RequestRow
-                key={friend.id}
-                friend={friend}
-                peer={peer}
-                incoming={incoming}
-                busy={busy}
-                onOpenProfile={onOpenProfile}
-                onAccept={onAcceptRequest}
-                onRemove={onRemoveRequest}
-              />
-            )) : <p className="requests-empty">No pending friend requests.</p>}
-          </div>
-        </details>
+        <section className="request-section" aria-labelledby="friend-requests-heading">
+          <h2 id="friend-requests-heading">Friend requests</h2>
+          <details className="friend-requests">
+            <summary aria-label={`Friend requests (${requests.length})`}>
+              <span className="request-avatar-stack" aria-hidden="true">
+                {requestPeers.length ? requestPeers.slice(0, 3).map(({ friend, peer }) => <Avatar key={friend.id} name={peer.name} url={peer.avatarUrl} size={34} />) : <Avatar name="?" size={34} />}
+              </span>
+              <span className="request-summary-copy"><strong>Friend requests</strong><small>{requests.length ? `${requests.length} pending ${requests.length === 1 ? "request" : "requests"}` : "No pending requests"}</small></span>
+              <span className={`request-count ${requests.length ? "" : "empty"}`} aria-hidden="true">{requests.length}</span>
+            </summary>
+            <div className="friend-request-list">
+              {requestPeers.length ? requestPeers.map(({ friend, peer, incoming }) => (
+                <RequestRow
+                  key={friend.id}
+                  friend={friend}
+                  peer={peer}
+                  incoming={incoming}
+                  busy={busy}
+                  onOpenProfile={onOpenProfile}
+                  onAccept={onAcceptRequest}
+                  onRemove={onRemoveRequest}
+                />
+              )) : <p className="requests-empty">No pending friend requests.</p>}
+            </div>
+          </details>
+        </section>
 
         <section className="direct-section" aria-labelledby="direct-messages-heading">
           <div className="section-heading">
@@ -320,7 +329,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                 return (
                   <li className="dm-list-item" key={id}>
                     <button type="button" className="dm-row-open" onClick={() => onOpenDirect(id)} aria-label={`Open direct message with ${peer.name}`}>
-                      <Avatar name={peer.name} url={peer.avatarUrl} size={56} />
+                      <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
                       <span className="dm-copy">
                         <strong>{peer.name}</strong>
                         <span className={failed ? "dm-preview dm-preview-error" : "dm-preview"}>

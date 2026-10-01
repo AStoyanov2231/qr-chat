@@ -6,7 +6,7 @@ const { default: Scan } = await import('../src/app/(app)/scan.tsx');
 const { default: Join } = await import('../src/app/(app)/join.tsx');
 const { default: Room } = await import('../src/app/(app)/room.tsx');
 const { Conversation } = await import('../src/components/conversation.tsx');
-const { default: Groups } = await import('../src/app/(app)/(tabs)/chats.tsx');
+const { default: Groups } = await import('../src/app/(app)/index.tsx');
 const { default: Members } = await import('../src/app/(app)/members.tsx');
 const { default: EditProfile } = await import('../src/app/(app)/edit-profile.tsx');
 const { default: Direct } = await import('../src/app/(app)/direct/[id].tsx');
@@ -159,22 +159,21 @@ for (const platform of ['ios', 'android']) {
     state.auth.api = { acceptFriend: async id => calls.push(['accept', id]), removeFriend: async id => calls.push(['remove', id]) };
     const screen = await render(t, Groups);
     assert.match(screen.text(), /Chats/);
-    assert.match(screen.text(), /Your group/);
+    assert.match(screen.text(), /Active group/);
     assert.match(screen.text(), /Brew & Chat/);
     assert.match(screen.text(), /BC/);
     assert.match(screen.text(), /Sam: Workshop starts soon/);
     assert.match(screen.text(), /Your group access ends in 2 hours\./);
-    assert.match(screen.text(), /Friend requests \(3\)/);
+    assert.match(screen.text(), /3 pending requests/);
     assert.match(screen.text(), /See you at the cafe\./);
     assert.doesNotMatch(screen.text(), /Recent|Nearby|My Groups/);
-    const searchButton = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Search chats');
-    assert.ok(searchButton);
-    assert.equal(searchButton.props.accessibilityState.disabled, false);
-    assert.equal(searchButton.props.accessibilityState.expanded, false);
-    assert.equal(searchButton.props.style({ pressed: true }).opacity, 0.72);
-    assert.equal(process.env.EXPO_OS === 'ios'
-      ? searchButton.findAllByType('Image').some(node => node.props.source === 'sf:magnifyingglass')
-      : searchButton.findAllByType('SymbolView').some(node => node.props.name.android === 'search'), true);
+    const searchField = screen.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === 'Search chats by name');
+    assert.ok(searchField, 'Search is always visible');
+    assert.equal(searchField.props.placeholder, 'Search groups or people...');
+    await screen.press('Open your profile');
+    assert.deepEqual(state.navigation.at(-1), ['push', '/profile']);
+    await screen.press('Scan a QR code');
+    assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
     const groupCard = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel.startsWith('Open Brew & Chat'));
     assert.ok(groupCard);
     assert.match(groupCard.props.accessibilityLabel, /Your group access ends in 2 hours/);
@@ -193,16 +192,13 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Cancel');
     assert.deepEqual(calls, [['accept', incoming.id], ['remove', decline.id], ['remove', outgoing.id]]);
 
-    await screen.press('Search chats');
-    const expandedSearch = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Close chat search');
-    assert.equal(expandedSearch.props.accessibilityState.expanded, true);
     await screen.type('Search chats by name', 'unknown room');
     assert.match(screen.text(), /No chats match “unknown room”\./);
     await screen.press('Clear search');
     await screen.type('Search chats by name', 'jordan');
     assert.match(screen.text(), /Open chat with Jordan/);
     assert.doesNotMatch(screen.text(), /Open Brew & Chat, 2 members/);
-    await screen.press('Close chat search');
+    await screen.type('Search chats by name', '');
     state.chat.group = { ...group, messages: [] }; await screen.update();
     assert.equal(screen.root.findAllByType('Text').some((node) => node.props.children === 'Now'), false);
     assert.doesNotMatch(screen.text(), /New message|new-message|Start a conversation/);
@@ -219,12 +215,11 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, Groups);
     assert.match(screen.text(), /No group yet/);
     assert.doesNotMatch(screen.text(), /Your group access ended/);
-    await screen.press('Search chats');
     await screen.type('Search chats by name', 'Cafe');
     assert.doesNotMatch(screen.text(), /No group yet/);
     state.chat.groupAccessEnded = true; await screen.update();
     assert.doesNotMatch(screen.text(), /Your group access ended/);
-    await screen.press('Close chat search');
+    await screen.type('Search chats by name', '');
     assert.match(screen.text(), /Your group access ended/);
     await screen.press('Scan a QR code');
     assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
@@ -257,13 +252,13 @@ for (const platform of ['ios', 'android']) {
       globalThis.clearInterval = timer => { timer.cleared = true; };
       state.chat.expiresAt = new Date(start + 2.5 * 60 * 60_000).toISOString();
       screen = await render(t, Groups);
-      assert.match(screen.text(), /2h left/);
+      assert.match(screen.text(), /Expires in 2h/);
       assert.equal(intervals.length, 1);
       assert.equal(intervals[0].delay, 60_000);
 
       now += 60 * 60_000;
       await act(async () => { intervals[0].callback(); });
-      assert.match(screen.text(), /1h left/);
+      assert.match(screen.text(), /Expires in 1h/);
 
       state.chat.expiresAt = null;
       await screen.update();
@@ -272,7 +267,7 @@ for (const platform of ['ios', 'android']) {
 
       state.chat.expiresAt = new Date(now + 5 * 60 * 60_000).toISOString();
       await screen.update();
-      assert.match(screen.text(), /5h left/, 'a replacement expiry is calculated against the current time immediately');
+      assert.match(screen.text(), /Expires in 5h/, 'a replacement expiry is calculated against the current time immediately');
       assert.equal(intervals.length, 2);
       await screen.unmount();
       assert.equal(intervals[1].cleared, true, 'unmount clears the active timer');
@@ -288,7 +283,7 @@ for (const platform of ['ios', 'android']) {
     reset(); process.env.EXPO_OS = platform; state.chat.ready = false;
     const screen = await render(t, Groups);
     assert.match(screen.text(), /Loading chats/);
-    assert.match(screen.text(), /Your group/);
+    assert.match(screen.text(), /Active group/);
     assert.match(screen.text(), /Friend requests/);
     assert.match(screen.text(), /Direct messages/);
     assert.doesNotMatch(screen.text(), /Your group access ended/);
@@ -316,7 +311,7 @@ for (const platform of ['ios', 'android']) {
     assert.deepEqual(calls, []);
     await screen.press('Leave group');
     await act(async () => { state.alerts.at(-1)[2].find(button => button.text === 'Leave').onPress(); });
-    assert.deepEqual(state.navigation.at(-1), ['dismissTo', '/chats']);
+    assert.deepEqual(state.navigation.at(-1), ['dismissTo', '/']);
     state.chat.group = { ...group, id: 'new-room' }; await screen.update();
     assert.match(screen.text(), /membership has ended/);
     assert.equal(screen.root.findAllByType('Pressable').length, 0);
