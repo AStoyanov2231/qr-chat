@@ -16,6 +16,8 @@ Run automated checks by default and choose scope from behavior and risk. Bug fix
 
 `pnpm check` runs tooling fixtures, the architecture checker, TypeScript checks, lint, and the existing offline unit suites. `pnpm test` runs the existing package unit suites. Use focused commands when broader consumers are unaffected.
 
+Type checks support a fresh checkout without starting either client: web generates Next.js route types before running TypeScript, and native loads Expo's asset/CSS types through the tracked `apps/mobile/expo-types.d.ts`. To reproduce the clean-checkout regression check, run `pnpm check` without native `expo-env.d.ts` or generated `.expo`/`.next` types; the GitHub Quality workflow runs this check after a fresh checkout and install.
+
 Browser and simulator checks run only when explicitly requested or explicitly required by task acceptance criteria. Bundle compilation checks package integration; it does not establish camera, permission, OAuth provider, accessibility, signing, or physical-device behavior.
 
 Mocked and fixture tests establish only the behavior they model. They do not establish production RLS, live Realtime, provider authentication, or cross-device delivery. Report those limits when they matter to the task.

@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "node --test tests/*.test.mjs",
     "test:e2e": "node tests/backend.e2e.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
