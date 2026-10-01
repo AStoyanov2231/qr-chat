@@ -40,6 +40,8 @@ export function getNativeApi() {
   api = createChatApi(createClient<Database>(url, key, { auth: {
     storage, storageKey: 'qrchat.auth', persistSession: true, autoRefreshToken: true,
     detectSessionInUrl: false, flowType: 'pkce',
-  } }));
+  } }), {
+    qrNameEndpoint: webOrigin ? `${webOrigin.replace(/\/+$/u, '')}/api/qr-name` : '',
+  });
   return api;
 }

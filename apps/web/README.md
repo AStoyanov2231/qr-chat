@@ -6,6 +6,8 @@ Next.js mobile client at widths ≤767px. Desktop currently shows a mobile-only 
 
 Configure `.env.local` from `.env.example`: Supabase URL/publishable key, public app origin, Apple enable flag. Enable Apple only after provider verification.
 
+The authenticated Node `/api/qr-name` route reads public linked-page metadata for scanned QR codes. Requests require a valid web session or native bearer token; fetches are bounded and pinned to validated public DNS addresses. Page lookup failures fall back to the chat-name field.
+
 ```sh
 pnpm --filter web dev
 ```
@@ -22,8 +24,8 @@ Run from the root. Open `http://localhost:3000`; phones use the network origin p
 | Sandbox Turbopack port failure | `pnpm --filter web exec next build --webpack` |
 | Approved production E2E | `pnpm --filter web test:e2e` |
 
-Full unit suite for logic changes: `pnpm test`. E2E credentials/cleanup: [API README](../../packages/api/README.md). Manual: affected flow, loading/error states, keyboard/focus, small viewport, safe areas, reduced motion.
+Choose checks from [docs/TESTING.md](../../docs/TESTING.md). When browser checks are explicitly requested or required by acceptance criteria, cover the affected flow, loading/error states, keyboard/focus, small viewport, safe areas, and reduced motion. E2E credentials/cleanup: [API README](../../packages/api/README.md).
 
 Member profiles open from group avatars/names and member rows; accepted friendships enable private messaging. Edit Profile supports photo selection, preview, replacement, and removal. Images are normalized in the browser and uploaded through the shared API; [avatar storage](../../packages/api/AVATARS.md) documents permissions and limits. New joins/rejoins require a camera scan; incoming links can open an existing active group or open the scanner.
 
-Navigation: [scoped instructions](AGENTS.md), [architecture](../../ARCHITECTURE.md), [product](PRODUCT.md), [design](../../DESIGN.md).
+Navigation: [scoped instructions](AGENTS.md), [architecture](../../ARCHITECTURE.md), [product](../../PRODUCT.md), [design](../../DESIGN.md), [coding](../../docs/CODING.md), [testing](../../docs/TESTING.md).

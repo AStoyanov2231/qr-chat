@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ChatNameResolution } from "@qr-chat/api";
 import { messageAge } from "@qr-chat/domain";
 import { usePathname, useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
@@ -126,6 +127,8 @@ export default function QrChatApp() {
   const peer = directFriend?.user_a_id === session?.id ? directFriend?.user_b : directFriend?.user_a;
   const [active, setActive] = useState<Venue | null>(null);
   const [pending, setPending] = useState<Venue | null>(null);
+  const [chatNameDraftState, setChatNameDraftState] = useState<{ code: string; value: string } | null>(null);
+  const [nameLookup, setNameLookup] = useState<{ code: string; result: ChatNameResolution | null } | null>(null);
   const [entry, setEntry] = useState(false);
   const [name, setName] = useState("");
   const [groupFilter, setGroupFilter] = useState("Recent");
@@ -162,6 +165,23 @@ export default function QrChatApp() {
 
   const latestGroupMessageId = group?.messages.at(-1)?.id;
   const latestDirectMessageId = direct.messages.at(-1)?.id;
+  const pendingCode = pending?.codes[0] ?? null;
+  const chatNameDraft = chatNameDraftState?.code === pendingCode ? chatNameDraftState.value : "";
+  const pendingNameResult = nameLookup?.code === pendingCode ? nameLookup.result : null;
+  const findingChatName = pendingCode !== null && pendingNameResult === null;
+  const suggestedChatName = pendingNameResult?.kind === "saved" || pendingNameResult?.kind === "suggested"
+    ? pendingNameResult.name
+    : null;
+  const chosenChatName = pendingNameResult?.kind === "missing" ? chatNameDraft.trim() : suggestedChatName;
+
+  useEffect(() => {
+    if (!pendingCode) return;
+    const controller = new AbortController();
+    void api.resolveQrChatName(pendingCode, controller.signal).then((result) => {
+      if (!controller.signal.aborted) setNameLookup({ code: pendingCode, result });
+    }, () => { if (!controller.signal.aborted) setNameLookup({ code: pendingCode, result: { kind: "missing" } }); });
+    return () => controller.abort();
+  }, [api, pendingCode]);
 
   async function perform(action: () => Promise<void>) {
     if (busyRef.current) return;
@@ -184,14 +204,21 @@ export default function QrChatApp() {
 
       const current = backend.group;
       if (current?.venue.codes[0] === venue.codes[0]) {
-        setDirectId(null);
-        setActive(current.venue);
-        setEntry(false);
-        setDraft("");
-        router.push(`/chats?code=${encodeURIComponent(venue.codes[0])}`);
+        if (current.venue.nameMissing) {
+          setPending(current.venue);
+          setName(session?.name ?? "");
+          setChatNameDraftState({ code: venue.codes[0], value: "" });
+        } else {
+          setDirectId(null);
+          setActive(current.venue);
+          setEntry(false);
+          setDraft("");
+          router.push(`/chats?code=${encodeURIComponent(venue.codes[0])}`);
+        }
       } else {
         setPending(venue);
         setName(session?.name ?? "");
+        setChatNameDraftState({ code: venue.codes[0], value: "" });
       }
     } catch {
       setNotice("Could not complete this action. Please try again.");
@@ -314,14 +341,23 @@ export default function QrChatApp() {
 
   function join(event: FormEvent) {
     event.preventDefault();
-    if (!pending || !session || !name.trim()) return;
+    if (!pending || !session || !name.trim() || !pendingNameResult || !chosenChatName) return;
     void perform(async () => {
       await api.saveProfile({ display_name: name });
-      const membership = await api.joinGroup(pending.codes[0]);
+      const current = backend.group?.venue.codes[0] === pending.codes[0] ? backend.group : null;
+      let destination: Venue;
+      if (current) {
+        const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chosenChatName);
+        destination = { ...current.venue, name: canonicalName, nameMissing: false };
+      } else {
+        const membership = await api.joinNamedGroup(pending.codes[0], chosenChatName);
+        destination = { ...pending, id: membership.group_id, name: membership.display_name, nameMissing: false };
+      }
       await backend.refresh();
       setDirectId(null);
-      setActive({ ...pending, id: membership.group_id });
+      setActive(destination);
       setEntry(false);
+      setPending(null);
       setDraft("");
       router.push(`/chats?code=${encodeURIComponent(pending.codes[0])}`);
     });
@@ -618,8 +654,13 @@ export default function QrChatApp() {
               <span className="entry-icon">
                 <Icon name="chat" size={28} />
               </span>
-              <h2>Join the room.</h2>
-              <p>{pending.name}</p>
+              <h2>Join the room</h2>
+              {findingChatName
+                ? <p role="status">Finding the chat name…</p>
+                : suggestedChatName
+                  ? <p>{suggestedChatName}</p>
+                  : <p>Unnamed chat</p>}
+              {backend.group && backend.group.venue.codes[0] !== pending.codes[0] && <p>Joining this room leaves your current group.</p>}
               <form onSubmit={join}>
                 <label htmlFor="name">Your name</label>
                 <input
@@ -631,7 +672,19 @@ export default function QrChatApp() {
                   required
                   autoFocus
                 />
-                <button type="submit" className="scan-primary" disabled={busy || !ready || !name.trim()}>
+                {pendingNameResult?.kind === "missing" && <>
+                  <label htmlFor="chat-name">Chat name</label>
+                  <input
+                    id="chat-name"
+                    value={chatNameDraft}
+                    onChange={(event) => setChatNameDraftState({ code: pending.codes[0], value: event.target.value })}
+                    placeholder="Cafe name"
+                    maxLength={100}
+                    required
+                  />
+                  <p>We couldn’t identify this place. Give this chat a name for everyone.</p>
+                </>}
+                <button type="submit" className="scan-primary" disabled={busy || !ready || findingChatName || !chosenChatName || !name.trim()}>
                   Join chat <Icon name="arrow" size={18} />
                 </button>
               </form>

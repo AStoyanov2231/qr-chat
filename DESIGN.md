@@ -1,6 +1,6 @@
 # Design
 
-Visual authority: [Design1.png](design_assets/Design1.png). Apply its hierarchy to the supported [product](apps/web/PRODUCT.md); use real data. Desktop remains marketing/handoff.
+Visual authority: [Design1.png](design_assets/Design1.png). Apply its hierarchy to the supported [product](PRODUCT.md); use real data. Desktop remains marketing/handoff.
 
 ## Direction
 
@@ -38,6 +38,30 @@ Values are extracted, not verified contrast results. Web uses CSS pixels; native
 
 ## Skills
 
-New surface: `ux-intent-discovery`, then `ux-designer` for substantial flows. Existing improvement: `ux-auditor`. Explicit restyle: `restyle`/`visual-character`. After UI changes: `ux-reviewer`.
+| Skill | Use |
+| --- | --- |
+| `ux-intent-discovery` | New surface or unclear user intent; settle the job and flow before design. Reuse intent answers already settled in this task. |
+| `ux-design` → `ux-designer` | Wrapper workflow for substantial interface or flow design; read both files and treat the pair as one workflow. |
+| `ux-designer` | Direct focused design work when intent is already settled. |
+| `ux-audit` → `ux-auditor` | Wrapper workflow to inspect an existing interface and identify user-facing problems; read both files and treat the pair as one workflow. |
+| `ux-auditor` | Direct focused audit of an existing surface. |
+| `ux-review` → `ux-reviewer` | Wrapper workflow for review after UI implementation; read both files and treat the pair as one review. |
+| `ux-reviewer` | Direct focused post-change UI review. |
+| `restyle` → `visual-character` | Wrapper workflow for an explicit restyle; treat the pair as one workflow. |
+| `visual-character` | New visible surfaces or polish/restyle work; inherit this document's approved direction. |
+| `design-system` | Shared tokens, components, or design-system structure. |
+| `information-hierarchy` | Creating or restructuring screens with competing actions, sections, or data. |
+| `state-completeness` | Creating or changing data fetch, input, or async UI; cover only applicable states. |
+| `form-ux` | Forms, validation, input retention, or submission behavior changes. |
+| `feedback-and-affordance` | Adding or changing controls or consequential actions. |
 
-Use only relevant specialists: `information-hierarchy`, `state-completeness`, `form-ux`, `feedback-and-affordance`. Shared tokens: `design-system`. Small edits inherit existing intent; avoid repeated interviews. Repository rules override skill defaults. Update this doc with approved design/token changes.
+For UI tasks, read and apply each skill whose trigger matches; do not load all skills for every edit. Resolve skill files at `~/.codex/skills/<name>/SKILL.md`. The primary owns intent, design decisions, and review; Luna implements assigned UI and code changes. Reuse settled grill-me and design-intent answers.
+
+### Relevant validation
+
+| Skill | Use |
+| --- | --- |
+| `validate` | Choose documented, targeted engineering checks for validation, diagnosis, or delivery. Browser and simulator steps follow [TESTING.md](docs/TESTING.md). |
+| `react-doctor` | Use changed-scope React diagnostics when required by the task; run a full scan only for an explicit triage or cleanup request. Its browser guidance does not override [TESTING.md](docs/TESTING.md). |
+
+Small edits inherit existing intent. Repository and user rules override skill defaults. Update this doc with approved design/token changes.

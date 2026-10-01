@@ -20,7 +20,8 @@ Next.js mobile web client at widths ≤767px. Desktop is marketing and QR handof
 - Design: follow [DESIGN.md](../../DESIGN.md) and its skill routing.
 - Auth: server claims protect routes; validate same-origin OAuth return paths. Viewport checks never authorize access.
 - Preserve keyboard/focus, labels, safe areas, and responsive layout.
-- Update affected docs with each change; run only required checks.
+- Follow shared [coding](../../docs/CODING.md) and [testing](../../docs/TESTING.md) guidance; update affected docs.
+- Product behavior: [PRODUCT.md](../../PRODUCT.md).
 
 ## Navigation
 
@@ -32,7 +33,7 @@ Paths below are relative to `apps/web`.
 | OAuth/redirects | `src/app/auth/callback/route.ts`, `src/lib/auth/redirect.ts` |
 | Chat state | `src/hooks/use-chat-backend.ts` |
 | UI/styles | `src/components/mobile-chat.tsx`, `src/app/globals.css` |
-| Setup/tests | `README.md`, `package.json`, `tests/` |
+| Setup/tests | `README.md`, `package.json`, `tests/`, [testing guidance](../../docs/TESTING.md) |
 
 ## Commands
 

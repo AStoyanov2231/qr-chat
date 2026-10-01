@@ -12,7 +12,7 @@ export function errorMessage(error: unknown) {
 }
 
 export function useChatBackend() {
-  const [api] = useState(() => createChatApi(createClient()));
+  const [api] = useState(() => createChatApi(createClient(), { qrNameEndpoint: "/api/qr-name" }));
   const [snapshot, setSnapshot] = useState<ChatSnapshot>(empty);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");

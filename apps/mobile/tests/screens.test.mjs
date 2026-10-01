@@ -31,14 +31,68 @@ for (const platform of ['ios', 'android']) {
     state.chat.scannedCode = 'New-Room';
     state.chat.ready = false; state.chat.session = null;
     const calls = [];
-    state.auth.api = { saveProfile: async value => calls.push(value), joinGroup: async code => { calls.push(code); return { group_id: 'room-two' }; } };
+    state.auth.api = {
+      saveProfile: async value => calls.push(value),
+      resolveQrChatName: async () => ({ kind: 'missing' }),
+      joinNamedGroup: async (code, displayName) => { calls.push([code, displayName]); return { group_id: 'room-two', display_name: displayName }; },
+    };
     const screen = await render(t, Join);
     state.chat.ready = true; state.chat.session = { id: 'me', name: 'Andy' };
     await screen.update();
-    assert.equal(screen.root.findByType('TextInput').props.value, 'Andy');
+    assert.equal(screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Your name').props.value, 'Andy');
+    await screen.type('Chat name', 'Cafe');
     await screen.press('Join chat');
-    assert.deepEqual(calls, [{ display_name: 'Andy' }, 'New-Room']);
-    assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'New-Room' } }]]);
+    assert.deepEqual(calls, [{ display_name: 'Andy' }, ['New-Room', 'Cafe']]);
+    assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'Cafe' } }]]);
+  });
+
+  test(`${platform}: an unnamed active room is named in place and failed refresh preserves the draft`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.params = { code: 'Old-Room' };
+    state.chat.scannedCode = 'Old-Room';
+    state.chat.group = { ...group, venue: { ...group.venue, name: 'Unnamed chat', nameMissing: true, codes: ['Old-Room'] } };
+    const calls = [];
+    state.auth.api = {
+      saveProfile: async () => calls.push('profile'),
+      resolveQrChatName: async () => ({ kind: 'missing' }),
+      nameCurrentQrChatIfEmpty: async (code, name) => { calls.push(['name-current', code, name]); return 'Cafe'; },
+    };
+    state.chat.refresh = async () => { state.chat.ready = false; throw new Error('Offline'); };
+    const screen = await render(t, Join);
+    await screen.type('Chat name', 'Cafe');
+    await screen.press('Join chat');
+    assert.deepEqual(calls, ['profile', ['name-current', 'Old-Room', 'Cafe']]);
+    assert.match(screen.text(), /Offline/);
+    assert.equal(screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Chat name').props.value, 'Cafe');
+    assert.equal(state.navigation.length, 0);
+  });
+
+  test(`${platform}: an unnamed current group scan opens its naming preview instead of its room`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    state.chat.group = { ...group, venue: { ...group.venue, name: 'Unnamed chat', nameMissing: true } };
+    const screen = await render(t, Scan);
+    await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({ data: 'Cafe-A' }); });
+    assert.deepEqual(state.navigation, [['replace', { pathname: '/join', params: { code: 'Cafe-A' } }]]);
+  });
+
+  test(`${platform}: an old metadata response cannot replace a later scan or its draft`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.params = { code: 'First-Room' }; state.chat.scannedCode = 'First-Room';
+    const deferred = new Map();
+    const signals = new Map();
+    state.auth.api = {
+      resolveQrChatName: (code, signal) => new Promise(resolve => { deferred.set(code, resolve); signals.set(code, signal); }),
+    };
+    const screen = await render(t, Join);
+    assert.match(screen.text(), /Finding the chat name/);
+    state.params = { code: 'Second-Room' }; state.chat.scannedCode = 'Second-Room';
+    await screen.update();
+    assert.equal(signals.get('First-Room').aborted, true);
+    deferred.get('First-Room')({ kind: 'suggested', name: 'Stale Venue' });
+    await screen.update();
+    assert.match(screen.text(), /Finding the chat name/);
+    assert.doesNotMatch(screen.text(), /Stale Venue/);
+    deferred.get('Second-Room')({ kind: 'missing' });
+    await screen.update();
+    assert.equal(screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Chat name').props.value, '');
   });
 
   test(`${platform}: a room that expires or is replaced cannot show the new group's messages`, async (t) => {

@@ -8,7 +8,12 @@ const text = (max: number) => z.string().trim().min(1).max(max).refine(
 export const userIdSchema = z.uuid();
 export const displayNameSchema = text(50);
 export const codeKeySchema = text(512);
-export const qrNameSchema = text(100);
+export const qrNameSchema = text(100).refine(
+  (value) => !/\p{Cc}/u.test(value),
+  "Unsupported control character",
+);
+export const qrNameLookupRequestSchema = z.strictObject({ code: codeKeySchema });
+export const qrNameLookupResponseSchema = z.strictObject({ name: qrNameSchema.nullable() });
 export const messageBodySchema = text(4000);
 export const profileSchema = z.strictObject({
   display_name: displayNameSchema,

@@ -1,6 +1,6 @@
 # Native
 
-Expo iOS/Android client with native tabs, stacks, camera, and keyboard handling. Shared [product](../web/PRODUCT.md), [architecture](../../ARCHITECTURE.md), [design](../../DESIGN.md).
+Expo iOS/Android client with native tabs, stacks, camera, and keyboard handling. Shared [product](../../PRODUCT.md), [architecture](../../ARCHITECTURE.md), [design](../../DESIGN.md).
 
 ## Setup
 
@@ -9,7 +9,7 @@ cp apps/mobile/.env.example apps/mobile/.env.local
 pnpm --filter mobile start
 ```
 
-Run from the root after `pnpm install`. Set public Supabase URL/key and the exact `EXPO_PUBLIC_WEB_ORIGIN` without a trailing slash. Google/Apple flags default to false.
+Run from the root after `pnpm install`. Set public Supabase URL/key and the exact `EXPO_PUBLIC_WEB_ORIGIN` without a trailing slash. Native name lookup uses its authenticated `/api/qr-name` route; if the web origin is unset or unreachable, the participant is asked to name the chat. Google/Apple flags default to false.
 
 ## OAuth checkpoint
 
@@ -22,7 +22,7 @@ Owner setup (agents require approval): allow `qrchat://auth/callback` in Supabas
 | Metro | `pnpm --filter mobile start` |
 | Build/launch | `pnpm --filter mobile ios` or `pnpm --filter mobile android` |
 | Lint/types | `pnpm --filter mobile lint`, `pnpm --filter mobile typecheck` |
-| Unit tests | `pnpm --filter mobile test`; full logic gate: `pnpm test` |
+| Unit tests | `pnpm --filter mobile test`; full offline suite: `pnpm test` |
 | Bundle check | `pnpm --filter mobile exec expo export --platform ios --platform android --output-dir /tmp/qr-chat-native-export` |
 | iPhone Release install | `pnpm --filter mobile exec expo run:ios --device --configuration Release` |
 | iPhone debug install | `pnpm --filter mobile exec expo run:ios --device` |
@@ -39,7 +39,9 @@ Run only required commands. Physical install needs a trusted device, Developer M
 - QR codes preserve percent escapes: `Room%2FA` differs from `Room/A`. Incoming join links survive sign-in and open the scanner; joining/rejoining requires a camera scan. Manual entry is removed.
 - Photo picking uses Expo ImagePicker/ImageManipulator/FileSystem. Rebuild installed native binaries after these dependency/config changes. The system photo picker supplies images; profile editing previews/replaces/removes photos before saving to Supabase Storage.
 
-## Manual checks
+## Device checks
+
+Run device checks only when explicitly requested or required by acceptance criteria. The automated verification policy is in [docs/TESTING.md](../../docs/TESTING.md).
 
 - Home/Groups/Profile, native tabs/back/modal gestures, safe areas, large text, VoiceOver/TalkBack.
 - Configured login/cancel/relaunch/sign-out; camera permission denial/recovery and background shutdown.

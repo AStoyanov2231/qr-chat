@@ -20,9 +20,18 @@ test('shared snapshot paginates chronologically and preserves membership indepen
   api.members = async () => [];
   const snapshot = await loadChatSnapshot(api, { groupId: 'room', count: 2 });
   assert.equal(snapshot.session.name, 'Andy');
+  assert.equal(snapshot.group.venue.name, 'Unnamed chat');
+  assert.equal(snapshot.group.venue.nameMissing, true);
   assert.deepEqual(snapshot.group.messages.map((m) => m.id), ['1', '2', '3']);
   assert.deepEqual(calls, [undefined, 2]);
   assert.equal(snapshot.group.nextCursor, null);
+});
+test('named QR snapshots expose the shared saved name without marking it missing', async () => {
+  const { api, membership } = fixture();
+  membership.qr_groups.qr_codes.display_name = 'Happy Cafe';
+  const snapshot = await loadChatSnapshot(api, { groupId: 'room', count: 1 });
+  assert.equal(snapshot.group.venue.name, 'Happy Cafe');
+  assert.equal(snapshot.group.venue.nameMissing, false);
 });
 test('switching group resets the old conversation pagination budget', async () => {
   const { api, calls } = fixture();

@@ -38,7 +38,14 @@ export async function loadChatSnapshot(api: ChatApi, pages: { groupId: string; c
       expiresAt = current.expires_at;
       group = {
         id: room.id,
-        venue: { id: room.id, name: code.display_name ?? code.code_key, codes: [code.code_key], kind: "place", label: "A conversation for this QR code." },
+        venue: {
+          id: room.id,
+          name: code.display_name ?? "Unnamed chat",
+          nameMissing: code.display_name === null,
+          codes: [code.code_key],
+          kind: "place",
+          label: "A conversation for this QR code.",
+        },
         members: members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? "Participant", avatarUrl: member.profiles?.avatar_url ?? null })),
         messages: messages.reverse(), nextCursor,
       };

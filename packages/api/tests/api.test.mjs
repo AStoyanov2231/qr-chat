@@ -30,6 +30,63 @@ test('join and leave each call only the authoritative transactional RPC', async 
   assert.deepEqual(calls, [['join_qr_group', { p_code_key: 'Room-a' }], ['leave_qr_group']]);
 });
 
+test('named joins use the required-name RPC and return the database winner', async () => {
+  const calls = [];
+  const api = createChatApi({ rpc: async (...args) => {
+    calls.push(args);
+    return { data: [{ group_id: id, display_name: 'Cafe' }], error: null };
+  } });
+  const membership = await api.joinNamedGroup(' Room-a ', ' Cafe ');
+  assert.equal(membership.display_name, 'Cafe');
+  assert.deepEqual(calls, [['join_named_qr_group', { p_code_key: 'Room-a', p_display_name: 'Cafe' }]]);
+  await assert.rejects(api.joinNamedGroup('Room-a', '\u0085'));
+});
+
+test('name resolution prefers a shared saved name, otherwise returns only a bounded authenticated server suggestion', async () => {
+  const calls = [];
+  let savedName = 'Cafe';
+  let fetched = false;
+  let rpcSignal;
+  const client = {
+    rpc: (name, args) => {
+      calls.push([name, args]);
+      return { abortSignal(signal) { rpcSignal = signal; return Promise.resolve({ data: savedName, error: null }); } };
+    },
+    auth: { getSession: async () => ({ data: { session: { access_token: 'native-token' } }, error: null }) },
+  };
+  const api = createChatApi(client, { fetcher: async (url, options) => {
+    fetched = true;
+    assert.equal(url, '/api/qr-name');
+    assert.equal(options.credentials, 'same-origin');
+    assert.equal(options.headers.authorization, 'Bearer native-token');
+    assert.deepEqual(JSON.parse(options.body), { code: 'Room-a' });
+    assert.ok(options.signal instanceof AbortSignal);
+    return Response.json({ name: 'Happy Cafe' });
+  } });
+
+  assert.deepEqual(await api.resolveQrChatName('Room-a'), { kind: 'saved', name: 'Cafe' });
+  assert.equal(fetched, false);
+  assert.ok(rpcSignal instanceof AbortSignal);
+  savedName = null;
+  assert.deepEqual(await api.resolveQrChatName('Room-a'), { kind: 'suggested', name: 'Happy Cafe' });
+  assert.equal(fetched, true);
+  assert.deepEqual(calls.map(([name]) => name), ['get_qr_chat_name', 'get_qr_chat_name']);
+});
+
+test('name lookup caller cancellation bounds an unresolved saved-name RPC', async () => {
+  let rpcSignal;
+  const client = {
+    rpc: () => ({ abortSignal(signal) { rpcSignal = signal; return new Promise(() => {}); } }),
+  };
+  const api = createChatApi(client, { fetcher: async () => assert.fail('Cancellation must stop before HTTP lookup') });
+  const controller = new AbortController();
+  const pending = api.resolveQrChatName('Room-a', controller.signal);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  controller.abort();
+  assert.deepEqual(await pending, { kind: 'missing' });
+  assert.equal(rpcSignal.aborted, true);
+});
+
 test('writes derive the sender from auth and exclude arbitrary write fields', async () => {
   let inserted;
   const api = createChatApi({

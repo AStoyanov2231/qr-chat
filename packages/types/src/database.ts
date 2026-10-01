@@ -254,6 +254,16 @@ export type Database = {
         Args: { p_connection_id: string }
         Returns: boolean
       }
+      get_qr_chat_name: { Args: { p_code_key: string }; Returns: string }
+      join_named_qr_group: {
+        Args: { p_code_key: string; p_display_name: string }
+        Returns: {
+          display_name: string
+          expires_at: string
+          group_id: string
+          qr_code_id: string
+        }[]
+      }
       join_qr_group: {
         Args: { p_code_key: string; p_display_name?: string }
         Returns: {
@@ -263,6 +273,10 @@ export type Database = {
         }[]
       }
       leave_qr_group: { Args: never; Returns: string }
+      name_current_qr_chat_if_empty: {
+        Args: { p_code_key: string; p_display_name: string }
+        Returns: string
+      }
       remove_friend_connection: {
         Args: { p_connection_id: string }
         Returns: boolean
@@ -400,4 +414,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

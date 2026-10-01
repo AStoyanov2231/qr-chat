@@ -37,7 +37,8 @@ export default function ScanScreen() {
       const code = codeKeySchema.parse(unwrapQrCode(value, webOrigin));
       locked.current = true;
       chat.acceptScan(code);
-      router.replace(chat.group?.venue.codes[0] === code ? roomRoute(chat.group) : { pathname: '/join', params: { code } });
+      const current = chat.group?.venue.codes[0] === code ? chat.group : null;
+      router.replace(current && !current.venue.nameMissing ? roomRoute(current) : { pathname: '/join', params: { code } });
     } catch { setError('This QR code is invalid. Try scanning another code.'); }
   }
   function permit() {
