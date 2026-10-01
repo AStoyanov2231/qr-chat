@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createChatApi, watchChanges, loadChatSnapshot, loadDirectSnapshot, emptySnapshot, type ChatSnapshot, type ConnectionState, type Tables } from "@qr-chat/api";
 import { createClient } from "@/lib/supabase/client";
 import { z } from "@qr-chat/validation";
@@ -18,9 +18,12 @@ export function useChatBackend() {
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [roomConnection, setRoomConnection] = useState<ConnectionState>("connecting");
+  const [previewConnection, setPreviewConnection] = useState<ConnectionState>("connecting");
+  const [hasObservedGroup, setHasObservedGroup] = useState(false);
   const generation = useRef(0);
   const alive = useRef(false);
   const pages = useRef({ groupId: "", count: 1 });
+  const observedGroup = useRef<{ userId: string | null; hadGroup: boolean }>({ userId: null, hadGroup: false });
 
   const refresh = useCallback(async () => {
     const ticket = ++generation.current;
@@ -28,6 +31,11 @@ export function useChatBackend() {
       const next = await loadChatSnapshot(api, pages.current);
       if (!alive.current || ticket !== generation.current) return;
       if (pages.current.groupId !== (next.group?.id ?? "")) pages.current = { groupId: next.group?.id ?? "", count: 1 };
+      if (observedGroup.current.userId !== next.session?.id) {
+        observedGroup.current = { userId: next.session?.id ?? null, hadGroup: false };
+      }
+      if (next.group) observedGroup.current.hadGroup = true;
+      setHasObservedGroup(observedGroup.current.hadGroup);
       setSnapshot(next);
       setError("");
       setReady(true);
@@ -53,6 +61,8 @@ export function useChatBackend() {
     const { data } = api.client.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         ++generation.current;
+        observedGroup.current = { userId: null, hadGroup: false };
+        setHasObservedGroup(false);
         setSnapshot(empty);
         setReady(false);
         window.location.replace("/sign-in");
@@ -93,6 +103,20 @@ export function useChatBackend() {
     ], refresh, setRoomConnection);
     return () => watcher.stop();
   }, [api, groupId, refresh]);
+  const acceptedDirectConnectionKey = snapshot.friends
+    .filter((friend) => friend.accepted_at !== null)
+    .map((friend) => friend.id)
+    .sort()
+    .join(",");
+  useEffect(() => {
+    if (!acceptedDirectConnectionKey) return;
+    const watcher = watchChanges(api.client, acceptedDirectConnectionKey.split(",").map((id) => ({
+      table: "direct_messages" as const,
+      column: "friend_connection_id" as const,
+      id,
+    })), refresh, setPreviewConnection);
+    return () => watcher.stop();
+  }, [acceptedDirectConnectionKey, api, refresh]);
   useEffect(() => {
     if (!snapshot.expiresAt) return;
     const timer = setTimeout(() => {
@@ -103,7 +127,12 @@ export function useChatBackend() {
   }, [snapshot.expiresAt, refresh]);
   return {
     ...snapshot, api, ready, error, refresh,
-    connection: connection === "connected" && (!groupId || roomConnection === "connected") ? "connected" : "reconnecting",
+    hasObservedGroup,
+    connection: connection === "connected"
+      && (!groupId || roomConnection === "connected")
+      && (!acceptedDirectConnectionKey || previewConnection === "connected")
+      ? "connected"
+      : "reconnecting",
     async loadOlder() { pages.current.count++; await refresh(); },
   };
 }
@@ -116,7 +145,9 @@ export function useDirectMessages(api: Api, connectionId: string | null) {
   const [loading, setLoading] = useState(true);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const pages = useRef(1);
-  const reload = useRef<() => Promise<void>>(async () => {});
+  const activeConnectionId = useRef(connectionId);
+  const reload = useRef<{ connectionId: string | null; run: () => Promise<void> }>({ connectionId: null, run: async () => {} });
+  useLayoutEffect(() => { activeConnectionId.current = connectionId; }, [connectionId]);
   useEffect(() => {
     let stopped = false;
     let ticket = 0;
@@ -135,7 +166,7 @@ export function useDirectMessages(api: Api, connectionId: string | null) {
         throw reason;
       }
     }
-    reload.current = refresh;
+    reload.current = { connectionId, run: refresh };
     const timer = setTimeout(() => {
       setMessages([]); setNextCursor(null); setLoading(true); setError("");
       void refresh().catch(() => {});
@@ -146,5 +177,23 @@ export function useDirectMessages(api: Api, connectionId: string | null) {
     document.addEventListener("visibilitychange", resume);
     return () => { stopped = true; clearTimeout(timer); watcher?.stop(); window.removeEventListener("online", resume); document.removeEventListener("visibilitychange", resume); };
   }, [api, connectionId]);
-  return { messages: loadedFor === connectionId ? messages : [], nextCursor: loadedFor === connectionId ? nextCursor : null, error, loading: loading || loadedFor !== connectionId, connection, refresh: () => reload.current(), async loadOlder() { pages.current++; await reload.current(); } };
+  return {
+    messages: loadedFor === connectionId ? messages : [],
+    nextCursor: loadedFor === connectionId ? nextCursor : null,
+    error,
+    loading: loading || loadedFor !== connectionId,
+    connection,
+    refresh: () => {
+      const current = reload.current;
+      return activeConnectionId.current === connectionId && current.connectionId === connectionId
+        ? current.run()
+        : Promise.resolve();
+    },
+    async loadOlder() {
+      const current = reload.current;
+      if (activeConnectionId.current !== connectionId || current.connectionId !== connectionId || !connectionId) return;
+      pages.current++;
+      await current.run();
+    },
+  };
 }

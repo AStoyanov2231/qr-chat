@@ -25,6 +25,7 @@ Shared package dependencies follow this DAG: API may depend on domain, validatio
 - PostgreSQL authorizes and owns state; caches and navigation never grant access.
 - Membership/friendship mutations use transactional RPCs. Messages use cursor pagination.
 - Filtered Realtime invalidates authorized snapshots; reconciliation handles missed events, expiry, reconnect, and foreground recovery.
+- Web and native chat hooks/providers separately watch accepted-friend direct messages for overview previews and combine that connection state with friendship and group watchers. Successful snapshots track whether the current signed-in session has observed a group; failed snapshots clear protected data without presenting access as expired. Watchers are stopped when their user, group, accepted-friend set, or app activity changes.
 - Web uses SSR cookies, server claims, PKCE callbacks, and validated return paths.
 - Native uses secure storage, PKCE app callbacks, and foreground/background refresh; data connects directly to Supabase.
 - After a camera scan, the shared API asks PostgreSQL for the QR code's saved name. If none exists, it calls the authenticated web `/api/qr-name` route. The route accepts web cookies or a native bearer token and fetches public HTML with bounded DNS-pinned requests; it never forwards Supabase credentials to the linked site. Native uses `EXPO_PUBLIC_WEB_ORIGIN` for this route.

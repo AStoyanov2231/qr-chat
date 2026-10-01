@@ -6,7 +6,7 @@ export { watchChanges } from "./realtime.ts";
 export type { ConnectionState, ChangeFilter } from "./realtime.ts";
 export type { Database, Tables } from "@qr-chat/types";
 export { loadChatSnapshot, loadDirectSnapshot, emptySnapshot } from "./snapshot.ts";
-export type { ChatSnapshot } from "./snapshot.ts";
+export type { ChatSnapshot, DirectPreview } from "./snapshot.ts";
 
 export class ChatApiError extends Error {
   readonly code: string;

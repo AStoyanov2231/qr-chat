@@ -1,10 +1,11 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import type { Message } from '@qr-chat/domain';
-import { Copy, ErrorNotice, Icon, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
+import { Copy, ErrorNotice, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
 import { Avatar } from './avatar';
+import { NativeAction } from './native-action';
 
 type Props = {
   messages: Message[];
@@ -20,12 +21,14 @@ type Props = {
   unavailable: string;
   avatars?: boolean;
   intro?: ReactNode;
+  emptyState?: ReactElement | null;
+  composerLabel?: string;
   endedAction?: ReactNode;
   openProfile?: (message: Message) => void;
   canOpenProfile?: (message: Message) => boolean;
 };
 
-export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, intro, endedAction, openProfile, canOpenProfile }: Props) {
+export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, intro, emptyState, composerLabel = 'Message', endedAction, openProfile, canOpenProfile }: Props) {
   const [draft, setDraft] = useState('');
   const action = useAction();
   const list = useRef<FlatList<Message>>(null);
@@ -55,9 +58,9 @@ export function Conversation({ messages, userId, loading, error, available, conn
       contentInsetAdjustmentBehavior="automatic"
       keyboardDismissMode={process.env.EXPO_OS === 'ios' ? 'interactive' : 'on-drag'}
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ paddingHorizontal: 22, paddingVertical: 24, gap: 12, flexGrow: 1, justifyContent: !available || !messages.length ? 'flex-end' : undefined }}
+      contentContainerStyle={{ paddingHorizontal: 22, paddingVertical: 24, gap: 12, flexGrow: 1, justifyContent: available && !messages.length && emptyState ? 'center' : !available || !messages.length ? 'flex-end' : undefined }}
       maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 100 }}
-      ListEmptyComponent={<Copy style={[styles.muted, { padding: 20, textAlign: 'center' }]}>{available ? 'Be the first to say hello.' : unavailable}</Copy>}
+      ListEmptyComponent={available ? emptyState === undefined ? <Copy style={[styles.muted, { padding: 20, textAlign: 'center' }]}>Be the first to say hello.</Copy> : emptyState : <Copy style={[styles.muted, { padding: 20, textAlign: 'center' }]}>{unavailable}</Copy>}
       ListFooterComponent={<View style={{ gap: 16 }}>{intro}{available && nextCursor !== null && <TextButton label="Load older messages" disabled={action.busy} onPress={() => { void action.run(loadOlder); }} />}</View>}
       renderItem={({ item }) => {
         const own = item.user === userId;
@@ -76,8 +79,8 @@ export function Conversation({ messages, userId, loading, error, available, conn
     />}
     <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 12) }}>
       {available ? <View style={[styles.row, { padding: 8, borderRadius: 18, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.line }]}>
-        <TextInput accessibilityLabel="Message" placeholder="Message…" placeholderTextColor={colors.muted} value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy} style={{ flex: 1, minHeight: 48, maxHeight: 150, paddingHorizontal: 8, paddingVertical: 12, fontSize: 16, color: colors.ink }} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Send message" accessibilityState={{ disabled: !!sendDisabled }} disabled={sendDisabled} style={[styles.iconButton, { backgroundColor: colors.ink, opacity: sendDisabled ? 0.4 : 1 }]} onPress={() => { void submit(); }}><Icon name="arrow" color="#fff" size={20} /></Pressable>
+        <TextInput accessibilityLabel={composerLabel} placeholder={`${composerLabel}…`} placeholderTextColor={colors.muted} value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy} style={{ flex: 1, minHeight: 48, maxHeight: 150, paddingHorizontal: 8, paddingVertical: 12, fontSize: 16, color: colors.ink }} />
+        <NativeAction label={action.busy ? 'Sending…' : 'Send'} variant="filled" disabled={sendDisabled} onPress={() => { void submit(); }} />
       </View> : !loading && endedAction}
     </View>
   </KeyboardAvoidingView>;

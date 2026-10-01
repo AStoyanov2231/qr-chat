@@ -108,3 +108,50 @@ export function messageAge(time: number, now = Date.now()): string {
   if (minutes < 1440) return `${Math.floor(minutes / 60)}h`;
   return `${Math.floor(minutes / 1440)}d`;
 }
+
+/** Format a countdown for display; membership authorization remains API-owned. */
+export function accessTimeRemaining(expiresAt: string | null, now = Date.now()): string | null {
+  if (expiresAt === null || !Number.isFinite(now)) return null;
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry)) return null;
+
+  const remainingMs = expiry - now;
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
+  if (remainingMs < 60_000) return "Your access ends in <1m";
+
+  const remainingMinutes = Math.floor(remainingMs / 60_000);
+  if (remainingMinutes < 60) return `Your access ends in ${remainingMinutes}m`;
+  return `Your access ends in ${Math.floor(remainingMinutes / 60)}h`;
+}
+
+export function directMessagePreview(
+  message: { body: string; sender_id: string | null } | null,
+  userId: string | null,
+): string {
+  if (!message) return "Say hello";
+  return userId !== null && message.sender_id === userId ? `You: ${message.body}` : message.body;
+}
+
+function finiteTimestamp(value: string | null): number | null {
+  if (value === null) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+/** Sort conversations by latest message, then friendship acceptance, then request time. */
+export function directConversationTime(
+  message: { created_at: string } | null,
+  acceptedAt: string | null,
+  requestedAt: string,
+): number {
+  return finiteTimestamp(message?.created_at ?? null)
+    ?? finiteTimestamp(acceptedAt)
+    ?? finiteTimestamp(requestedAt)
+    ?? 0;
+}
+
+/** Build initials from the first two Unicode letter/number words in a group name. */
+export function groupInitials(name: string): string {
+  const words = name.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return words.slice(0, 2).map((word) => (Array.from(word)[0] ?? "").toUpperCase()).join("");
+}

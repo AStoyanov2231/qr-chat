@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unwrapQrCode, messageAge, resolveQrPageName } from '../src/index.ts';
+import {
+  unwrapQrCode,
+  messageAge,
+  accessTimeRemaining,
+  directMessagePreview,
+  directConversationTime,
+  groupInitials,
+  resolveQrPageName,
+} from '../src/index.ts';
 
 test('QR handoffs preserve case, unicode, and URL-like opaque keys across clients', () => {
   assert.equal(unwrapQrCode('https://chat.example/chats?code=Room%26A', 'https://chat.example'), 'Room&A');
@@ -14,6 +22,40 @@ test('message age handles boundaries and clocks ahead of the device', () => {
   for (const [minutes, expected] of [[-1, 'Now'], [0, 'Now'], [1, '1m'], [59, '59m'], [60, '1h'], [1439, '23h'], [1440, '1d']]) {
     assert.equal(messageAge(now - minutes * 60000, now), expected);
   }
+});
+
+test('access countdown labels finite future timestamps without deciding membership access', () => {
+  const now = Date.parse('2026-10-01T00:00:00Z');
+  assert.equal(accessTimeRemaining('2026-10-01T18:00:00Z', now), 'Your access ends in 18h');
+  assert.equal(accessTimeRemaining('2026-10-01T00:17:00Z', now), 'Your access ends in 17m');
+  assert.equal(accessTimeRemaining('2026-10-01T00:00:59Z', now), 'Your access ends in <1m');
+  assert.equal(accessTimeRemaining(null, now), null);
+  assert.equal(accessTimeRemaining('not-a-date', now), null);
+  assert.equal(accessTimeRemaining('2026-10-01T00:00:00Z', Number.NaN), null);
+  assert.equal(accessTimeRemaining('2026-09-30T23:59:00Z', now), null);
+});
+
+test('direct message previews never claim an unknown sender is the current user', () => {
+  assert.equal(directMessagePreview(null, 'self'), 'Say hello');
+  assert.equal(directMessagePreview({ body: 'Hi', sender_id: 'self' }, 'self'), 'You: Hi');
+  assert.equal(directMessagePreview({ body: 'Hi', sender_id: 'friend' }, 'self'), 'Hi');
+  assert.equal(directMessagePreview({ body: 'Hi', sender_id: null }, null), 'Hi');
+});
+
+test('direct conversation time uses the first finite message or friendship timestamp', () => {
+  const requestedAt = '2026-01-01T00:00:00Z';
+  const acceptedAt = '2026-01-02T00:00:00Z';
+  assert.equal(directConversationTime({ created_at: '2026-01-03T00:00:00Z' }, acceptedAt, requestedAt), Date.parse('2026-01-03T00:00:00Z'));
+  assert.equal(directConversationTime({ created_at: 'invalid' }, acceptedAt, requestedAt), Date.parse(acceptedAt));
+  assert.equal(directConversationTime(null, 'invalid', requestedAt), Date.parse(requestedAt));
+  assert.equal(directConversationTime({ created_at: '1970-01-01T00:00:00Z' }, acceptedAt, requestedAt), 0);
+  assert.equal(directConversationTime(null, 'invalid', 'invalid'), 0);
+});
+
+test('group initials use the first two Unicode word tokens', () => {
+  assert.equal(groupInitials('Brew & Chat'), 'BC');
+  assert.equal(groupInitials('Кафе № 2'), 'К2');
+  assert.equal(groupInitials('   '), '');
 });
 
 test('QR page metadata resolves venue titles while rejecting generic, technical, and conflicting names', () => {

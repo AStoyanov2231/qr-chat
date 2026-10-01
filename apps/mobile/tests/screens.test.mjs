@@ -15,6 +15,20 @@ const { useDirectMessages } = await import('../src/hooks/use-direct-messages.ts'
 const group = { id: 'room-one', venue: { id: 'room-one', name: 'Cafe', codes: ['Cafe-A'], label: 'A conversation for this QR code.' }, members: [{ id: 'me', name: 'Andy' }, { id: 'peer', name: 'Sam' }], messages: [], nextCursor: null };
 const friendId = '11111111-1111-4111-8111-111111111111';
 
+function assertNativeButtonsHosted(screen) {
+  const buttons = screen.root.findAllByType('Button');
+  assert.ok(buttons.length, 'Expected a native action button');
+  for (const button of buttons) {
+    let host = button.parent;
+    while (host && host.type !== 'Host') host = host.parent;
+    assert.ok(host, 'Platform buttons must render inside an Expo UI Host');
+    assert.equal(host.props.matchContents, true);
+    assert.equal(host.props.colorScheme, 'light');
+    assert.ok(host.props.seedColor, 'The native host uses the app color palette');
+    assert.equal(button.props.style.height, 44, 'The platform button keeps a 44 point touch height');
+  }
+}
+
 for (const platform of ['ios', 'android']) {
   test(`${platform}: scanning the current code opens its conversation without joining again`, async (t) => {
     reset(); process.env.EXPO_OS = platform; state.chat.group = group;
@@ -131,28 +145,132 @@ for (const platform of ['ios', 'android']) {
     assert.deepEqual(state.navigation, [['replace', { pathname: '/join', params: { code: 'Case-Sensitive' } }]]);
   });
 
-  test(`${platform}: friend request actions and group search use the current web flow`, async (t) => {
-    reset(); process.env.EXPO_OS = platform; state.chat.group = group;
-    const friend = { id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'peer', accepted_at: null, user_b: { display_name: 'Sam' } };
-    state.chat.friends = [friend];
+  test(`${platform}: Chats shows the current group, collapsible requests, and real DM previews`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    state.chat.group = { ...group, venue: { ...group.venue, name: 'Brew & Chat' }, messages: [{ id: 'group-message', user: 'peer', name: 'Sam', text: 'Workshop starts soon', time: Date.now() - 4 * 60_000 }] };
+    state.chat.expiresAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+    const incoming = { id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'peer', requested_at: '2026-10-01T10:00:00Z', accepted_at: null, user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } };
+    const decline = { ...incoming, id: '22222222-2222-4222-8222-222222222222', user_b_id: 'peer-two', user_b: { id: 'peer-two', display_name: 'Niko', avatar_url: null } };
+    const outgoing = { ...incoming, id: '33333333-3333-4333-8333-333333333333', user_b_id: 'peer-three', requested_by_id: 'me', user_b: { id: 'peer-three', display_name: 'Mira', avatar_url: null } };
+    const accepted = { ...incoming, id: '44444444-4444-4444-8444-444444444444', user_b_id: 'jordan', accepted_at: '2026-09-30T10:00:00Z', user_b: { id: 'jordan', display_name: 'Jordan', avatar_url: null } };
+    state.chat.friends = [incoming, decline, outgoing, accepted];
+    state.chat.directPreviews[accepted.id] = { status: 'ready', message: { id: 9, friend_connection_id: accepted.id, sender_id: 'jordan', body: 'See you at the cafe.', created_at: new Date(Date.now() - 12 * 60_000).toISOString() } };
     const calls = [];
     state.auth.api = { acceptFriend: async id => calls.push(['accept', id]), removeFriend: async id => calls.push(['remove', id]) };
     const screen = await render(t, Groups);
+    assertNativeButtonsHosted(screen);
+    assert.match(screen.text(), /Chats/);
+    assert.match(screen.text(), /Your group/);
+    assert.match(screen.text(), /Brew & Chat/);
+    assert.match(screen.text(), /BC/);
+    assert.match(screen.text(), /Sam: Workshop starts soon/);
+    assert.match(screen.text(), /Your access ends in \dh/);
+    assert.match(screen.text(), /Friend requests \(3\)/);
+    assert.match(screen.text(), /See you at the cafe\./);
+    assert.doesNotMatch(screen.text(), /Recent|Nearby|My Groups/);
+    assert.equal(screen.root.findAllByType('Pressable').some((node) => node.props.accessibilityLabel === 'Open Brew & Chat, 2 members'), true);
+    await screen.press('Open Brew & Chat, 2 members');
+    assert.equal(state.navigation.at(-1)[1].pathname, '/room');
+
+    await screen.press('Toggle friend requests');
+    const requestActions = screen.root.findAllByType('Button').filter(button => ['Accept', 'Decline', 'Cancel'].includes(button.props.title));
+    assert.ok(requestActions.some(button => button.props.title === 'Accept' && button.props.variant !== 'text'));
+    assert.ok(requestActions.filter(button => ['Decline', 'Cancel'].includes(button.props.title)).every(button => button.props.variant === 'text'));
+    await screen.press('View Sam’s profile');
+    assert.deepEqual(state.navigation.at(-1), ['push', { pathname: '/person/[id]', params: { id: 'peer' } }]);
     await screen.press('Accept');
-    await screen.press('Decline');
-    assert.deepEqual(calls, [['accept', friendId], ['remove', friendId]]);
-    friend.requested_by_id = 'me'; await screen.update();
+    await screen.press('Decline', 1);
     await screen.press('Cancel');
-    friend.accepted_at = '2026-09-19T00:00:00Z'; await screen.update();
-    await screen.press('Message');
-    assert.deepEqual(state.navigation.at(-1), ['push', { pathname: '/direct/[id]', params: { id: friendId } }]);
-    await screen.press('Remove');
-    await act(async () => { state.alerts.at(-1)[2].find(button => button.text === 'Remove').onPress(); });
-    assert.equal(calls.filter(([action]) => action === 'remove').length, 3);
-    await screen.press('Search groups'); await screen.type('Search groups by name', 'Unknown room');
-    assert.match(screen.text(), /No groups found/);
-    await screen.type('Search groups by name', 'cafe');
-    assert.match(screen.text(), /You’re in. Say hello/);
+    assert.deepEqual(calls, [['accept', incoming.id], ['remove', decline.id], ['remove', outgoing.id]]);
+
+    await screen.press('Search');
+    await screen.type('Search chats by name', 'unknown room');
+    assert.match(screen.text(), /No chats match “unknown room”\./);
+    await screen.press('Clear search');
+    await screen.type('Search chats by name', 'jordan');
+    assert.match(screen.text(), /Open chat with Jordan/);
+    assert.doesNotMatch(screen.text(), /Open Brew & Chat, 2 members/);
+    await screen.press('Done');
+    state.chat.group = { ...group, messages: [] }; await screen.update();
+    assert.equal(screen.root.findAllByType('Text').some((node) => node.props.children === 'Now'), false);
+    await screen.press('New message');
+    assert.equal(screen.root.findByType('Modal').props.visible, true);
+    assert.match(screen.text(), /Start a conversation with Jordan/);
+    assert.doesNotMatch(screen.text(), /Start a conversation with Sam/);
+    assert.equal(screen.root.findAllByType('Text').find(node => node.props.children === 'Jordan').props.numberOfLines, 1);
+    await screen.press('Start a conversation with Jordan');
+    assert.equal(state.navigation.at(-1)[1].params.id, accepted.id);
+    assert.equal(calls.length, 3, 'The new-message picker must not create a friendship');
+  });
+
+  test(`${platform}: Chats distinguishes a first group from observed expiry and retries a failed load`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    const screen = await render(t, Groups);
+    assert.match(screen.text(), /No group yet/);
+    assert.doesNotMatch(screen.text(), /Your group access ended/);
+    await screen.press('Search');
+    await screen.type('Search chats by name', 'Cafe');
+    assert.doesNotMatch(screen.text(), /No group yet/);
+    state.chat.groupAccessEnded = true; await screen.update();
+    assert.doesNotMatch(screen.text(), /Your group access ended/);
+    await screen.press('Done');
+    assert.match(screen.text(), /Your group access ended/);
+    await screen.press('Scan a QR code');
+    assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
+    assert.match(screen.text(), /Your group access ended/);
+    assert.match(screen.text(), /Your friends and DMs stay/);
+    state.chat.error = 'Offline'; state.chat.ready = false; state.chat.groupAccessEnded = false; await screen.update();
+    assert.match(screen.text(), /We couldn’t load your chats\. Offline/);
+    assert.doesNotMatch(screen.text(), /Your group access ended/);
+    let retried = false; state.chat.refresh = async () => { retried = true; };
+    await screen.press('Retry');
+    assert.equal(retried, true);
+  });
+
+  test(`${platform}: new-message picker shows loading and retry states after snapshot failures`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    state.chat.friends = [{ id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'me', requested_at: '2026-09-30T10:00:00Z', accepted_at: '2026-09-30T11:00:00Z', user_b: { id: 'peer', display_name: 'Jordan', avatar_url: null } }];
+    let refreshed = false;
+    state.chat.refresh = async () => { refreshed = true; };
+    const screen = await render(t, Groups);
+    await screen.press('New message');
+    assert.match(screen.text(), /Start a conversation with Jordan/);
+
+    state.chat.ready = false; state.chat.friends = []; await screen.update();
+    assert.match(screen.text(), /Loading friends/);
+    assert.doesNotMatch(screen.text(), /Add a friend first/);
+
+    state.chat.error = 'Offline'; await screen.update();
+    assert.match(screen.text(), /We couldn’t load your friends\. Offline/);
+    assert.doesNotMatch(screen.text(), /Add a friend first/);
+    const retryButtons = screen.root.findAllByType('Button').filter(button => button.props.title === 'Retry');
+    assert.equal(retryButtons.length, 2, 'The open picker and page error each offer retry');
+    await act(async () => { retryButtons[1].props.onPress(); });
+    assert.equal(refreshed, true);
+    await screen.press('Close');
+    assert.equal(screen.root.findAllByType('Modal').length, 0);
+  });
+
+  test(`${platform}: Chats loading skeleton preserves the section structure`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.chat.ready = false;
+    const screen = await render(t, Groups);
+    assert.match(screen.text(), /Loading chats/);
+    assert.match(screen.text(), /Your group/);
+    assert.match(screen.text(), /Friend requests/);
+    assert.match(screen.text(), /Direct messages/);
+    assert.doesNotMatch(screen.text(), /Your group access ended/);
+  });
+
+  test(`${platform}: a failed DM preview has a separate retry action`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    const accepted = { id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'me', requested_at: '2026-09-30T10:00:00Z', accepted_at: '2026-09-30T11:00:00Z', user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } };
+    state.chat.friends = [accepted];
+    state.chat.directPreviews[friendId] = { status: 'error' };
+    let refreshed = false; state.chat.refresh = async () => { refreshed = true; };
+    const screen = await render(t, Groups);
+    assert.match(screen.text(), /Preview unavailable\. Tap to retry\./);
+    await screen.press('Retry preview');
+    assert.equal(refreshed, true);
   });
 
   test(`${platform}: member actions stop when that membership is no longer current`, async (t) => {
@@ -241,6 +359,30 @@ for (const platform of ['ios', 'android']) {
     assert.equal(screen.root.findAllByType('TextInput').length, 0);
     assert.equal(state.watchers[0].stopped, true);
   });
+
+  test(`${platform}: an accepted friend’s empty DM shows a greeting only after its first read succeeds`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.params = { id: friendId };
+    state.chat.friends = [{ id: friendId, user_a_id: 'me', user_b_id: 'peer', accepted_at: '2026-09-19', user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } }];
+    let finishRead;
+    state.loadDirectSnapshot = () => new Promise((resolve) => { finishRead = resolve; });
+    const screen = await render(t, Direct);
+    assert.doesNotMatch(screen.text(), /Say hello to Sam|Send your first message/);
+    await act(async () => { finishRead({ messages: [], nextCursor: null }); });
+    assert.match(screen.text(), /Say hello to Sam/);
+    assert.match(screen.text(), /Send your first message/);
+    const composer = screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Message Sam');
+    assert.ok(composer);
+    assert.equal(composer.props.placeholder, 'Message Sam…');
+  });
+
+  test(`${platform}: a failed empty-DM read keeps its retry state instead of showing a first-message greeting`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.params = { id: friendId };
+    state.chat.friends = [{ id: friendId, user_a_id: 'me', user_b_id: 'peer', accepted_at: '2026-09-19', user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } }];
+    state.loadDirectSnapshot = async () => { throw new Error('Offline'); };
+    const screen = await render(t, Direct);
+    assert.match(screen.text(), /Offline/);
+    assert.doesNotMatch(screen.text(), /Say hello to Sam|Send your first message/);
+  });
 }
 
 test('resuming the app retains direct-message pagination and reconciles before reporting connected', async (t) => {
@@ -266,11 +408,15 @@ test('message composer retains a failed draft and clears it before a failed refr
     refresh: async () => { throw new Error('Offline'); }, loadOlder: async () => {},
     send: async body => { if (failSend) throw new Error('Failed send'); sent.push(body); }, unavailable: 'Ended',
   });
+  assertNativeButtonsHosted(screen);
+  const sendButton = screen.root.findAllByType('Button').find((button) => button.props.title === 'Send');
+  assert.equal(sendButton.props.disabled, true);
   await screen.type('Message', 'Hello');
-  await screen.press('Send message');
+  assert.equal(screen.root.findAllByType('Button').find((button) => button.props.title === 'Send').props.disabled, false);
+  await screen.press('Send');
   assert.equal(screen.root.findByType('TextInput').props.value, 'Hello');
   failSend = false;
-  await screen.press('Send message');
+  await screen.press('Send');
   assert.deepEqual(sent, ['Hello']);
   assert.equal(screen.root.findByType('TextInput').props.value, '');
 });

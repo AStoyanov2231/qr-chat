@@ -13,6 +13,7 @@
 - Names live on the QR record and persist after room deletion. Database row locking and a first-non-null update make the first committed name shared by subsequent joins. Existing nameless rooms display as “Unnamed chat” until named.
 - The strict named join is idempotent for a caller already active on the same QR code: retries return the existing room and preserve its original expiry and messages. Other mutations must not be automatically retried after ambiguous failures. Empty results never authorize direct membership/friend inserts.
 - Message pages descend by identity, fetch one extra row, and expose `nextCursor`; pass it as `before`, render chronologically. IDs must be safe integers.
+- `loadChatSnapshot` exposes `directPreviews` keyed by friend connection ID and returns one newest direct-message row per accepted friendship from a one-item page, with a concurrency limit of four; it does not load DM history. A failed preview is isolated as `status: "error"`, while an empty conversation is `status: "ready"` with `message: null`. Friendship state is rechecked before return so removed connections lose previews; accepted connections added during loading are marked unknown/error until refreshed.
 - Membership indicators are not online presence. Feature/lifecycle scope: [PRODUCT.md](../../PRODUCT.md).
 
 ## Recovery

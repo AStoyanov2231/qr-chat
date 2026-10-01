@@ -1,13 +1,13 @@
 # Design
 
-Visual authority: [Design1.png](design_assets/Design1.png). Apply its hierarchy to the supported [product](PRODUCT.md); use real data. Desktop remains marketing/handoff.
+Visual authority: [Design1.png](design_assets/Design1.png). The Chats overview, first-DM, access-ended, and loading details follow [02-chats.png](assets/02-chats.png), [05-first-dm.png](assets/05-first-dm.png), [06-group-access-ended.png](assets/06-group-access-ended.png), and [09-chats-loading.png](assets/09-chats-loading.png), respectively. Apply these references to the supported [product](PRODUCT.md), use real data, and preserve existing navigation. Desktop remains marketing/handoff.
 
 ## Direction
 
 - Compact sans serif; bold headings, quiet supporting copy.
 - Near-white surfaces, dark primary actions, cool secondary surfaces, fine separators.
 - Space around scanning/identity; tighter chat/settings rows. Rounded controls, limited scan elevation.
-- Home prioritizes scanning; Groups the active conversation; Profile identity/editing; conversations reading/sending.
+- Home prioritizes scanning; the existing Groups tab is headed Chats and puts the active group before friend requests and direct messages; Profile supports identity/editing; conversations support reading/sending.
 
 ## Existing styles
 
@@ -28,7 +28,8 @@ Values are extracted, not verified contrast results. Web uses CSS pixels; native
 
 ## Interaction
 
-- Reuse Home/Groups/Profile navigation, native tabs, actual profile images, and icon fallbacks.
+- Keep Home/Groups/Profile navigation and labels, native tabs, actual profile images, and icon fallbacks. The Chats overview uses a rounded cool-surface group card with initials, member count, latest message, age, and access-expiry footer; friend requests are a collapsed row; accepted friends use compact rows with avatar, preview, age, and inset separators. Search and New message are secondary actions.
+- Distinguish a first visit with no group from a group that ended during the signed-in session. Keep friends and DMs visible after group access ends. Loading placeholders mirror the same section order without acting as controls.
 - Label inputs; preserve drafts/values on failure; show pending/error/retry states and prevent duplicate submits.
 - Skeletons match real readiness and layout. Empty, offline, reconnect, and revoked-access states stay explicit.
 - Identify the conversation before sending. Confirm destructive consequences, including friendship/DM deletion.
