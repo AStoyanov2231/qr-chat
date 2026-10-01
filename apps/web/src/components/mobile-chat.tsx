@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { messageAge } from "@qr-chat/domain";
-import { usePathname, useRouter } from "next/navigation";
+import type { ChatNameResolution } from "@qr-chat/api";
+import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
 import {
   useEffect,
@@ -12,12 +11,14 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Bell, CornersOut, Lightbulb, CaretRight, House, Users, User, MagnifyingGlass } from "@phosphor-icons/react";
+import { CornersOut, QrCode, X, CaretRight } from "@phosphor-icons/react";
 import { ProfileView } from "@/components/profile-view";
+import { ChatsOverview } from "@/components/chats-overview";
+import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty } from "@/components/direct-message-parts";
 import { Avatar } from "@/components/avatar";
 import { MemberProfile } from "@/components/member-profile";
 import { Icon } from "@/components/icon";
-import { resolveCode, type Venue } from "@/lib/chat-view";
+import { directConversationScopeIsCurrent, resolveCode, type DirectConversationScope, type Venue } from "@/lib/chat-view";
 import { useChatBackend, useDirectMessages, errorMessage } from "@/hooks/use-chat-backend";
 
 function venueIcon(venue: Venue): "coffee" | "sun" | "pin" {
@@ -26,70 +27,6 @@ function venueIcon(venue: Venue): "coffee" | "sun" | "pin" {
     : venue.kind === "event"
       ? "sun"
       : "pin";
-}
-
-function LoadingSkeleton({ view }: { view: "scanner" | "chats" | "profile" }) {
-  if (view === "scanner") {
-    return (
-      <section className="loading-skeleton scanner-skeleton" role="status" aria-label="Loading your chats">
-        <span className="skeleton-block skeleton-toolbar" />
-        <div className="skeleton-copy">
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block skeleton-subtitle" />
-        </div>
-        <span className="skeleton-block skeleton-scan" />
-        <span className="skeleton-block skeleton-tip" />
-      </section>
-    );
-  }
-
-  if (view === "profile") {
-    return (
-      <section className="loading-skeleton profile-skeleton" role="status" aria-label="Loading your profile">
-        <span className="skeleton-block skeleton-avatar" />
-        <span className="skeleton-block skeleton-name" />
-        <span className="skeleton-block skeleton-handle" />
-        <div className="skeleton-stats">
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-        </div>
-        <div className="skeleton-menu">
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-          <span className="skeleton-block" />
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="loading-skeleton chats-skeleton" role="status" aria-label="Loading your groups">
-      <div className="skeleton-heading">
-        <span className="skeleton-block" />
-        <span className="skeleton-block" />
-      </div>
-      <div className="skeleton-filters">
-        <span className="skeleton-block" />
-        <span className="skeleton-block" />
-        <span className="skeleton-block" />
-      </div>
-      <div className="skeleton-rooms">
-        {[0, 1, 2].map((item) => (
-          <div key={item}>
-            <span className="skeleton-block skeleton-room-icon" />
-            <span>
-              <i className="skeleton-block" />
-              <i className="skeleton-block" />
-              <i className="skeleton-block" />
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 }
 
 function MessageSkeleton() {
@@ -102,22 +39,13 @@ function MessageSkeleton() {
   );
 }
 
-function BottomNavigation({ view }: { view: "scanner" | "chats" | "profile" }) {
-  return (
-    <nav className="bottom-nav" aria-label="Primary navigation">
-      <Link href="/" className={view === "scanner" ? "active" : ""} aria-current={view === "scanner" ? "page" : undefined}><House size={29} weight={view === "scanner" ? "fill" : "regular"} /><span>Home</span></Link>
-      <Link href="/chats" className={view === "chats" ? "active" : ""} aria-current={view === "chats" ? "page" : undefined}><Users size={30} weight={view === "chats" ? "fill" : "regular"} /><span>Groups</span></Link>
-      <Link href="/profile" className={view === "profile" ? "active" : ""} aria-current={view === "profile" ? "page" : undefined}><User size={29} weight={view === "profile" ? "fill" : "regular"} /><span>Profile</span></Link>
-    </nav>
-  );
-}
-
 export default function QrChatApp() {
-  const pathname = usePathname();
   const router = useRouter();
   const backend = useChatBackend();
   const { session, api, ready } = backend;
   const groups = backend.group ? [backend.group] : [];
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileDialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [directId, setDirectId] = useState<string | null>(null);
@@ -126,12 +54,13 @@ export default function QrChatApp() {
   const peer = directFriend?.user_a_id === session?.id ? directFriend?.user_b : directFriend?.user_a;
   const [active, setActive] = useState<Venue | null>(null);
   const [pending, setPending] = useState<Venue | null>(null);
+  const [chatNameDraftState, setChatNameDraftState] = useState<{ code: string; value: string } | null>(null);
+  const [nameLookup, setNameLookup] = useState<{ code: string; result: ChatNameResolution | null } | null>(null);
   const [entry, setEntry] = useState(false);
   const [name, setName] = useState("");
-  const [groupFilter, setGroupFilter] = useState("Recent");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
+  const [directSendError, setDirectSendError] = useState("");
+  const [sendingDirect, setSendingDirect] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [personId, setPersonId] = useState<string | null>(null);
@@ -151,9 +80,16 @@ export default function QrChatApp() {
   const directBottom = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const scanLocked = useRef(false);
+  const directScope = useRef<DirectConversationScope>({ connectionId: null, version: 0 });
+
+  function switchDirectConversation(connectionId: string | null) {
+    directScope.current = { connectionId, version: directScope.current.version + 1 };
+    setDirectId(connectionId);
+    setDirectSendError("");
+    setSendingDirect(false);
+  }
 
   // The current-membership query is authoritative, even if the member list is capped.
-  const joined = groups;
   const group = groups.find((item) => item.id === active?.id);
   const hiddenUsers = useMemo(
     () => new Set(session?.hidden ?? []),
@@ -162,6 +98,23 @@ export default function QrChatApp() {
 
   const latestGroupMessageId = group?.messages.at(-1)?.id;
   const latestDirectMessageId = direct.messages.at(-1)?.id;
+  const pendingCode = pending?.codes[0] ?? null;
+  const chatNameDraft = chatNameDraftState?.code === pendingCode ? chatNameDraftState.value : "";
+  const pendingNameResult = nameLookup?.code === pendingCode ? nameLookup.result : null;
+  const findingChatName = pendingCode !== null && pendingNameResult === null;
+  const suggestedChatName = pendingNameResult?.kind === "saved" || pendingNameResult?.kind === "suggested"
+    ? pendingNameResult.name
+    : null;
+  const chosenChatName = pendingNameResult?.kind === "missing" ? chatNameDraft.trim() : suggestedChatName;
+
+  useEffect(() => {
+    if (!pendingCode) return;
+    const controller = new AbortController();
+    void api.resolveQrChatName(pendingCode, controller.signal).then((result) => {
+      if (!controller.signal.aborted) setNameLookup({ code: pendingCode, result });
+    }, () => { if (!controller.signal.aborted) setNameLookup({ code: pendingCode, result: { kind: "missing" } }); });
+    return () => controller.abort();
+  }, [api, pendingCode]);
 
   async function perform(action: () => Promise<void>) {
     if (busyRef.current) return;
@@ -184,14 +137,21 @@ export default function QrChatApp() {
 
       const current = backend.group;
       if (current?.venue.codes[0] === venue.codes[0]) {
-        setDirectId(null);
-        setActive(current.venue);
-        setEntry(false);
-        setDraft("");
-        router.push(`/chats?code=${encodeURIComponent(venue.codes[0])}`);
+        if (current.venue.nameMissing) {
+          setPending(current.venue);
+          setName(session?.name ?? "");
+          setChatNameDraftState({ code: venue.codes[0], value: "" });
+        } else {
+          switchDirectConversation(null);
+          setActive(current.venue);
+          setEntry(false);
+          setDraft("");
+          router.push(`/?code=${encodeURIComponent(venue.codes[0])}`);
+        }
       } else {
         setPending(venue);
         setName(session?.name ?? "");
+        setChatNameDraftState({ code: venue.codes[0], value: "" });
       }
     } catch {
       setNotice("Could not complete this action. Please try again.");
@@ -210,11 +170,18 @@ export default function QrChatApp() {
   useEffect(() => {
     if (!ready) return;
     const init = window.setTimeout(() => {
-      const query = new URLSearchParams(window.location.search).get("code");
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("profile") === "open") setProfileOpen(true);
+      const query = params.get("code");
       if (query !== null) openInitialCode(query);
     }, 0);
     return () => window.clearTimeout(init);
   }, [ready]);
+
+  useEffect(() => {
+    if (profileOpen) profileDialog.current?.showModal();
+    else profileDialog.current?.close();
+  }, [profileOpen]);
 
   useEffect(() => {
     if (entry) {
@@ -300,7 +267,7 @@ export default function QrChatApp() {
   }
 
   function openPerson(id: string) {
-    if (id === session?.id) { router.push("/profile"); return; }
+    if (id === session?.id) { setProfileOpen(true); return; }
     setPersonError(""); setPersonId(id);
   }
 
@@ -314,16 +281,25 @@ export default function QrChatApp() {
 
   function join(event: FormEvent) {
     event.preventDefault();
-    if (!pending || !session || !name.trim()) return;
+    if (!pending || !session || !name.trim() || !pendingNameResult || !chosenChatName) return;
     void perform(async () => {
       await api.saveProfile({ display_name: name });
-      const membership = await api.joinGroup(pending.codes[0]);
+      const current = backend.group?.venue.codes[0] === pending.codes[0] ? backend.group : null;
+      let destination: Venue;
+      if (current) {
+        const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chosenChatName);
+        destination = { ...current.venue, name: canonicalName, nameMissing: false };
+      } else {
+        const membership = await api.joinNamedGroup(pending.codes[0], chosenChatName);
+        destination = { ...pending, id: membership.group_id, name: membership.display_name, nameMissing: false };
+      }
       await backend.refresh();
-      setDirectId(null);
-      setActive({ ...pending, id: membership.group_id });
+      switchDirectConversation(null);
+      setActive(destination);
       setEntry(false);
+      setPending(null);
       setDraft("");
-      router.push(`/chats?code=${encodeURIComponent(pending.codes[0])}`);
+      router.push(`/?code=${encodeURIComponent(pending.codes[0])}`);
     });
   }
 
@@ -337,11 +313,55 @@ export default function QrChatApp() {
     });
   }
 
+  async function submitDirectMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!directId || !directFriend || !draft.trim() || sendingDirect) return;
+    const expectedScope = directScope.current;
+    if (expectedScope.connectionId !== directId) return;
+    const connectionId = expectedScope.connectionId;
+    const body = draft;
+    const isCurrent = () => directConversationScopeIsCurrent(directScope.current, expectedScope);
+    if (busyRef.current) return;
+    setDirectSendError("");
+    setSendingDirect(true);
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await api.sendDirectMessage(connectionId, body);
+      if (isCurrent()) {
+        setDraft("");
+        try {
+          await direct.refresh();
+        } catch {
+          if (isCurrent()) setDirectSendError("Your message was sent, but the chat could not refresh. Retry loading messages to confirm it appears.");
+        }
+      }
+    } catch (reason) {
+      if (isCurrent()) {
+        setDirectSendError("Could not send your message. Your draft is still here; try again.");
+        setNotice(errorMessage(reason));
+      }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+      if (isCurrent()) setSendingDirect(false);
+    }
+  }
+
   function openConversation(venue: Venue) {
     setActive(venue);
-    setDirectId(null);
+    switchDirectConversation(null);
     setDraft("");
-    router.push(`/chats?code=${encodeURIComponent(venue.codes[0])}`);
+    setDirectSendError("");
+    router.push(`/?code=${encodeURIComponent(venue.codes[0])}`);
+  }
+
+  function openDirectMessage(friendId: string) {
+    setActive(null);
+    switchDirectConversation(friendId);
+    setDraft("");
+    setDirectSendError("");
+    router.push("/");
   }
 
   function leaveCurrentChat() {
@@ -349,111 +369,52 @@ export default function QrChatApp() {
       await api.leaveGroup();
       await backend.refresh();
       setActive(null);
-      router.push("/chats");
+      router.push("/");
     });
   }
 
-  const view =
-    pathname === "/profile"
-      ? "profile"
-      : pathname === "/chats"
-        ? "chats"
-        : "scanner";
-
-  if (!ready && !backend.error) {
-    return (
-      <div className={`qr-app ${view === "scanner" ? "home-screen" : ""}`} aria-busy="true">
-        <main className="app-content">
-          <LoadingSkeleton view={view} />
-        </main>
-        <BottomNavigation view={view} />
-      </div>
-    );
-  }
-
   return (
-    <div className={`qr-app ${view === "scanner" ? "home-screen" : ""}`}>
-      {backend.error ? (
-        <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>
-      ) : null}
-      <main
-        className={`app-content ${(active || directId) && view === "chats" ? "has-chat" : ""}`}
-      >
-        {view === "scanner" && (
-          <section className="scanner-view">
-            <div className="home-toolbar"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("No new notifications.")}><Bell size={25} /></button></div>
-            <div className="scanner-copy">
-              <h1>Scan.<br />Join.<br />Chat.</h1>
-              <p>Turn any QR code into<br />a group chat.</p>
+    <div className="qr-app">
+      <main className={`app-content ${active || directId ? "has-chat" : ""}`}>
+        {!ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={() => setProfileOpen(true)} /> : !active && !directId && (
+          <ChatsOverview
+            profileName={session?.name}
+            profileAvatarUrl={session?.avatarUrl}
+            connected={backend.connection === "connected"}
+            onOpenOwnProfile={() => setProfileOpen(true)}
+            group={backend.group}
+            friends={backend.friends}
+            directPreviews={backend.directPreviews}
+            expiresAt={backend.expiresAt}
+            hasObservedGroup={backend.hasObservedGroup}
+            sessionId={session?.id ?? null}
+            busy={busy}
+            error={backend.error}
+            onRetry={() => { void perform(backend.refresh); }}
+            onScan={startEntry}
+            onOpenGroup={() => { if (backend.group) openConversation(backend.group.venue); }}
+            onOpenDirect={openDirectMessage}
+            onOpenProfile={openPerson}
+            onAcceptRequest={(friendId) => { void perform(async () => { await api.acceptFriend(friendId); await backend.refresh(); }); }}
+            onRemoveRequest={(friendId) => { void perform(async () => { await api.removeFriend(friendId); await backend.refresh(); }); }}
+          />
+        )}
+
+        {backend.error && (active || directId) && (
+          <section className="conversation-view">
+            <header className="conversation-header">
+              <button type="button" aria-label="Back to chats" onClick={() => { setActive(null); switchDirectConversation(null); router.push("/"); }}>‹</button>
+              <span><strong>{active?.name ?? peer?.display_name ?? "Direct message"}</strong><small>Access could not be checked</small></span>
+            </header>
+            <div className="conversation-load-error" role="alert">
+              <h2>Couldn’t load this chat.</h2>
+              <p>We couldn’t verify your access. Try again to reload the conversation.</p>
+              <button type="button" className="scan-primary" disabled={busy} onClick={() => void perform(backend.refresh)}>Retry</button>
             </div>
-            <div className="scan-halo">
-              <button type="button" className="scan-trigger" onClick={startEntry} disabled={!ready} aria-label="Scan a QR code"><CornersOut size={70} weight="bold" /></button>
-              <span>Tap to scan</span>
-            </div>
-            <button className="scan-tip" onClick={startEntry} disabled={!ready}>
-              <span className="tip-icon"><Lightbulb size={29} /></span>
-              <span>See a QR code at a café,<br />venue or event? Scan it and<br />start chatting with people around you.</span>
-              <CaretRight size={18} />
-            </button>
           </section>
         )}
 
-        {view === "chats" && !active && !directId && (
-          <section className="chats-view">
-            <div className="view-heading">
-              <h1>Groups</h1>
-              <button className="icon-button" aria-label="Search groups" aria-expanded={searchOpen} onClick={() => { setSearchOpen(!searchOpen); setSearch(""); }}><MagnifyingGlass size={25} /></button>
-            </div>
-            <div className="group-filters" aria-label="Filter groups">
-              {["Recent", "Nearby", "My Groups"].map((filter) => <button key={filter} aria-pressed={groupFilter === filter} onClick={() => setGroupFilter(filter)}>{filter}</button>)}
-            </div>
-            {searchOpen && <input className="group-search" aria-label="Search groups by name" placeholder="Search groups" autoFocus value={search} onChange={(event) => setSearch(event.target.value)} />}
-            {backend.friends.length > 0 && <div className="friend-list" aria-label="Friends and requests">
-              {backend.friends.map((friend) => {
-                const other = friend.user_a_id === session?.id ? friend.user_b : friend.user_a;
-                const incoming = friend.requested_by_id !== session?.id;
-                return <div className="friend-row" key={friend.id}>
-                  <Avatar name={other?.display_name ?? "Participant"} url={other?.avatar_url} />
-                  <span><button className="person-link" onClick={() => openPerson(other?.id ?? (friend.user_a_id === session?.id ? friend.user_b_id : friend.user_a_id))}><strong>{other?.display_name ?? "Participant"}</strong></button><small>{friend.accepted_at ? "Friend" : incoming ? "Wants to be friends" : "Request sent"}</small></span>
-                  {friend.accepted_at ? <button className="text-button" onClick={() => { setDirectId(friend.id); setDraft(""); }}>Message</button> : incoming && <button className="text-button" disabled={busy} onClick={() => void perform(async () => { await api.acceptFriend(friend.id); await backend.refresh(); })}>Accept</button>}
-                  <button className="text-button" disabled={busy} onClick={() => void perform(async () => { await api.removeFriend(friend.id); await backend.refresh(); })}>{friend.accepted_at ? "Remove" : incoming ? "Decline" : "Cancel"}</button>
-                </div>;
-              })}
-            </div>}
-            {groupFilter === "Nearby" ? <div className="empty-view"><span><Icon name="pin" size={34} /></span><h2>Find a group nearby.</h2><p>Scan a QR code at a place around you.</p><button className="scan-primary" disabled={!ready} onClick={startEntry}>Scan a code</button></div> : joined.length ? (
-              <div className="chat-list">
-                {search && !joined.some((item) => item.venue.name.toLowerCase().includes(search.toLowerCase())) && <p className="first-message">No groups found.</p>}
-                {joined.filter((item) => item.venue.name.toLowerCase().includes(search.toLowerCase())).map((item) => {
-                  const venue = item.venue;
-                  return (
-                    <button type="button" key={item.id} onClick={() => openConversation(venue)}>
-                      <span className="room-icon">
-                        <Icon name={venueIcon(venue)} size={23} />
-                      </span>
-                      <span className="room-copy">
-                        <strong>{venue.name}</strong>
-                        <span className="member-count"><i />{item.members.length} members</span>
-                        <small>{item.messages.at(-1) ? `${item.messages.at(-1)!.name}: ${item.messages.at(-1)!.text}` : "You’re in. Say hello."}</small>
-                      </span>
-                      <time className="room-time">{item.messages.at(-1) ? messageAge(item.messages.at(-1)!.time) : "Now"}</time>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-view">
-                <span><Icon name="chat" size={34} /></span>
-                <h2>No groups yet.</h2>
-                <p>Your first room starts with a scan.</p>
-                <button type="button" className="scan-primary" disabled={!ready} onClick={startEntry}>
-                  Scan a code
-                </button>
-              </div>
-            )}
-          </section>
-        )}
-
-        {view === "chats" && active && (
+        {active && !backend.error && (
           <section className="conversation-view">
             <header className="conversation-header">
               <button
@@ -461,7 +422,7 @@ export default function QrChatApp() {
                 aria-label="Back to chats"
                 onClick={() => {
                   setActive(null);
-                  router.push("/chats");
+                  router.push("/");
                 }}
               >
                 ‹
@@ -526,24 +487,26 @@ export default function QrChatApp() {
 
             {group ? (
               <form className="message-composer" onSubmit={submitMessage}>
-                <label className="sr-only" htmlFor="message">Message</label>
-                <input
-                  id="message"
-                  value={draft}
-                  disabled={busy}
-                  maxLength={4000}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Message..."
-                  autoComplete="off"
-                />
-                <button
-                  type="submit"
-                  className="send"
-                  aria-label="Send message"
-                  disabled={busy || !ready || !draft.trim()}
-                >
-                  <Icon name="arrow" size={18} />
-                </button>
+                <div className="message-composer-pill">
+                  <label className="sr-only" htmlFor="message">Message</label>
+                  <input
+                    id="message"
+                    value={draft}
+                    disabled={busy}
+                    maxLength={4000}
+                    onChange={(event) => setDraft(event.target.value)}
+                    placeholder="Message..."
+                    autoComplete="off"
+                  />
+                  <button
+                    type="submit"
+                    className="send"
+                    aria-label={busy ? "Sending message" : "Send message"}
+                    disabled={busy || !ready || !draft.trim()}
+                  >
+                    {busy ? <span className="send-spinner" aria-hidden="true" /> : <Icon name="send" size={19} />}
+                  </button>
+                </div>
               </form>
             ) : (
               <button
@@ -558,42 +521,59 @@ export default function QrChatApp() {
           </section>
         )}
 
-        {view === "chats" && directId && (
+        {directId && !backend.error && (
           <section className="conversation-view">
-            <header className="conversation-header">
-              <button aria-label="Back to chats" onClick={() => { setDirectId(null); setDraft(""); }}>‹</button>
-              <Avatar name={peer?.display_name ?? "Friend"} url={peer?.avatar_url} />
-              <span><strong>{peer?.display_name ?? "Direct message"}</strong><small>{direct.connection === "connected" ? "Friends" : "Reconnecting…"}</small></span>
+            <header className="conversation-header direct-conversation-header">
+              <button type="button" aria-label="Back to chats" onClick={() => { switchDirectConversation(null); setDraft(""); }}>‹</button>
+              <button type="button" className="dm-header-avatar" aria-label={`View ${peer?.display_name ?? "friend"}'s profile`} disabled={!peer?.id} onClick={() => { if (peer?.id) openPerson(peer.id); }}><Avatar name={peer?.display_name ?? "Friend"} url={peer?.avatar_url} /></button>
+              <span><strong>{peer?.display_name ?? "Direct message"}</strong><small>{direct.connection === "connected" ? "Friend" : "Friend · Reconnecting…"}</small></span>
             </header>
             {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
-              {direct.error && <div className="connection-banner" role="alert">{direct.error} <button onClick={() => void perform(direct.refresh)}>Retry</button></div>}
               <div className="message-stream" aria-live="polite">
+                {direct.error && <div className="connection-banner dm-load-error" role="alert">Couldn’t load messages. Your draft stays here. <button onClick={() => void perform(direct.refresh)}>Retry</button></div>}
                 {direct.loading && <MessageSkeleton />}
+                {!direct.loading && !direct.error && direct.messages.length === 0 && <FirstDirectMessageEmpty friendName={peer?.display_name ?? "your friend"} />}
                 {direct.nextCursor !== null && <button className="text-button" disabled={busy} onClick={() => void perform(direct.loadOlder)}>Load older messages</button>}
-                {direct.messages.map((message) => <article key={message.id} className={message.sender_id === session?.id ? "own" : ""}>
-                  <div><span className="message-meta">{message.sender_id === session?.id ? "You" : peer?.display_name ?? "Friend"}</span><p>{message.body}</p><time>{new Date(message.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</time></div>
-                </article>)}
+                {direct.messages.map((message) => <DirectMessageBubble key={message.id} message={message} session={session} peer={peer ?? null} onOpenProfile={openPerson} />)}
                 <div ref={directBottom} />
               </div>
-              <form className="message-composer" onSubmit={(event) => { event.preventDefault(); void perform(async () => { await api.sendDirectMessage(directId, draft); setDraft(""); await direct.refresh(); }); }}>
-                <label className="sr-only" htmlFor="direct-message">Direct message</label>
-                <input id="direct-message" value={draft} disabled={busy} maxLength={4000} onChange={(event) => setDraft(event.target.value)} placeholder="Message..." autoComplete="off" />
-                <button type="submit" className="send" aria-label="Send direct message" disabled={busy || !ready || direct.loading || !!direct.error || !draft.trim()}><Icon name="arrow" size={18} /></button>
-              </form>
+              <DirectMessageComposer
+                draft={draft}
+                friendName={peer?.display_name ?? "your friend"}
+                busy={busy}
+                sending={sendingDirect}
+                ready={ready}
+                loading={direct.loading}
+                loadError={direct.error}
+                sendError={directSendError}
+                onChange={(value) => { setDraft(value); setDirectSendError(""); }}
+                onSubmit={submitDirectMessage}
+              />
             </>}
           </section>
         )}
 
-        {view === "profile" && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
       </main>
 
-      <BottomNavigation view={view} />
+      {!active && !directId && <div className="scan-overlay">
+        <button type="button" className="floating-scan" aria-label="Scan a QR code" disabled={!ready || !!backend.error} onClick={startEntry}>
+          <span className="scan-symbol" aria-hidden="true"><CornersOut size={34} weight="bold" /><QrCode size={21} weight="bold" /></span>
+        </button>
+      </div>}
+
+      <dialog ref={profileDialog} className="profile-sheet" aria-label="Your profile" onCancel={(event) => { if (event.target === profileDialog.current) setProfileOpen(false); }} onClose={(event) => { if (event.target !== profileDialog.current) return; setProfileOpen(false); if (new URLSearchParams(window.location.search).has("profile")) router.replace("/"); }} onClick={(event) => { if (event.target === profileDialog.current) setProfileOpen(false); }}>
+        <div className="profile-sheet-panel">
+          <span className="sheet-grabber" aria-hidden="true" />
+          <button type="button" className="modal-close" aria-label="Close your profile" onClick={() => setProfileOpen(false)}><X size={20} /></button>
+          {profileOpen && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
+        </div>
+      </dialog>
 
       {personId && session && <MemberProfile key={personId} person={person} friend={personFriend} userId={session.id} canRequest={!!personMember} busy={busy} error={personError || backend.error} onClose={() => setPersonId(null)}
         onRequest={() => { if (personMember) void changeFriend(() => api.requestFriend(personMember.id)); }}
         onAccept={() => { if (personFriend) void changeFriend(() => api.acceptFriend(personFriend.id)); }}
         onRemove={() => { if (personFriend) void changeFriend(() => api.removeFriend(personFriend.id)); }}
-        onMessage={() => { if (!personFriend?.accepted_at) return; setPersonId(null); setActive(null); setDirectId(personFriend.id); setDraft(""); router.push("/chats"); }} />}
+        onMessage={() => { if (!personFriend?.accepted_at) return; setPersonId(null); openDirectMessage(personFriend.id); }} />}
 
       <dialog
         className={pending ? "join-dialog" : "camera-dialog"}
@@ -618,8 +598,13 @@ export default function QrChatApp() {
               <span className="entry-icon">
                 <Icon name="chat" size={28} />
               </span>
-              <h2>Join the room.</h2>
-              <p>{pending.name}</p>
+              <h2>Join the room</h2>
+              {findingChatName
+                ? <p role="status">Finding the chat name…</p>
+                : suggestedChatName
+                  ? <p>{suggestedChatName}</p>
+                  : <p>Unnamed chat</p>}
+              {backend.group && backend.group.venue.codes[0] !== pending.codes[0] && <p>Joining this room leaves your current group.</p>}
               <form onSubmit={join}>
                 <label htmlFor="name">Your name</label>
                 <input
@@ -631,7 +616,19 @@ export default function QrChatApp() {
                   required
                   autoFocus
                 />
-                <button type="submit" className="scan-primary" disabled={busy || !ready || !name.trim()}>
+                {pendingNameResult?.kind === "missing" && <>
+                  <label htmlFor="chat-name">Chat name</label>
+                  <input
+                    id="chat-name"
+                    value={chatNameDraft}
+                    onChange={(event) => setChatNameDraftState({ code: pending.codes[0], value: event.target.value })}
+                    placeholder="Cafe name"
+                    maxLength={100}
+                    required
+                  />
+                  <p>We couldn’t identify this place. Give this chat a name for everyone.</p>
+                </>}
+                <button type="submit" className="scan-primary" disabled={busy || !ready || findingChatName || !chosenChatName || !name.trim()}>
                   Join chat <Icon name="arrow" size={18} />
                 </button>
               </form>

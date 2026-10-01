@@ -8,7 +8,7 @@ import { errorMessage } from '@/providers/chat-provider';
 export const colors = { paper: '#fdfdfe', ink: '#0d1114', muted: '#626a78', line: '#eeeff2', soft: '#f3f4f6', blue: '#e9eff8', green: '#29bc68', danger: '#b62929' };
 const symbols = {
   qr: ['qrcode', 'qr_code'],
-  scan: ['viewfinder', 'qr_code_scanner'], group: ['person.2', 'group'], user: ['person', 'person'],
+  scan: ['qrcode.viewfinder', 'qr_code_scanner'], group: ['person.2', 'group'], user: ['person', 'person'],
   settings: ['gearshape', 'settings'], edit: ['pencil', 'edit'], search: ['magnifyingglass', 'search'],
   arrow: ['arrow.up', 'arrow_upward'], chevron: ['chevron.right', 'chevron_right'], light: ['lightbulb', 'lightbulb'],
   bell: ['bell', 'notifications'], bookmark: ['bookmark', 'bookmark'], lock: ['lock', 'lock'],
@@ -51,7 +51,7 @@ export function ErrorNotice({ message, retry }: { message: string; retry?: () =>
   if (!message) return null;
   return <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}><Copy style={{ color: colors.danger }}>{message}</Copy>{retry && <Button label="Retry" onPress={retry} subtle />}</View>;
 }
-export function Skeleton({ profile = false, view = 'groups' }: { profile?: boolean; view?: 'home' | 'groups' | 'messages' }) {
+export function Skeleton({ profile = false, view = 'groups' }: { profile?: boolean; view?: 'home' | 'groups' | 'chats' | 'messages' }) {
   if (profile) return <View accessibilityLabel="Loading profile" accessibilityRole="progressbar" style={{ gap: 16, alignItems: 'center', paddingTop: 10 }}>
     <View style={[styles.skeleton, { height: 130, width: 130, borderRadius: 65 }]} />
     <View style={[styles.skeleton, { width: 164, height: 28 }]} /><View style={[styles.skeleton, { width: 105, height: 17 }]} />
@@ -63,6 +63,37 @@ export function Skeleton({ profile = false, view = 'groups' }: { profile?: boole
     <View style={[styles.skeleton, { width: 184, height: 24, marginTop: 10 }]} />
     <View style={[styles.skeleton, { width: 145, height: 145, borderRadius: 73, alignSelf: 'center', marginVertical: 38 }]} />
     <View style={[styles.skeleton, { height: 92, marginTop: 'auto' }]} />
+  </View>;
+  if (view === 'chats') return <View accessibilityLabel="Loading chats" accessibilityRole="progressbar" style={{ gap: 28 }}>
+    <View style={{ gap: 12 }}>
+      <Copy style={{ fontSize: 19, fontWeight: '700' }}>Active group</Copy>
+      <View style={{ padding: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff' }}>
+        <View style={[styles.row, { gap: 13 }]}>
+          <View style={[styles.skeleton, { width: 72, height: 72, borderWidth: 3, borderColor: '#e4e7ed', borderRadius: 36 }]} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <View style={[styles.skeleton, { width: '55%', height: 18 }]} />
+            <View style={[styles.skeleton, { width: '80%', height: 14 }]} />
+            <View style={[styles.skeleton, { width: '70%', height: 14 }]} />
+          </View>
+        </View>
+      </View>
+    </View>
+    <View style={{ gap: 12 }}>
+      <Copy style={{ fontSize: 19, fontWeight: '700' }}>Friend requests</Copy>
+      <View style={[styles.skeleton, { height: 68, borderRadius: 17 }]} />
+    </View>
+    <View style={{ gap: 12 }}>
+      <Copy style={{ fontSize: 19, fontWeight: '700' }}>Direct messages</Copy>
+      {[0, 1, 2].map((index) => <View key={index} style={[styles.row, { minHeight: 72, gap: 17 }]}>
+        <View style={[styles.skeleton, { width: 52, height: 52, borderRadius: 26 }]} />
+        <View style={{ flex: 1, gap: 8 }}>
+          <View style={[styles.skeleton, { width: '44%', height: 18 }]} />
+          <View style={[styles.skeleton, { width: '68%', height: 14 }]} />
+        </View>
+        <View style={[styles.skeleton, { width: 36, height: 14 }]} />
+      </View>)}
+    </View>
+    <Copy style={[styles.muted, { textAlign: 'center' }]}>Loading chats…</Copy>
   </View>;
   if (view === 'messages') return <View accessibilityLabel="Loading messages" accessibilityRole="progressbar" style={{ gap: 16 }}>
     {[0, 1, 2].map((i) => <View key={i} style={[styles.skeleton, { height: 48, width: i === 1 ? '54%' : '68%', alignSelf: i === 1 ? 'flex-end' : 'flex-start' }]} />)}

@@ -18,7 +18,8 @@ export const state = globalThis.__qrChatNativeTest = {};
 const mocks = {
   'react-native': `
     import React from 'react';
-    export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView';
+    export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', Button='Button', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView', ActivityIndicator='ActivityIndicator';
+    export const Modal=({visible,...props})=>visible?React.createElement('Modal',{visible,...props},props.children):null;
     export const StyleSheet={create: value => value};
     export const useWindowDimensions=()=>({width:390,height:844});
     export const Alert={alert: (...args) => globalThis.__qrChatNativeTest.alerts.push(args)};
@@ -31,24 +32,23 @@ const mocks = {
     export function FlatList({data, renderItem, keyExtractor, ListEmptyComponent, ListHeaderComponent, ListFooterComponent, ...props}) {
       return React.createElement('FlatList', props, ListHeaderComponent, data.length ? data.map((item,index) => React.createElement(React.Fragment,{key:keyExtractor(item)},renderItem({item,index}))) : ListEmptyComponent, ListFooterComponent);
     }`,
+  '@expo/ui': `
+    import React from 'react';
+    export const Host=({children,...props})=>React.createElement('Host',props,children);
+    export const Button=({label,...props})=>React.createElement('Button',{...props,title:label});`,
   'expo-router': `
-    import {useEffect} from 'react';
+    import React, {useEffect} from 'react';
     export const router=Object.fromEntries(['push','replace','dismissTo','back'].map(method => [method,(...args) => globalThis.__qrChatNativeTest.navigation.push([method,...args])]));
     router.canGoBack=()=>true;
     export {useLocalSearchParams} from 'expo-router/build/hooks/useLocalSearchParams.js';
     export {useRoute} from 'expo-router/build/react-navigation/core/useRoute.js';
     export const useFocusEffect=useEffect;
     export const Redirect=({href})=>{useEffect(()=>{router.replace(href);},[href]);return null;};
-    export const Stack=({children})=>children;
-    Stack.Screen=()=>null;`,
+    export const Stack=({children,...props})=>React.createElement('NativeStack',props,children);
+    Stack.Screen=props=>React.createElement('NativeStackScreen',props);`,
   'expo-router/react-navigation': 'export const useHeaderHeight=()=>64;',
   'react-native-safe-area-context': 'export const useSafeAreaInsets=()=>({top:24,right:0,bottom:24,left:0});',
   'react-native-screens/experimental': "export const SafeAreaView='NativeSafeAreaView';",
-  'expo-router/unstable-native-tabs': `
-    import React from 'react';
-    export const NativeTabs=({children,...props})=>React.createElement('NativeTabs',props,children);
-    const Trigger=({children,...props})=>React.createElement('NativeTabTrigger',props,children);
-    Trigger.Label='NativeTabLabel'; Trigger.Icon='NativeTabIcon'; NativeTabs.Trigger=Trigger;`,
   'expo-image': "export const Image='Image';",
   'expo-crypto': "export const randomUUID=()=> '22222222-2222-4222-8222-222222222222';",
   'expo-image-picker': `export async function launchImageLibraryAsync(options) {
@@ -71,8 +71,10 @@ const mocks = {
   '@/lib/supabase': 'export const webOrigin="https://chat.example"; export const getNativeApi=()=>globalThis.__qrChatNativeTest.nativeApi ?? null;',
   '@qr-chat/api': `
     export const loadDirectSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadDirectSnapshot(...args);
+    export const loadChatSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadChatSnapshot(...args);
+    export const emptySnapshot={session:null,group:null,friends:[],expiresAt:null,directPreviews:{}};
     export function watchChanges(client,filters,refresh,onState) {
-      const watcher={filters,refresh,stopped:false,stop(){this.stopped=true;}};
+      const watcher={filters,refresh,onState,stopped:false,stop(){this.stopped=true;}};
       globalThis.__qrChatNativeTest.watchers.push(watcher);onState('connected');return watcher;
     }`,
 };
@@ -80,6 +82,7 @@ const mocks = {
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier in mocks) return { url: `qr-chat-test:${specifier}`, shortCircuit: true };
+    if (specifier === './auth-provider' && context.parentURL?.endsWith('/providers/chat-provider.tsx')) return { url: 'qr-chat-test:@/providers/auth-provider', shortCircuit: true };
     if (context.parentURL?.startsWith('qr-chat-test:')) return nextResolve(specifier, { ...context, parentURL: import.meta.url });
     const candidate = specifier.startsWith('@/') ? path.join(sourceRoot, specifier.slice(2))
       : specifier.startsWith('.') && context.parentURL?.startsWith(pathToFileURL(sourceRoot).href)
@@ -119,22 +122,25 @@ export function reset() {
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
     auth: { userId: 'me', active: true, api: {} },
-    chat: { ready: true, error: '', session: { id: 'me', name: 'Andy' }, group: null, friends: [], connection: 'connected', refresh: async () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
+    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, group: null, expiresAt: null, friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
+    loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},group:null,friends:[],expiresAt:null,directPreviews:{}}),
   });
 }
 
 export async function render(t, Component, props = {}) {
   let tree;
+  let mounted = true;
   const element = props => React.createElement(LocalRouteParamsContext.Provider, { value: state.params },
     React.createElement(NavigationRouteContext.Provider, { value: { key: 'test', name: 'test', params: state.params } }, React.createElement(Component, props)));
   await act(async () => { tree = create(element(props)); });
-  t.after(async () => { await act(async () => { tree.unmount(); }); });
+  t.after(async () => { if (mounted) await act(async () => { tree.unmount(); mounted = false; }); });
   return {
     get root() { return tree.root; },
     text: () => JSON.stringify(tree.toJSON()),
+    async unmount() { if (mounted) await act(async () => { tree.unmount(); mounted = false; }); },
     async update(nextProps = props) { await act(async () => { tree.update(element(nextProps)); }); },
-    async press(label) {
-      const control = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === label || node.findAllByType('Text').some(text => text.props.children === label));
+    async press(label, occurrence = 0) {
+      const control = tree.root.findAll(node => node.type === 'Pressable' || node.type === 'Button').filter(node => node.props.accessibilityLabel === label || node.props.title === label || node.findAllByType('Text').some(text => text.props.children === label))[occurrence];
       if (!control) throw new Error(`Missing button: ${label}`);
       if (control.props.disabled) throw new Error(`Disabled button: ${label}`);
       await act(async () => { await control.props.onPress(); });

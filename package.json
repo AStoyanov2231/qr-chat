@@ -7,6 +7,9 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
+    "test:tooling": "node --test scripts/tests/*.test.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check": "pnpm test:tooling && pnpm check:boundaries && pnpm typecheck && pnpm lint && pnpm test",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck"
   },

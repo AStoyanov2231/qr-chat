@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { safeAuthDestination } from "@/lib/auth/redirect";
+import { isRouteAuthenticatedApiPath } from "@/lib/qr-name-route";
 import { updateSession } from "@/lib/supabase/proxy";
 
 function copyAuthCookies(from: NextResponse, to: NextResponse) {
@@ -17,7 +18,7 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/auth/");
 
-  if (!userId && !isAuthRoute) {
+  if (!userId && !isAuthRoute && !isRouteAuthenticatedApiPath(pathname)) {
     const signInUrl = request.nextUrl.clone();
     signInUrl.pathname = "/sign-in";
     signInUrl.search = "";

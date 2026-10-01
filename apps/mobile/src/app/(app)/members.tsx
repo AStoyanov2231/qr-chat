@@ -16,6 +16,6 @@ export default function MembersScreen() {
     {group?.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } })} style={[styles.row, { minHeight: 60, paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.line }]}>
       <Avatar name={member.name} url={member.avatarUrl} /><Copy style={{ flex: 1 }}>{member.id === userId ? 'You' : member.name}</Copy><Icon name="chevron" size={18} />
     </Pressable>)}
-    {group && <Button label="Leave group" danger subtle disabled={action.busy} onPress={() => Alert.alert('Leave this group?', 'You can join again by scanning its QR code.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(); await chat.refresh(); router.dismissTo('/chats'); }); } }])} />}
+    {group && <Button label="Leave group" danger subtle disabled={action.busy} onPress={() => Alert.alert('Leave this group?', 'You can join again by scanning its QR code.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(); await chat.refresh(); router.dismissTo('/'); }); } }])} />}
   </Screen>;
 }

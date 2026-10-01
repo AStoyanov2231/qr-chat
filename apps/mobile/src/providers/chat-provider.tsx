@@ -1,5 +1,5 @@
 import { createContext, use, useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
-import { emptySnapshot, loadChatSnapshot, watchChanges, type ChatSnapshot, type ConnectionState } from '@qr-chat/api';
+import { emptySnapshot, loadChatSnapshot, watchChanges, type ConnectionState } from '@qr-chat/api';
 import { z } from '@qr-chat/validation';
 import { useAuth } from './auth-provider';
 
@@ -8,10 +8,11 @@ export function errorMessage(reason: unknown) {
 }
 function useBackend() {
   const { api, userId, active } = useAuth();
-  const [snapshot, setSnapshot] = useState<ChatSnapshot>(emptySnapshot);
+  const [snapshotState, setSnapshotState] = useState({ snapshot: emptySnapshot, hasObservedGroup: false });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState<ConnectionState>('connecting');
+  const [previewConnection, setPreviewConnection] = useState<ConnectionState>('connecting');
   const [roomConnection, setRoomConnection] = useState<ConnectionState>('connecting');
   // Only the camera scanner supplies a code for a new join.
   const [scannedCode, acceptScan] = useState<string | null>(null);
@@ -20,6 +21,7 @@ function useBackend() {
   const invalidate = useCallback(() => { ++generation.current; }, []);
   const alive = useRef(false);
   const pages = useRef({ groupId: '', count: 1 });
+  const snapshotRef = useRef(snapshotState);
   const refresh = useCallback(async () => {
     if (!api || !userId || !alive.current) return;
     const ticket = ++generation.current;
@@ -28,10 +30,14 @@ function useBackend() {
       if (!alive.current || ticket !== generation.current) return;
       if (next.session?.id !== userId) throw new Error('Please sign in again.');
       if (pages.current.groupId !== (next.group?.id ?? '')) pages.current = { groupId: next.group?.id ?? '', count: 1 };
-      setSnapshot(next); setReady(true); setError('');
+      const loaded = { snapshot: next, hasObservedGroup: snapshotRef.current.hasObservedGroup || !!next.group };
+      snapshotRef.current = loaded;
+      setSnapshotState(loaded); setReady(true); setError('');
     } catch (reason) {
       if (!alive.current || ticket !== generation.current) return;
-      setSnapshot(emptySnapshot); setReady(false); setError(errorMessage(reason));
+      const failed = { snapshot: emptySnapshot, hasObservedGroup: snapshotRef.current.hasObservedGroup };
+      snapshotRef.current = failed;
+      setSnapshotState(failed); setReady(false); setError(errorMessage(reason));
       throw reason;
     }
   }, [api, userId]);
@@ -46,6 +52,7 @@ function useBackend() {
     ], refresh, setConnection);
     return () => { alive.current = false; invalidate(); watcher.stop(); };
   }, [active, api, userId, refresh, invalidate]);
+  const snapshot = snapshotState.snapshot;
   const groupId = snapshot.group?.id;
   useEffect(() => {
     if (!api || !groupId || !active) return;
@@ -55,12 +62,19 @@ function useBackend() {
     ], refresh, setRoomConnection);
     return () => watcher.stop();
   }, [active, api, groupId, refresh]);
+  const acceptedFriendIds = snapshot.friends.filter((friend) => friend.accepted_at !== null).map((friend) => friend.id).sort().join(',');
+  useEffect(() => {
+    if (!api || !active || !acceptedFriendIds) return;
+    const filters = acceptedFriendIds.split(',').map((id) => ({ table: 'direct_messages' as const, column: 'friend_connection_id' as const, id }));
+    const watcher = watchChanges(api.client, filters, refresh, setPreviewConnection);
+    return () => watcher.stop();
+  }, [active, api, acceptedFriendIds, refresh]);
   useEffect(() => {
     if (!snapshot.expiresAt || !active) return;
     const timer = setTimeout(() => { void refresh().catch(() => {}); }, Math.max(1000, Date.parse(snapshot.expiresAt) - Date.now() + 100));
     return () => clearTimeout(timer);
   }, [active, snapshot.expiresAt, refresh]);
-  return { ...snapshot, ready, error, refresh, scannedCode, acceptScan, clearScan, connection: active && connection === 'connected' && (!groupId || roomConnection === 'connected') ? 'connected' : 'reconnecting',
+  return { ...snapshot, ready, error, groupAccessEnded: ready && snapshotState.hasObservedGroup && !snapshot.group, refresh, scannedCode, acceptScan, clearScan, connection: active && connection === 'connected' && (!groupId || roomConnection === 'connected') && (!acceptedFriendIds || previewConnection === 'connected') ? 'connected' : 'reconnecting',
     async loadOlder() { const previous = pages.current.count; pages.current.count++; try { await refresh(); } catch (error) { pages.current.count = previous; throw error; } },
   };
 }
