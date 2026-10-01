@@ -1,9 +1,9 @@
 "use client";
 
 import type { ChatSnapshot } from "@qr-chat/api";
-import { accessTimeRemaining, directConversationTime, directMessagePreview, groupInitials, messageAge } from "@qr-chat/domain";
-import { CaretRight, Clock, MagnifyingGlass, X } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from "@qr-chat/domain";
+import { CaretRight, MagnifyingGlass, X } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
 import { Avatar } from "./avatar";
 
 type FriendConnection = ChatSnapshot["friends"][number];
@@ -54,16 +54,14 @@ function ChatsLoading() {
         <h2 id="loading-group-heading">Your group</h2>
         <div className="group-card-skeleton">
           <div className="group-card-skeleton-main">
-            <span className="skeleton-block group-loading-tile" />
-            <span className="group-loading-copy">
-              <i className="skeleton-block" />
-              <i className="skeleton-block" />
-              <i className="skeleton-block" />
+            <span className="group-loading-identity">
+              <i className="skeleton-block group-loading-ring" />
+              <i className="skeleton-block group-loading-chip" />
             </span>
-          </div>
-          <div className="group-loading-access">
-            <span className="skeleton-block" />
-            <i className="skeleton-block" />
+            <span className="group-loading-copy">
+              <span className="group-loading-title"><i className="skeleton-block" /><i className="skeleton-block" /></span>
+              <span className="group-loading-preview"><i className="skeleton-block" /><i className="skeleton-block" /></span>
+            </span>
           </div>
         </div>
       </section>
@@ -74,7 +72,6 @@ function ChatsLoading() {
       <section className="direct-section" aria-labelledby="loading-direct-heading">
         <div className="section-heading">
           <h2 id="loading-direct-heading">Direct messages</h2>
-          <span className="skeleton-block new-message-loading" aria-hidden="true" />
         </div>
         <div className="dm-loading-list" aria-hidden="true">
           {[0, 1, 2].map((item) => <LoadingRow key={item} />)}
@@ -83,6 +80,27 @@ function ChatsLoading() {
       </section>
     </section>
   );
+}
+
+function useGroupAccessCountdown(expiresAt: string | null) {
+  const [now, setNow] = useState(Date.now);
+  const countdown = groupAccessIndicator(expiresAt, now);
+
+  useEffect(() => {
+    let current = true;
+    const update = () => { if (current) setNow(Date.now()); };
+    update();
+    if (groupAccessIndicator(expiresAt).state !== "remaining") {
+      return () => { current = false; };
+    }
+    const interval = window.setInterval(update, 60_000);
+    return () => {
+      current = false;
+      window.clearInterval(interval);
+    };
+  }, [expiresAt, countdown.state]);
+
+  return countdown;
 }
 
 function getPeer(friend: FriendConnection, sessionId: string | null): Peer {
@@ -133,69 +151,14 @@ function RequestRow({
   );
 }
 
-function NewMessageDialog({
-  open,
-  friends,
-  error,
-  busy,
-  onClose,
-  onRetry,
-  onSelect,
-}: {
-  open: boolean;
-  friends: { id: string; peer: Peer }[];
-  error: string;
-  busy: boolean;
-  onClose: () => void;
-  onRetry: () => void;
-  onSelect: (friendId: string) => void;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    if (open && !element.open) element.showModal();
-    if (!open && element.open) element.close();
-  }, [open]);
-
-  return (
-    <dialog
-      ref={dialog}
-      className="new-message-dialog"
-      aria-labelledby="new-message-heading"
-      onCancel={onClose}
-      onClose={onClose}
-      onClick={(event) => { if (event.target === dialog.current) onClose(); }}
-    >
-      <div className="new-message-panel">
-        <button type="button" className="modal-close" aria-label="Close new message" onClick={onClose}><X size={20} /></button>
-        <h2 id="new-message-heading">New message</h2>
-        <p>Choose an accepted friend to start a private chat.</p>
-        {error ? (
-          <div className="new-message-load-error" role="alert">
-            <p>Couldn’t load accepted friends. Retry to choose someone to message.</p>
-            <button type="button" className="scan-primary" disabled={busy} onClick={onRetry}>{busy ? "Trying again…" : "Retry"}</button>
-          </div>
-        ) : friends.length ? (
-          <div className="new-message-list">
-            {friends.map(({ id, peer }) => (
-              <button type="button" className="new-message-person" key={id} onClick={() => onSelect(id)}>
-                <Avatar name={peer.name} url={peer.avatarUrl} />
-                <span>{peer.name}</span>
-                <CaretRight size={19} aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        ) : <p className="new-message-empty">No accepted friends yet. Accept a friend request to start a direct message.</p>}
-      </div>
-    </dialog>
-  );
-}
-
 export function ChatsOverview(props: LoadingProps | ReadyProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [newMessageOpen, setNewMessageOpen] = useState(false);
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const countdownExpiry = !props.loading && !props.error && props.group && chatNameMatches(props.group.venue.name, normalizedSearch)
+    ? props.expiresAt
+    : null;
+  const accessIndicator = useGroupAccessCountdown(countdownExpiry);
 
   if (props.loading) return <ChatsLoading />;
 
@@ -203,7 +166,6 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     group,
     friends,
     directPreviews,
-    expiresAt,
     hasObservedGroup,
     sessionId,
     busy,
@@ -216,7 +178,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     onAcceptRequest,
     onRemoveRequest,
   } = props;
-  const query = search.trim().toLocaleLowerCase();
+  const query = normalizedSearch;
   const accepted = friends.filter((friend): friend is AcceptedFriend => friend.accepted_at !== null);
   const requests = friends.filter((friend) => friend.accepted_at === null);
   const acceptedWithPeers = accepted.map((friend) => ({ id: friend.id, friend, peer: getPeer(friend, sessionId) }))
@@ -236,7 +198,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     peer: getPeer(friend, sessionId),
     incoming: friend.requested_by_id !== sessionId,
   }));
-  const accessRemaining = group ? accessTimeRemaining(expiresAt) : null;
+  const latestGroupMessage = group?.messages.at(-1);
 
   return (
     <section className="chats-view">
@@ -272,24 +234,40 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
           <h2 id="your-group-heading">Your group</h2>
           {group ? (
             groupMatches ? (
-              <button type="button" className="group-card" onClick={() => onOpenGroup(group.id)} aria-label={`Open ${group.venue.name}, ${group.members.length} members`}>
+              <button type="button" className="group-card" onClick={() => onOpenGroup(group.id)} aria-label={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? "member" : "members"}. ${accessIndicator.accessibilityLabel}`}>
                 <span className="group-card-main">
-                  <span className="group-initials" aria-hidden="true">{groupInitials(group.venue.name)}</span>
+                  <span className="group-identity" aria-hidden="true">
+                    <span className="group-access-ring">
+                      <svg viewBox="0 0 72 72" aria-hidden="true">
+                        <circle className="group-access-track" cx="36" cy="36" r="33" />
+                        <circle
+                          className="group-access-progress"
+                          cx="36"
+                          cy="36"
+                          r="33"
+                          strokeDasharray={2 * Math.PI * 33}
+                          strokeDashoffset={2 * Math.PI * 33 * (1 - (accessIndicator.progress ?? 0))}
+                        />
+                      </svg>
+                      <span className="group-initials">{groupInitials(group.venue.name)}</span>
+                    </span>
+                    <span className={`group-access-chip ${accessIndicator.state}`}>{accessIndicator.label}</span>
+                  </span>
                   <span className="group-copy">
-                    <strong>{group.venue.name}</strong>
-                    <span className="group-member-count">{group.members.length} {group.members.length === 1 ? "member" : "members"}</span>
-                    <span className="group-preview">
-                      {group.messages.at(-1)
-                        ? `${group.messages.at(-1)!.user === sessionId ? "You" : group.messages.at(-1)!.name}: ${group.messages.at(-1)!.text}`
+                    <span className="group-title-row">
+                      <strong>{group.venue.name}</strong>
+                      <span className="group-member-count">{group.members.length} {group.members.length === 1 ? "member" : "members"}</span>
+                    </span>
+                    <span className="group-preview-row">
+                      <span className="group-preview">
+                      {latestGroupMessage
+                        ? `${latestGroupMessage.user === sessionId ? "You" : latestGroupMessage.name}: ${latestGroupMessage.text}`
                         : "You’re in. Say hello."}
+                      </span>
+                      {latestGroupMessage && <time dateTime={new Date(latestGroupMessage.time).toISOString()}>{messageAge(latestGroupMessage.time)}</time>}
                     </span>
                   </span>
-                  <span className="group-card-side">
-                    {group.messages.at(-1) && <time dateTime={new Date(group.messages.at(-1)!.time).toISOString()}>{messageAge(group.messages.at(-1)!.time)}</time>}
-                    <CaretRight size={20} aria-hidden="true" />
-                  </span>
                 </span>
-                {accessRemaining && <span className="group-access"><Clock size={18} aria-hidden="true" />{accessRemaining}</span>}
               </button>
             ) : null
           ) : hasObservedGroup ? (
@@ -331,7 +309,6 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
         <section className="direct-section" aria-labelledby="direct-messages-heading">
           <div className="section-heading">
             <h2 id="direct-messages-heading">Direct messages</h2>
-            <button type="button" className="new-message-button" onClick={() => setNewMessageOpen(true)}>New message</button>
           </div>
           {visibleFriends.length ? (
             <ul className="dm-list">
@@ -363,20 +340,11 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
               <button type="button" className="text-button clear-search-button" onClick={() => setSearch("")}>Clear search</button>
             </div>
           ) : accepted.length === 0 ? (
-            <p className="direct-empty">Accepted friends appear here so you can pick up a private conversation.</p>
+            <p className="direct-empty">Accepted friends appear here so you can start a private conversation.</p>
           ) : <p className="direct-empty">No direct messages match “{search.trim()}”.</p>}
         </section>
       </>}
 
-      <NewMessageDialog
-        open={newMessageOpen}
-        friends={acceptedWithPeers.map(({ id, peer }) => ({ id, peer }))}
-        error={error}
-        busy={busy}
-        onClose={() => setNewMessageOpen(false)}
-        onRetry={onRetry}
-        onSelect={(friendId) => { setNewMessageOpen(false); onOpenDirect(friendId); }}
-      />
     </section>
   );
 }

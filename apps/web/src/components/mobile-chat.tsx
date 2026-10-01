@@ -15,7 +15,7 @@ import {
 import { Bell, CornersOut, Lightbulb, CaretRight, House, Users, User } from "@phosphor-icons/react";
 import { ProfileView } from "@/components/profile-view";
 import { ChatsOverview } from "@/components/chats-overview";
-import { DirectMessageComposer, FirstDirectMessageEmpty } from "@/components/direct-message-parts";
+import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty } from "@/components/direct-message-parts";
 import { Avatar } from "@/components/avatar";
 import { MemberProfile } from "@/components/member-profile";
 import { Icon } from "@/components/icon";
@@ -568,24 +568,26 @@ export default function QrChatApp() {
 
             {group ? (
               <form className="message-composer" onSubmit={submitMessage}>
-                <label className="sr-only" htmlFor="message">Message</label>
-                <input
-                  id="message"
-                  value={draft}
-                  disabled={busy}
-                  maxLength={4000}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Message..."
-                  autoComplete="off"
-                />
-                <button
-                  type="submit"
-                  className="send"
-                  aria-label="Send message"
-                  disabled={busy || !ready || !draft.trim()}
-                >
-                  <Icon name="arrow" size={18} />
-                </button>
+                <div className="message-composer-pill">
+                  <label className="sr-only" htmlFor="message">Message</label>
+                  <input
+                    id="message"
+                    value={draft}
+                    disabled={busy}
+                    maxLength={4000}
+                    onChange={(event) => setDraft(event.target.value)}
+                    placeholder="Message..."
+                    autoComplete="off"
+                  />
+                  <button
+                    type="submit"
+                    className="send"
+                    aria-label={busy ? "Sending message" : "Send message"}
+                    disabled={busy || !ready || !draft.trim()}
+                  >
+                    {busy ? <span className="send-spinner" aria-hidden="true" /> : <Icon name="send" size={19} />}
+                  </button>
+                </div>
               </form>
             ) : (
               <button
@@ -613,9 +615,7 @@ export default function QrChatApp() {
                 {direct.loading && <MessageSkeleton />}
                 {!direct.loading && !direct.error && direct.messages.length === 0 && <FirstDirectMessageEmpty friendName={peer?.display_name ?? "your friend"} />}
                 {direct.nextCursor !== null && <button className="text-button" disabled={busy} onClick={() => void perform(direct.loadOlder)}>Load older messages</button>}
-                {direct.messages.map((message) => <article key={message.id} className={message.sender_id === session?.id ? "own" : ""}>
-                  <div><span className="message-meta">{message.sender_id === session?.id ? "You" : peer?.display_name ?? "Friend"}</span><p>{message.body}</p><time>{new Date(message.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</time></div>
-                </article>)}
+                {direct.messages.map((message) => <DirectMessageBubble key={message.id} message={message} session={session} peer={peer ?? null} onOpenProfile={openPerson} />)}
                 <div ref={directBottom} />
               </div>
               <DirectMessageComposer

@@ -148,7 +148,7 @@ for (const platform of ['ios', 'android']) {
   test(`${platform}: Chats shows the current group, collapsible requests, and real DM previews`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     state.chat.group = { ...group, venue: { ...group.venue, name: 'Brew & Chat' }, messages: [{ id: 'group-message', user: 'peer', name: 'Sam', text: 'Workshop starts soon', time: Date.now() - 4 * 60_000 }] };
-    state.chat.expiresAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+    state.chat.expiresAt = new Date(Date.now() + 2.5 * 60 * 60_000).toISOString();
     const incoming = { id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'peer', requested_at: '2026-10-01T10:00:00Z', accepted_at: null, user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } };
     const decline = { ...incoming, id: '22222222-2222-4222-8222-222222222222', user_b_id: 'peer-two', user_b: { id: 'peer-two', display_name: 'Niko', avatar_url: null } };
     const outgoing = { ...incoming, id: '33333333-3333-4333-8333-333333333333', user_b_id: 'peer-three', requested_by_id: 'me', user_b: { id: 'peer-three', display_name: 'Mira', avatar_url: null } };
@@ -158,18 +158,28 @@ for (const platform of ['ios', 'android']) {
     const calls = [];
     state.auth.api = { acceptFriend: async id => calls.push(['accept', id]), removeFriend: async id => calls.push(['remove', id]) };
     const screen = await render(t, Groups);
-    assertNativeButtonsHosted(screen);
     assert.match(screen.text(), /Chats/);
     assert.match(screen.text(), /Your group/);
     assert.match(screen.text(), /Brew & Chat/);
     assert.match(screen.text(), /BC/);
     assert.match(screen.text(), /Sam: Workshop starts soon/);
-    assert.match(screen.text(), /Your access ends in \dh/);
+    assert.match(screen.text(), /Your group access ends in 2 hours\./);
     assert.match(screen.text(), /Friend requests \(3\)/);
     assert.match(screen.text(), /See you at the cafe\./);
     assert.doesNotMatch(screen.text(), /Recent|Nearby|My Groups/);
-    assert.equal(screen.root.findAllByType('Pressable').some((node) => node.props.accessibilityLabel === 'Open Brew & Chat, 2 members'), true);
-    await screen.press('Open Brew & Chat, 2 members');
+    const searchButton = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Search chats');
+    assert.ok(searchButton);
+    assert.equal(searchButton.props.accessibilityState.disabled, false);
+    assert.equal(searchButton.props.accessibilityState.expanded, false);
+    assert.equal(searchButton.props.style({ pressed: true }).opacity, 0.72);
+    assert.equal(process.env.EXPO_OS === 'ios'
+      ? searchButton.findAllByType('Image').some(node => node.props.source === 'sf:magnifyingglass')
+      : searchButton.findAllByType('SymbolView').some(node => node.props.name.android === 'search'), true);
+    const groupCard = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel.startsWith('Open Brew & Chat'));
+    assert.ok(groupCard);
+    assert.match(groupCard.props.accessibilityLabel, /Your group access ends in 2 hours/);
+    assert.equal(groupCard.findAllByType('SymbolView').length, 0, 'the group card has no disclosure arrow');
+    await screen.press(groupCard.props.accessibilityLabel);
     assert.equal(state.navigation.at(-1)[1].pathname, '/room');
 
     await screen.press('Toggle friend requests');
@@ -183,24 +193,25 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Cancel');
     assert.deepEqual(calls, [['accept', incoming.id], ['remove', decline.id], ['remove', outgoing.id]]);
 
-    await screen.press('Search');
+    await screen.press('Search chats');
+    const expandedSearch = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Close chat search');
+    assert.equal(expandedSearch.props.accessibilityState.expanded, true);
     await screen.type('Search chats by name', 'unknown room');
     assert.match(screen.text(), /No chats match “unknown room”\./);
     await screen.press('Clear search');
     await screen.type('Search chats by name', 'jordan');
     assert.match(screen.text(), /Open chat with Jordan/);
     assert.doesNotMatch(screen.text(), /Open Brew & Chat, 2 members/);
-    await screen.press('Done');
+    await screen.press('Close chat search');
     state.chat.group = { ...group, messages: [] }; await screen.update();
     assert.equal(screen.root.findAllByType('Text').some((node) => node.props.children === 'Now'), false);
-    await screen.press('New message');
-    assert.equal(screen.root.findByType('Modal').props.visible, true);
-    assert.match(screen.text(), /Start a conversation with Jordan/);
-    assert.doesNotMatch(screen.text(), /Start a conversation with Sam/);
-    assert.equal(screen.root.findAllByType('Text').find(node => node.props.children === 'Jordan').props.numberOfLines, 1);
-    await screen.press('Start a conversation with Jordan');
+    assert.doesNotMatch(screen.text(), /New message|new-message|Start a conversation/);
+    const jordanRow = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Open chat with Jordan');
+    assert.ok(jordanRow, 'an accepted friend with no message history stays directly available');
+    assert.equal(jordanRow.findAllByType('SymbolView').length, 0, 'DM rows have no disclosure arrow');
+    await screen.press('Open chat with Jordan');
     assert.equal(state.navigation.at(-1)[1].params.id, accepted.id);
-    assert.equal(calls.length, 3, 'The new-message picker must not create a friendship');
+    assert.equal(calls.length, 3, 'Opening a direct message does not create a friendship');
   });
 
   test(`${platform}: Chats distinguishes a first group from observed expiry and retries a failed load`, async (t) => {
@@ -208,12 +219,12 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, Groups);
     assert.match(screen.text(), /No group yet/);
     assert.doesNotMatch(screen.text(), /Your group access ended/);
-    await screen.press('Search');
+    await screen.press('Search chats');
     await screen.type('Search chats by name', 'Cafe');
     assert.doesNotMatch(screen.text(), /No group yet/);
     state.chat.groupAccessEnded = true; await screen.update();
     assert.doesNotMatch(screen.text(), /Your group access ended/);
-    await screen.press('Done');
+    await screen.press('Close chat search');
     assert.match(screen.text(), /Your group access ended/);
     await screen.press('Scan a QR code');
     assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
@@ -227,28 +238,50 @@ for (const platform of ['ios', 'android']) {
     assert.equal(retried, true);
   });
 
-  test(`${platform}: new-message picker shows loading and retry states after snapshot failures`, async (t) => {
-    reset(); process.env.EXPO_OS = platform;
-    state.chat.friends = [{ id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'me', requested_at: '2026-09-30T10:00:00Z', accepted_at: '2026-09-30T11:00:00Z', user_b: { id: 'peer', display_name: 'Jordan', avatar_url: null } }];
-    let refreshed = false;
-    state.chat.refresh = async () => { refreshed = true; };
-    const screen = await render(t, Groups);
-    await screen.press('New message');
-    assert.match(screen.text(), /Start a conversation with Jordan/);
+  test(`${platform}: the access ring refreshes once a minute and clears stale countdown timers`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.chat.group = group;
+    const originalNow = Date.now;
+    const originalSetInterval = globalThis.setInterval;
+    const originalClearInterval = globalThis.clearInterval;
+    const start = Date.parse('2026-10-01T00:00:00Z');
+    let now = start;
+    const intervals = [];
+    let screen;
+    try {
+      Date.now = () => now;
+      globalThis.setInterval = (callback, delay) => {
+        const timer = { callback, delay, cleared: false };
+        intervals.push(timer);
+        return timer;
+      };
+      globalThis.clearInterval = timer => { timer.cleared = true; };
+      state.chat.expiresAt = new Date(start + 2.5 * 60 * 60_000).toISOString();
+      screen = await render(t, Groups);
+      assert.match(screen.text(), /2h left/);
+      assert.equal(intervals.length, 1);
+      assert.equal(intervals[0].delay, 60_000);
 
-    state.chat.ready = false; state.chat.friends = []; await screen.update();
-    assert.match(screen.text(), /Loading friends/);
-    assert.doesNotMatch(screen.text(), /Add a friend first/);
+      now += 60 * 60_000;
+      await act(async () => { intervals[0].callback(); });
+      assert.match(screen.text(), /1h left/);
 
-    state.chat.error = 'Offline'; await screen.update();
-    assert.match(screen.text(), /We couldn’t load your friends\. Offline/);
-    assert.doesNotMatch(screen.text(), /Add a friend first/);
-    const retryButtons = screen.root.findAllByType('Button').filter(button => button.props.title === 'Retry');
-    assert.equal(retryButtons.length, 2, 'The open picker and page error each offer retry');
-    await act(async () => { retryButtons[1].props.onPress(); });
-    assert.equal(refreshed, true);
-    await screen.press('Close');
-    assert.equal(screen.root.findAllByType('Modal').length, 0);
+      state.chat.expiresAt = null;
+      await screen.update();
+      assert.equal(intervals[0].cleared, true, 'removing expiry clears the old timer');
+      assert.match(screen.text(), /Time unavailable/);
+
+      state.chat.expiresAt = new Date(now + 5 * 60 * 60_000).toISOString();
+      await screen.update();
+      assert.match(screen.text(), /5h left/, 'a replacement expiry is calculated against the current time immediately');
+      assert.equal(intervals.length, 2);
+      await screen.unmount();
+      assert.equal(intervals[1].cleared, true, 'unmount clears the active timer');
+    } finally {
+      if (screen) await screen.unmount();
+      Date.now = originalNow;
+      globalThis.setInterval = originalSetInterval;
+      globalThis.clearInterval = originalClearInterval;
+    }
   });
 
   test(`${platform}: Chats loading skeleton preserves the section structure`, async (t) => {
@@ -360,6 +393,31 @@ for (const platform of ['ios', 'android']) {
     assert.equal(state.watchers[0].stopped, true);
   });
 
+  test(`${platform}: every direct message shows the actual sender photo and opens that profile`, async (t) => {
+    reset(); process.env.EXPO_OS = platform; state.params = { id: friendId };
+    const ownAvatar = 'https://images.example/andy.jpg';
+    const peerAvatar = 'https://images.example/sam.jpg';
+    state.chat.session = { id: 'me', name: 'Andy', avatarUrl: ownAvatar };
+    state.chat.friends = [{
+      id: friendId, user_a_id: 'me', user_b_id: 'peer', accepted_at: '2026-09-19',
+      user_b: { id: 'peer', display_name: 'Sam', avatar_url: peerAvatar },
+    }];
+    state.loadDirectSnapshot = async () => ({ messages: [
+      { id: 1, sender_id: 'peer', body: 'Incoming note', created_at: '2026-09-19T10:00:00Z' },
+      { id: 2, sender_id: 'me', body: 'My reply', created_at: '2026-09-19T10:01:00Z' },
+    ], nextCursor: null });
+    const screen = await render(t, Direct);
+    const sources = screen.root.findAllByType('Image').map(image => image.props.source);
+    assert.ok(sources.includes(ownAvatar), 'the own-message avatar uses the signed-in profile photo');
+    assert.ok(sources.includes(peerAvatar), 'the received-message avatar uses the friend profile photo');
+    assert.match(screen.text(), /Incoming note/);
+    assert.match(screen.text(), /My reply/);
+    await screen.press("View Andy's profile");
+    assert.deepEqual(state.navigation.at(-1), ['push', '/edit-profile']);
+    await screen.press("View Sam's profile");
+    assert.deepEqual(state.navigation.at(-1), ['push', { pathname: '/person/[id]', params: { id: 'peer' } }]);
+  });
+
   test(`${platform}: an accepted friend’s empty DM shows a greeting only after its first read succeeds`, async (t) => {
     reset(); process.env.EXPO_OS = platform; state.params = { id: friendId };
     state.chat.friends = [{ id: friendId, user_a_id: 'me', user_b_id: 'peer', accepted_at: '2026-09-19', user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } }];
@@ -408,16 +466,36 @@ test('message composer retains a failed draft and clears it before a failed refr
     refresh: async () => { throw new Error('Offline'); }, loadOlder: async () => {},
     send: async body => { if (failSend) throw new Error('Failed send'); sent.push(body); }, unavailable: 'Ended',
   });
-  assertNativeButtonsHosted(screen);
-  const sendButton = screen.root.findAllByType('Button').find((button) => button.props.title === 'Send');
-  assert.equal(sendButton.props.disabled, true);
+  const sendButton = () => screen.root.findAllByType('Pressable').find(button => button.props.accessibilityLabel === 'Send message');
+  assert.equal(sendButton().props.accessibilityState.disabled, true);
   await screen.type('Message', 'Hello');
-  assert.equal(screen.root.findAllByType('Button').find((button) => button.props.title === 'Send').props.disabled, false);
-  await screen.press('Send');
+  assert.equal(sendButton().props.accessibilityState.disabled, false);
+  await screen.press('Send message');
   assert.equal(screen.root.findByType('TextInput').props.value, 'Hello');
   failSend = false;
-  await screen.press('Send');
+  await screen.press('Send message');
   assert.deepEqual(sent, ['Hello']);
+  assert.equal(screen.root.findByType('TextInput').props.value, '');
+});
+
+test('message composer displays a pending spinner and prevents duplicate sends', async (t) => {
+  reset();
+  let finishSend;
+  let sendCount = 0;
+  const screen = await render(t, Conversation, {
+    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    refresh: async () => {}, loadOlder: async () => {},
+    send: async () => { sendCount += 1; await new Promise(resolve => { finishSend = resolve; }); }, unavailable: 'Ended',
+  });
+  await screen.type('Message', 'Hello');
+  await screen.press('Send message');
+  assert.equal(screen.root.findAllByType('ActivityIndicator').length, 1);
+  assert.equal(screen.root.findAllByType('Pressable').some(button => button.props.accessibilityLabel === 'Sending message'), true);
+  assert.equal(screen.root.findAllByType('Pressable').find(button => button.props.accessibilityLabel === 'Sending message').props.accessibilityState.disabled, true);
+  assert.equal(sendCount, 1);
+  await assert.rejects(screen.press('Sending message'), /Disabled button/);
+  assert.equal(sendCount, 1, 'the disabled pending control cannot trigger another send');
+  await act(async () => { finishSend(); await Promise.resolve(); });
   assert.equal(screen.root.findByType('TextInput').props.value, '');
 });
 

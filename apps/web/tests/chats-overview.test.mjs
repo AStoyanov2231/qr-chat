@@ -39,6 +39,7 @@ async function loadTsxModule(relativePath) {
     if (specifier === '@qr-chat/domain') return domain;
     if (specifier === '@phosphor-icons/react') return icons;
     if (specifier === './avatar') return { Avatar };
+    if (specifier === '@/components/avatar') return { Avatar };
     if (specifier === '@/components/icon') return { Icon };
     return requireFromTest(specifier);
   };
@@ -147,7 +148,7 @@ test('active Chats overview shows real group details, collapsed requests, ordere
       [acceptedMaya.id]: { status: 'ready', message: mayaMessage },
       [acceptedJordan.id]: { status: 'ready', message: null },
     },
-    expiresAt: new Date(Date.now() + 19 * 60 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 18.5 * 60 * 60_000).toISOString(),
   }));
 
   assert.match(html, /<h1>Chats<\/h1>/);
@@ -155,13 +156,20 @@ test('active Chats overview shows real group details, collapsed requests, ordere
   assert.match(html, /class="group-initials"[^>]*>BC<\/span>/);
   assert.match(html, /Brew &amp; Chat/);
   assert.match(html, /2 members/);
+  const groupTitleRow = html.match(/<span class="group-title-row">([\s\S]*?)<\/span>/)?.[1] ?? '';
+  assert.match(groupTitleRow, /Brew &amp; Chat/);
+  assert.match(groupTitleRow, /2 members/);
   assert.match(html, /Maya Chen: Anyone here for the workshop\?/);
-  assert.match(html, /Your access ends in/);
+  assert.match(html, /18h left/);
+  assert.match(html, /Your group access ends in 18 hours\./);
+  assert.match(html, /group-title-row/);
+  assert.match(html, /group-preview-row/);
+  assert.match(html, /data-icon="MagnifyingGlass"/);
   assert.match(html, /Friend requests \(2\)/);
   assert.match(html, /Accept Bea Kim&#x27;s friend request/);
   assert.match(html, /Decline Bea Kim&#x27;s friend request/);
   assert.match(html, /Cancel friend request to Kai Tan/);
-  assert.match(html, /New message/);
+  assert.doesNotMatch(html, /New message|new-message/);
   assert.match(html, /src="https:\/\/images.example\/maya.jpg"/);
   assert.match(html, /You: Thanks for the welcome!/);
   assert.match(html, /Say hello/);
@@ -169,6 +177,10 @@ test('active Chats overview shows real group details, collapsed requests, ordere
   const dmStart = html.indexOf('<ul class="dm-list">');
   const dmEnd = html.indexOf('</ul>', dmStart);
   const dmList = html.slice(dmStart, dmEnd);
+  assert.doesNotMatch(dmList, /CaretRight/);
+  const groupStart = html.indexOf('<button type="button" class="group-card"');
+  const groupEnd = html.indexOf('</button>', groupStart);
+  assert.doesNotMatch(html.slice(groupStart, groupEnd), /CaretRight/);
   const mayaRow = dmList.indexOf('Open direct message with Maya Chen');
   const jordanRow = dmList.indexOf('Open direct message with Jordan Lee');
   assert.ok(mayaRow >= 0 && jordanRow >= 0 && mayaRow < jordanRow, 'the newest conversation appears before other DM rows');
@@ -200,9 +212,7 @@ test('failed chat loads and individual preview failures have explicit recovery w
   assert.match(loadError, /Try again to see your group, requests, and messages\./);
   assert.match(loadError, />Retry</);
   assert.doesNotMatch(loadError, /No group yet|Your group access ended|No direct messages/);
-  assert.match(loadError, /Couldn’t load accepted friends\. Retry to choose someone to message\./);
-  assert.match(loadError, /aria-label="Close new message"/);
-  assert.doesNotMatch(loadError, /No accepted friends yet/);
+  assert.doesNotMatch(loadError, /New message|new-message|accepted friend chooser/);
 
   const previewError = renderOverview(props({
     friends: [acceptedMaya],
@@ -238,6 +248,8 @@ test('first-DM copy and composer keep the addressed friend and recoverable draft
   }));
   assert.match(failedComposer, /value="A message I can retry"/);
   assert.match(failedComposer, /placeholder="Message Jordan Lee…"/);
+  assert.match(failedComposer, /message-composer-pill/);
+  assert.match(failedComposer, /data-icon="send"/);
   assert.match(failedComposer, /Your draft is still here/);
 
   const pendingComposer = renderToStaticMarkup(React.createElement(directParts.DirectMessageComposer, {
@@ -254,6 +266,53 @@ test('first-DM copy and composer keep the addressed friend and recoverable draft
   }));
   assert.match(pendingComposer, /aria-busy="true"/);
   assert.match(pendingComposer, /aria-label="Sending direct message"/);
+  assert.match(pendingComposer, /send-spinner/);
   assert.match(pendingComposer, /value="Sending a note"/);
   assert.match(pendingComposer, /disabled/);
+});
+
+test('direct-message bubbles show the actual sender avatar and keep known profile actions', () => {
+  const session = { id: sessionId, name: 'Current User', avatarUrl: 'https://images.example/current.jpg' };
+  const peer = { id: 'user-jordan', display_name: 'Jordan Lee', avatar_url: 'https://images.example/jordan.jpg' };
+  const renderBubble = (senderId) => renderToStaticMarkup(React.createElement(directParts.DirectMessageBubble, {
+    message: { id: 10, sender_id: senderId, body: 'Hello there', created_at: '2026-10-01T11:00:00.000Z' },
+    session,
+    peer,
+    onOpenProfile: noOp,
+  }));
+
+  const own = renderBubble(sessionId);
+  assert.match(own, /class="own"/);
+  assert.match(own, /src="https:\/\/images\.example\/current\.jpg"/);
+  assert.match(own, /View Current User&#x27;s profile/);
+  assert.match(own, />You<\/span>/);
+
+  const received = renderBubble(peer.id);
+  assert.match(received, /src="https:\/\/images\.example\/jordan\.jpg"/);
+  assert.match(received, /View Jordan Lee&#x27;s profile/);
+  assert.match(received, />Jordan Lee<\/span>/);
+
+  const opened = [];
+  const ownElement = directParts.DirectMessageBubble({
+    message: { id: 11, sender_id: sessionId, body: 'Private note', created_at: '2026-10-01T11:00:00.000Z' },
+    session,
+    peer,
+    onOpenProfile: (id) => opened.push(id),
+  });
+  ownElement.props.children[0].props.onClick();
+  assert.deepEqual(opened, [sessionId]);
+
+  const deleted = renderBubble(null);
+  assert.match(deleted, /Former participant/);
+  assert.match(deleted, /disabled=""/);
+  assert.doesNotMatch(deleted, /src="https:\/\/images\.example\//);
+  const deletedElement = directParts.DirectMessageBubble({
+    message: { id: 12, sender_id: null, body: 'Old message', created_at: '2026-10-01T11:00:00.000Z' },
+    session,
+    peer,
+    onOpenProfile: (id) => opened.push(id),
+  });
+  assert.equal(deletedElement.props.children[0].props.disabled, true);
+  deletedElement.props.children[0].props.onClick();
+  assert.deepEqual(opened, [sessionId]);
 });

@@ -1,13 +1,54 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { Modal, Pressable, TextInput, View } from 'react-native';
-import { accessTimeRemaining, directConversationTime, directMessagePreview, groupInitials, messageAge } from '@qr-chat/domain';
+import { Pressable, TextInput, View } from 'react-native';
+import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from '@qr-chat/domain';
 import { Avatar } from '@/components/avatar';
 import { Copy, Icon, Screen, Skeleton, colors, styles, useAction } from '@/components/chat-ui';
 import { NativeAction } from '@/components/native-action';
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
 import { roomRoute } from '@/lib/room-route';
+
+function useGroupAccessCountdown(expiresAt: string | null) {
+  const [now, setNow] = useState(() => Date.now());
+  const countdown = groupAccessIndicator(expiresAt, now);
+
+  useEffect(() => {
+    let current = true;
+    const update = () => { if (current) setNow(Date.now()); };
+    const immediateUpdate = setTimeout(update, 0);
+    if (groupAccessIndicator(expiresAt).state !== 'remaining') return () => { current = false; clearTimeout(immediateUpdate); };
+    const interval = setInterval(update, 60_000);
+    return () => { current = false; clearTimeout(immediateUpdate); clearInterval(interval); };
+  }, [expiresAt, countdown.state]);
+
+  return countdown;
+}
+
+function GroupAccessRing({ name, indicator }: { name: string; indicator: ReturnType<typeof groupAccessIndicator> }) {
+  const segmentCount = 180;
+  const center = 36;
+  const radius = 33;
+  const segmentSize = 3;
+  return <View style={{ width: 76, alignItems: 'center' }}>
+    <View style={{ width: 72, height: 72, alignItems: 'center', justifyContent: 'center' }}>
+      <View pointerEvents="none" style={{ position: 'absolute', width: 72, height: 72 }}>
+        <View style={{ position: 'absolute', left: 1.5, top: 1.5, width: 69, height: 69, borderRadius: 34.5, borderWidth: 3, borderColor: '#dfe2e8' }} />
+        {Array.from({ length: segmentCount }, (_, index) => {
+          const angle = index / segmentCount * Math.PI * 2 - Math.PI / 2;
+          const left = center + radius * Math.cos(angle) - segmentSize / 2;
+          const top = center + radius * Math.sin(angle) - segmentSize / 2;
+          const active = indicator.progress !== null && index / segmentCount < indicator.progress;
+          return <View key={index} style={{ position: 'absolute', left, top, width: segmentSize, height: segmentSize, borderRadius: segmentSize / 2, backgroundColor: active ? '#168a49' : '#dfe2e8' }} />;
+        })}
+      </View>
+      <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' }}>
+        <Copy style={{ color: '#334c72', fontSize: 21, fontWeight: '600' }}>{groupInitials(name)}</Copy>
+      </View>
+    </View>
+    <Copy style={{ width: 76, marginTop: -6, paddingHorizontal: 5, paddingVertical: 3, borderRadius: 10, borderWidth: 2, borderColor: colors.soft, backgroundColor: colors.paper, color: indicator.state === 'ended' ? '#7b4a4a' : colors.muted, fontSize: 10, lineHeight: 13, fontWeight: '600', textAlign: 'center' }}>{indicator.label}</Copy>
+  </View>;
+}
 
 export default function ChatsScreen() {
   const chat = useChat();
@@ -16,7 +57,6 @@ export default function ChatsScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [requestsExpanded, setRequestsExpanded] = useState(false);
-  const [newMessageOpen, setNewMessageOpen] = useState(false);
   const query = search.trim().toLocaleLowerCase();
   const group = chat.group;
   const latestGroupMessage = group?.messages.at(-1);
@@ -25,6 +65,7 @@ export default function ChatsScreen() {
   const peerFor = (friend: typeof chat.friends[number]) => friend.user_a_id === userId ? friend.user_b : friend.user_a;
   const nameFor = (friend: typeof chat.friends[number]) => peerFor(friend)?.display_name ?? 'Friend';
   const groupMatches = !!group && (!query || group.venue.name.toLocaleLowerCase().includes(query));
+  const accessIndicator = useGroupAccessCountdown(chat.ready && !chat.error && groupMatches ? chat.expiresAt : null);
   const visibleFriends = acceptedFriends
     .filter((friend) => nameFor(friend).toLocaleLowerCase().includes(query))
     .sort((first, second) => {
@@ -55,21 +96,17 @@ export default function ChatsScreen() {
     void action.run(async () => { await api.removeFriend(friendId); await chat.refresh(); });
   }
 
-  function startDirectMessage(friend: typeof chat.friends[number]) {
-    setNewMessageOpen(false);
-    openDirectMessage(friend);
-  }
-
   return <Screen contentContainerStyle={{ gap: 32 }}>
     <View style={[styles.row, { justifyContent: 'space-between', paddingTop: 12 }]}>
       <Copy accessibilityRole="header" style={[styles.title, { flexShrink: 1 }]}>Chats</Copy>
-      <NativeAction
-        label={searchOpen ? 'Done' : 'Search'}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={searchOpen ? 'Close chat search' : 'Search chats'}
+        accessibilityState={{ disabled: !chat.ready || !!chat.error, expanded: searchOpen }}
         disabled={!chat.ready || !!chat.error}
         onPress={() => { setSearchOpen((open) => !open); setSearch(''); }}
-        variant="text"
-        align="flex-end"
-      />
+        style={({ pressed }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: colors.soft, opacity: !chat.ready || !!chat.error ? 0.45 : pressed ? 0.72 : 1 })}
+      ><Icon name={searchOpen ? 'close' : 'search'} size={23} color={colors.muted} /></Pressable>
     </View>
     {searchOpen && <TextInput
       autoFocus
@@ -91,29 +128,25 @@ export default function ChatsScreen() {
         {!chat.groupAccessEnded && <Copy style={{ color: colors.muted, fontSize: 20, fontWeight: '600' }}>Your group</Copy>}
         {group ? <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Open ${group.venue.name}, ${group.members.length} members`}
+          accessibilityLabel={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}. ${accessIndicator.accessibilityLabel}`}
           onPress={() => router.push(roomRoute(group))}
-          style={{ padding: 16, borderRadius: 18, backgroundColor: colors.soft, gap: 14 }}
+          style={{ padding: 16, borderRadius: 18, backgroundColor: colors.soft }}
         >
-          <View style={[styles.row, { alignItems: 'flex-start', gap: 12 }]}>
-            <View style={{ width: 56, height: 56, borderRadius: 17, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' }}>
-              <Copy style={{ color: '#334c72', fontSize: 21, fontWeight: '600' }}>{groupInitials(group.venue.name)}</Copy>
-            </View>
-            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <Copy numberOfLines={1} style={{ fontSize: 18, lineHeight: 24, fontWeight: '600' }}>{group.venue.name}</Copy>
-              <Copy style={{ color: colors.muted, fontSize: 14 }}>{group.members.length} members</Copy>
-              <Copy numberOfLines={1} style={{ color: colors.muted, fontSize: 14 }}>
-                {latestGroupMessage ? `${latestGroupMessage.name}: ${latestGroupMessage.text}` : 'You’re in. Say hello.'}
-              </Copy>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 7 }}>
-              <Copy style={{ color: colors.muted, fontSize: 12 }}>{latestGroupMessage ? messageAge(latestGroupMessage.time) : ''}</Copy>
-              <Icon name="chevron" size={17} color={colors.muted} />
+          <View style={[styles.row, { alignItems: 'center', gap: 12 }]}>
+            <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
+            <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                <Copy numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 18, lineHeight: 24, fontWeight: '600' }}>{group.venue.name}</Copy>
+                <Copy style={{ flexShrink: 1, maxWidth: '50%', color: colors.muted, fontSize: 13, textAlign: 'right' }}>{group.members.length} {group.members.length === 1 ? 'member' : 'members'}</Copy>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                <Copy numberOfLines={1} style={{ flex: 1, minWidth: 0, color: colors.muted, fontSize: 14 }}>
+                  {latestGroupMessage ? `${latestGroupMessage.name}: ${latestGroupMessage.text}` : 'You’re in. Say hello.'}
+                </Copy>
+                {latestGroupMessage && <Copy style={{ flexShrink: 0, color: colors.muted, fontSize: 12 }}>{messageAge(latestGroupMessage.time)}</Copy>}
+              </View>
             </View>
           </View>
-          {accessTimeRemaining(chat.expiresAt) && <View style={{ borderTopWidth: 1, borderColor: colors.line, paddingTop: 11 }}>
-            <Copy style={{ color: colors.muted, fontSize: 14 }}>{accessTimeRemaining(chat.expiresAt)}</Copy>
-          </View>}
         </Pressable> : chat.groupAccessEnded ? <View style={[styles.panel, { paddingVertical: 18, backgroundColor: colors.soft, gap: 10 }]}>
           <Copy style={{ fontSize: 20, lineHeight: 26, fontWeight: '600' }}>Your group access ended</Copy>
           <Copy style={styles.muted}>Your friends and DMs stay.</Copy>
@@ -166,7 +199,6 @@ export default function ChatsScreen() {
       <View style={{ gap: 4 }}>
         <View style={[styles.row, { justifyContent: 'space-between', minHeight: 48 }]}>
           <Copy style={{ fontSize: 18, fontWeight: '600', flexShrink: 1 }}>Direct messages</Copy>
-          <NativeAction label="New message" variant="text" align="flex-end" onPress={() => setNewMessageOpen(true)} />
         </View>
         {noMatches ? <View style={{ paddingVertical: 12, gap: 8 }}>
           <Copy style={styles.muted}>{`No chats match “${search.trim()}”.`}</Copy>
@@ -197,38 +229,11 @@ export default function ChatsScreen() {
             {preview?.status === 'error' && <NativeAction label="Retry preview" variant="text" disabled={action.busy} onPress={() => { void action.run(chat.refresh); }} align="flex-end" />}
           </View>;
         }) : query ? null : acceptedFriends.length === 0
-          ? <Copy style={[styles.muted, { paddingVertical: 10 }]}>Accepted friends appear here. Choose New message to start a chat.</Copy>
+          ? <Copy style={[styles.muted, { paddingVertical: 10 }]}>Accepted friends appear here so you can start a private conversation.</Copy>
           : null}
         {!!query && !noMatches && !visibleFriends.length && <Copy style={[styles.muted, { paddingVertical: 8 }]}>No direct messages match “{search.trim()}”.</Copy>}
       </View>
     </>}
 
-    <Modal visible={newMessageOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setNewMessageOpen(false)}>
-      <Screen contentContainerStyle={{ gap: 16 }}>
-        <View style={[styles.row, { justifyContent: 'space-between' }]}>
-          <Copy accessibilityRole="header" style={styles.subtitle}>New message</Copy>
-          <NativeAction label="Done" variant="text" align="flex-end" onPress={() => setNewMessageOpen(false)} />
-        </View>
-        {chat.error ? <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>
-          <Copy style={{ color: colors.danger }}>{`We couldn’t load your friends. ${chat.error}`}</Copy>
-          <NativeAction label="Retry" variant="outlined" disabled={action.busy} onPress={() => { void action.run(chat.refresh); }} align="flex-start" />
-          <NativeAction label="Close" variant="text" onPress={() => setNewMessageOpen(false)} align="flex-start" />
-        </View> : !chat.ready ? <Copy style={styles.muted}>Loading friends…</Copy> : acceptedFriends.length ? acceptedFriends.map((friend) => {
-          const peer = peerFor(friend);
-          const peerName = nameFor(friend);
-          return <Pressable
-            key={friend.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Start a conversation with ${peerName}`}
-            onPress={() => startDirectMessage(friend)}
-            style={[styles.row, { minHeight: 62, borderBottomWidth: 1, borderColor: colors.line }]}
-          >
-            <Avatar name={peerName} url={peer?.avatar_url} size={46} />
-            <Copy numberOfLines={1} style={{ fontWeight: '600', flexShrink: 1 }}>{peerName}</Copy>
-            <View style={{ marginLeft: 'auto' }}><Icon name="chevron" size={18} color={colors.muted} /></View>
-          </Pressable>;
-        }) : <Copy style={styles.muted}>Only accepted friends can start a direct message. Add a friend first.</Copy>}
-      </Screen>
-    </Modal>
   </Screen>;
 }

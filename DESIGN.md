@@ -19,6 +19,7 @@ Sources: [web CSS](apps/web/src/app/globals.css), [native chat UI](apps/mobile/s
 | Muted text | `#797e8b` / `#626a78` |
 | Separator, soft surface | `#eeeff2`, `#f3f4f6` |
 | Blue surface, membership | `#e9eff8`, `#29bc68` |
+| Group access ring | Progress `#168a49` on `#dfe2e8` track; local to this indicator |
 | Danger | Web auth/native `#b62929`; web `.danger` `#c23b3b` |
 | Type | Web Arial/Helvetica; native system. Home 44, heading 35, group title/detail 18/14 |
 | Layout | Horizontal inset 22; common gaps 8/12/16, sections 24/32 |
@@ -28,8 +29,11 @@ Values are extracted, not verified contrast results. Web uses CSS pixels; native
 
 ## Interaction
 
-- Keep Home/Groups/Profile navigation and labels, native tabs, actual profile images, and icon fallbacks. The Chats overview uses a rounded cool-surface group card with initials, member count, latest message, age, and access-expiry footer; friend requests are a collapsed row; accepted friends use compact rows with avatar, preview, age, and inset separators. Search and New message are secondary actions.
+- Keep Home/Groups/Profile navigation and labels, native tabs, actual profile images, and icon fallbacks. The active group card uses a 72px initials icon encircled by a 3px access ring. The ring tracks the clamped remaining share of the 24-hour window; a compact chip overlaps its bottom edge and shows remaining time, “Access ended,” or “Time unavailable.” Full expiry meaning is available to assistive technology. The darker `#168a49` progress color measures 3.40:1 against the quiet `#dfe2e8` track, while the shared green remains unchanged elsewhere. This indicator describes time and does not authorize or revoke membership.
+- Place the member count at the right of the group title row, with the latest message preview and age on the next row. Long names truncate and the count may wrap. Friend requests stay collapsed; accepted friends use compact rows with avatar, preview, age, and inset separators. Search uses a magnifying-glass control. Every accepted friend, including one with no history, opens directly from the Direct messages list.
 - Distinguish a first visit with no group from a group that ended during the signed-in session. Keep friends and DMs visible after group access ends. Loading placeholders mirror the same section order without acting as controls.
+- Keep chat composers as compact pills about 58px high overall, with a 48px minimum input and 44px icon-only send target. Keep errors separate from the pill, retain drafts on failure, show a pending spinner, and prevent duplicate sends. Native input can grow for multiline text.
+- Show the real sender's profile photo next to every group and DM message, including the signed-in user's own messages. Missing images use initials; known profile actions open the matching profile.
 - Label inputs; preserve drafts/values on failure; show pending/error/retry states and prevent duplicate submits.
 - Skeletons match real readiness and layout. Empty, offline, reconnect, and revoked-access states stay explicit.
 - Identify the conversation before sending. Confirm destructive consequences, including friendship/DM deletion.
@@ -56,7 +60,7 @@ Values are extracted, not verified contrast results. Web uses CSS pixels; native
 | `form-ux` | Forms, validation, input retention, or submission behavior changes. |
 | `feedback-and-affordance` | Adding or changing controls or consequential actions. |
 
-For UI tasks, read and apply each skill whose trigger matches; do not load all skills for every edit. Resolve skill files at `~/.codex/skills/<name>/SKILL.md`. The primary owns intent, design decisions, and review; Luna implements assigned UI and code changes. Reuse settled grill-me and design-intent answers.
+For UI tasks, read and apply each skill whose trigger matches; do not load all skills for every edit. Resolve skill files at `~/.codex/skills/<name>/SKILL.md`. The primary owns intent, design decisions, implementation, and review; optional subagents follow the ownership and checks in their brief. Reuse settled design-intent answers.
 
 ### Relevant validation
 

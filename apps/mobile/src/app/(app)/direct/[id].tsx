@@ -16,6 +16,18 @@ export default function DirectScreen() {
   const peer = friend?.user_a_id === userId ? friend.user_b : friend?.user_a;
   const direct = useDirectMessages(friend?.id ?? null);
   const peerName = peer?.display_name ?? 'Friend';
+  const messages = direct.messages.map((message) => {
+    const own = message.sender_id !== null && message.sender_id === userId;
+    const peerSender = message.sender_id !== null && message.sender_id === peer?.id;
+    return {
+      id: String(message.id),
+      user: message.sender_id ?? 'deleted',
+      name: own ? chat.session?.name?.trim() || 'You' : peerSender ? peerName : 'Former participant',
+      avatarUrl: own ? chat.session?.avatarUrl ?? null : peerSender ? peer?.avatar_url ?? null : null,
+      text: message.body,
+      time: Date.parse(message.created_at),
+    };
+  });
   const emptyState = direct.loading || (!chat.ready && !chat.error) ? undefined : direct.error || chat.error || !friend ? null : direct.messages.length === 0
     ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20 }}>
       <Copy style={{ fontSize: 24, lineHeight: 30, fontWeight: '600', textAlign: 'center' }}>{`Say hello to ${peerName}`}</Copy>
@@ -27,6 +39,24 @@ export default function DirectScreen() {
     await direct.refresh();
   }
   return <><Stack.Screen options={{ title: peerName, headerTitle: peer ? () => <Pressable accessibilityRole="button" accessibilityLabel={`View ${peerName}’s profile`} onPress={() => router.push({ pathname: '/person/[id]', params: { id: peer.id } })} style={[styles.row, { minHeight: 44 }]}><Avatar name={peerName} url={peer.avatar_url} size={34} /><View style={{ minWidth: 0, gap: 0 }}><Copy numberOfLines={1} style={{ fontSize: 16, lineHeight: 21, fontWeight: '600' }}>{peerName}</Copy><Copy style={{ fontSize: 12, lineHeight: 16, color: colors.muted }}>Friend</Copy></View></Pressable> : undefined }} />
-    <Conversation key={id} messages={direct.messages.map((message) => ({ id: String(message.id), user: message.sender_id ?? 'deleted', name: peerName, text: message.body, time: Date.parse(message.created_at) }))} userId={userId!} loading={(!chat.ready && !chat.error) || (!!friend && direct.loading)} error={chat.error || (friend ? direct.error : '')} available={!!friend && chat.ready} connected={direct.connection === 'connected'} nextCursor={direct.nextCursor} loadOlder={direct.loadOlder} refresh={refresh} send={(body) => api!.sendDirectMessage(id, body)} unavailable={chat.error ? 'Reconnect to open this conversation.' : 'This friendship is no longer available.'} emptyState={emptyState} composerLabel={`Message ${peerName}`} />
+    <Conversation
+      key={id}
+      avatars
+      messages={messages}
+      userId={userId!}
+      loading={(!chat.ready && !chat.error) || (!!friend && direct.loading)}
+      error={chat.error || (friend ? direct.error : '')}
+      available={!!friend && chat.ready}
+      connected={direct.connection === 'connected'}
+      nextCursor={direct.nextCursor}
+      loadOlder={direct.loadOlder}
+      refresh={refresh}
+      send={(body) => api!.sendDirectMessage(id, body)}
+      unavailable={chat.error ? 'Reconnect to open this conversation.' : 'This friendship is no longer available.'}
+      emptyState={emptyState}
+      composerLabel={`Message ${peerName}`}
+      canOpenProfile={(message) => message.user === userId || message.user === peer?.id}
+      openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
+    />
   </>;
 }

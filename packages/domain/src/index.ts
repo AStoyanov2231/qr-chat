@@ -109,19 +109,46 @@ export function messageAge(time: number, now = Date.now()): string {
   return `${Math.floor(minutes / 1440)}d`;
 }
 
-/** Format a countdown for display; membership authorization remains API-owned. */
-export function accessTimeRemaining(expiresAt: string | null, now = Date.now()): string | null {
-  if (expiresAt === null || !Number.isFinite(now)) return null;
+export type GroupAccessIndicator =
+  | { state: "remaining"; progress: number; label: string; accessibilityLabel: string }
+  | { state: "ended"; progress: 0; label: "Access ended"; accessibilityLabel: string }
+  | { state: "unknown"; progress: null; label: "Time unavailable"; accessibilityLabel: string };
+
+const GROUP_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
+
+/** Describe remaining group access for display only; authorization remains API-owned. */
+export function groupAccessIndicator(expiresAt: string | null, now = Date.now()): GroupAccessIndicator {
+  if (expiresAt === null || !Number.isFinite(now)) {
+    return { state: "unknown", progress: null, label: "Time unavailable", accessibilityLabel: "Group access time is unavailable." };
+  }
+
   const expiry = Date.parse(expiresAt);
-  if (!Number.isFinite(expiry)) return null;
+  if (!Number.isFinite(expiry)) {
+    return { state: "unknown", progress: null, label: "Time unavailable", accessibilityLabel: "Group access time is unavailable." };
+  }
 
   const remainingMs = expiry - now;
-  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
-  if (remainingMs < 60_000) return "Your access ends in <1m";
+  if (!Number.isFinite(remainingMs)) {
+    return { state: "unknown", progress: null, label: "Time unavailable", accessibilityLabel: "Group access time is unavailable." };
+  }
+  if (remainingMs <= 0) {
+    return { state: "ended", progress: 0, label: "Access ended", accessibilityLabel: "Your group access has ended." };
+  }
+
+  const progress = Math.min(1, Math.max(0, remainingMs / GROUP_ACCESS_DURATION_MS));
+  if (remainingMs < 60_000) {
+    return { state: "remaining", progress, label: "Under 1m left", accessibilityLabel: "Your group access ends in less than one minute." };
+  }
 
   const remainingMinutes = Math.floor(remainingMs / 60_000);
-  if (remainingMinutes < 60) return `Your access ends in ${remainingMinutes}m`;
-  return `Your access ends in ${Math.floor(remainingMinutes / 60)}h`;
+  if (remainingMinutes < 60) {
+    const unit = remainingMinutes === 1 ? "minute" : "minutes";
+    return { state: "remaining", progress, label: `${remainingMinutes}m left`, accessibilityLabel: `Your group access ends in ${remainingMinutes} ${unit}.` };
+  }
+
+  const remainingHours = Math.floor(remainingMinutes / 60);
+  const unit = remainingHours === 1 ? "hour" : "hours";
+  return { state: "remaining", progress, label: `${remainingHours}h left`, accessibilityLabel: `Your group access ends in ${remainingHours} ${unit}.` };
 }
 
 export function directMessagePreview(

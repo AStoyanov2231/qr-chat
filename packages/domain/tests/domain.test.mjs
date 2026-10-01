@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   unwrapQrCode,
   messageAge,
-  accessTimeRemaining,
+  groupAccessIndicator,
   directMessagePreview,
   directConversationTime,
   groupInitials,
@@ -24,15 +24,27 @@ test('message age handles boundaries and clocks ahead of the device', () => {
   }
 });
 
-test('access countdown labels finite future timestamps without deciding membership access', () => {
+test('group access indicator displays a clamped 24-hour countdown without deciding membership access', () => {
   const now = Date.parse('2026-10-01T00:00:00Z');
-  assert.equal(accessTimeRemaining('2026-10-01T18:00:00Z', now), 'Your access ends in 18h');
-  assert.equal(accessTimeRemaining('2026-10-01T00:17:00Z', now), 'Your access ends in 17m');
-  assert.equal(accessTimeRemaining('2026-10-01T00:00:59Z', now), 'Your access ends in <1m');
-  assert.equal(accessTimeRemaining(null, now), null);
-  assert.equal(accessTimeRemaining('not-a-date', now), null);
-  assert.equal(accessTimeRemaining('2026-10-01T00:00:00Z', Number.NaN), null);
-  assert.equal(accessTimeRemaining('2026-09-30T23:59:00Z', now), null);
+  assert.deepEqual(groupAccessIndicator('2026-10-01T18:00:00Z', now), {
+    state: 'remaining', progress: 0.75, label: '18h left', accessibilityLabel: 'Your group access ends in 18 hours.',
+  });
+  assert.deepEqual(groupAccessIndicator('2026-10-01T00:17:00Z', now), {
+    state: 'remaining', progress: 17 / 1440, label: '17m left', accessibilityLabel: 'Your group access ends in 17 minutes.',
+  });
+  assert.deepEqual(groupAccessIndicator('2026-10-01T00:00:59Z', now), {
+    state: 'remaining', progress: 59 / 86_400, label: 'Under 1m left', accessibilityLabel: 'Your group access ends in less than one minute.',
+  });
+  assert.equal(groupAccessIndicator('2026-10-02T12:00:00Z', now).progress, 1, 'remaining time above 24 hours clamps at a full ring');
+  assert.deepEqual(groupAccessIndicator(null, now), {
+    state: 'unknown', progress: null, label: 'Time unavailable', accessibilityLabel: 'Group access time is unavailable.',
+  });
+  assert.equal(groupAccessIndicator('not-a-date', now).state, 'unknown');
+  assert.equal(groupAccessIndicator('2026-10-01T18:00:00Z', Number.NaN).state, 'unknown');
+  assert.deepEqual(groupAccessIndicator('2026-10-01T00:00:00Z', now), {
+    state: 'ended', progress: 0, label: 'Access ended', accessibilityLabel: 'Your group access has ended.',
+  });
+  assert.equal(groupAccessIndicator('2026-09-30T23:59:59.999Z', now).state, 'ended', 'past expiries never show a live countdown');
 });
 
 test('direct message previews never claim an unknown sender is the current user', () => {

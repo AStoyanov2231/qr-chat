@@ -18,7 +18,7 @@ export const state = globalThis.__qrChatNativeTest = {};
 const mocks = {
   'react-native': `
     import React from 'react';
-    export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', Button='Button', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView';
+    export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', Button='Button', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView', ActivityIndicator='ActivityIndicator';
     export const Modal=({visible,...props})=>visible?React.createElement('Modal',{visible,...props},props.children):null;
     export const StyleSheet={create: value => value};
     export const useWindowDimensions=()=>({width:390,height:844});
@@ -134,13 +134,15 @@ export function reset() {
 
 export async function render(t, Component, props = {}) {
   let tree;
+  let mounted = true;
   const element = props => React.createElement(LocalRouteParamsContext.Provider, { value: state.params },
     React.createElement(NavigationRouteContext.Provider, { value: { key: 'test', name: 'test', params: state.params } }, React.createElement(Component, props)));
   await act(async () => { tree = create(element(props)); });
-  t.after(async () => { await act(async () => { tree.unmount(); }); });
+  t.after(async () => { if (mounted) await act(async () => { tree.unmount(); mounted = false; }); });
   return {
     get root() { return tree.root; },
     text: () => JSON.stringify(tree.toJSON()),
+    async unmount() { if (mounted) await act(async () => { tree.unmount(); mounted = false; }); },
     async update(nextProps = props) { await act(async () => { tree.update(element(nextProps)); }); },
     async press(label, occurrence = 0) {
       const control = tree.root.findAll(node => node.type === 'Pressable' || node.type === 'Button').filter(node => node.props.accessibilityLabel === label || node.props.title === label || node.findAllByType('Text').some(text => text.props.children === label))[occurrence];
