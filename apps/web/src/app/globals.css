@@ -92,11 +92,6 @@ h1, h2, p { margin: 0; }
 .floating-scan:active { transform: scale(.95); }
 .scan-symbol { position: relative; display: grid; place-items: center; width: 34px; height: 34px; }
 .scan-symbol > svg:last-child { position: absolute; }
-.profile-sheet { position: fixed; inset: auto 0 0; width: 100%; max-width: 600px; max-height: 90dvh; margin: 0 auto; padding: 0; border: 0; border-radius: 28px 28px 0 0; background: var(--paper); color: var(--ink); overflow-y: auto; overscroll-behavior: contain; }
-.profile-sheet::backdrop { background: #0d111466; }
-.profile-sheet-panel { position: relative; padding: 24px 22px calc(28px + env(safe-area-inset-bottom)); }
-.sheet-grabber { position: absolute; top: 9px; left: calc(50% - 18px); width: 36px; height: 5px; border-radius: 3px; background: #cdd2d9; }
-.profile-sheet .modal-close { left: 14px; right: auto; }
 
 .friend-request-list { padding-bottom: 8px; }
 .friend-request-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 68px; padding: 9px 0; border-bottom: 1px solid var(--line); }
@@ -155,7 +150,8 @@ h1, h2, p { margin: 0; }
 .message-skeleton .skeleton-block { width: 68%; height: 48px; border-radius: 16px 16px 16px 4px; }
 .message-skeleton .skeleton-block:nth-child(2) { width: 54%; margin-left: auto; border-radius: 16px 16px 4px 16px; }
 .message-skeleton .skeleton-block:nth-child(3) { width: 76%; }
-.profile-toolbar { height: 61px; display: flex; justify-content: flex-end; align-items: end; margin-right: -8px; }
+.profile-toolbar { height: 61px; display: flex; justify-content: space-between; align-items: end; margin-right: -8px; }
+.profile-view { min-height: 100%; padding-bottom: env(safe-area-inset-bottom); }
 .profile-identity { display: flex; flex-direction: column; align-items: center; }
 .avatar-wrap { position: relative; margin: -4px 0 14px; }
 .profile-avatar { width: 130px; height: 130px; border-radius: 50%; background: #e3eaf4; color: #60718b; display: grid; place-items: center; }

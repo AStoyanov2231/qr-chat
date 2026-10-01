@@ -11,7 +11,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { CornersOut, QrCode, X, CaretRight } from "@phosphor-icons/react";
+import { CornersOut, QrCode, CaretRight } from "@phosphor-icons/react";
 import { ProfileView } from "@/components/profile-view";
 import { ChatsOverview } from "@/components/chats-overview";
 import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty } from "@/components/direct-message-parts";
@@ -39,13 +39,11 @@ function MessageSkeleton() {
   );
 }
 
-export default function QrChatApp() {
+export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profile" }) {
   const router = useRouter();
   const backend = useChatBackend();
   const { session, api, ready } = backend;
   const groups = backend.group ? [backend.group] : [];
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileDialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [directId, setDirectId] = useState<string | null>(null);
@@ -168,20 +166,14 @@ export default function QrChatApp() {
   const openScannedCode = useEffectEvent((value: string) => openCode(value));
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || view === "profile") return;
     const init = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("profile") === "open") setProfileOpen(true);
       const query = params.get("code");
       if (query !== null) openInitialCode(query);
     }, 0);
     return () => window.clearTimeout(init);
-  }, [ready]);
-
-  useEffect(() => {
-    if (profileOpen) profileDialog.current?.showModal();
-    else profileDialog.current?.close();
-  }, [profileOpen]);
+  }, [ready, view]);
 
   useEffect(() => {
     if (entry) {
@@ -267,7 +259,7 @@ export default function QrChatApp() {
   }
 
   function openPerson(id: string) {
-    if (id === session?.id) { setProfileOpen(true); return; }
+    if (id === session?.id) { router.push("/profile"); return; }
     setPersonError(""); setPersonId(id);
   }
 
@@ -375,13 +367,16 @@ export default function QrChatApp() {
 
   return (
     <div className="qr-app">
-      <main className={`app-content ${active || directId ? "has-chat" : ""}`}>
-        {!ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={() => setProfileOpen(true)} /> : !active && !directId && (
+      <main className={`app-content ${view === "chats" && (active || directId) ? "has-chat" : ""}`}>
+        {view === "profile" ? <>
+          {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
+          <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
+        </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={() => router.push("/profile")} /> : !active && !directId && (
           <ChatsOverview
             profileName={session?.name}
             profileAvatarUrl={session?.avatarUrl}
             connected={backend.connection === "connected"}
-            onOpenOwnProfile={() => setProfileOpen(true)}
+            onOpenOwnProfile={() => router.push("/profile")}
             group={backend.group}
             friends={backend.friends}
             directPreviews={backend.directPreviews}
@@ -400,7 +395,7 @@ export default function QrChatApp() {
           />
         )}
 
-        {backend.error && (active || directId) && (
+        {view === "chats" && backend.error && (active || directId) && (
           <section className="conversation-view">
             <header className="conversation-header">
               <button type="button" aria-label="Back to chats" onClick={() => { setActive(null); switchDirectConversation(null); router.push("/"); }}>‹</button>
@@ -414,7 +409,7 @@ export default function QrChatApp() {
           </section>
         )}
 
-        {active && !backend.error && (
+        {view === "chats" && active && !backend.error && (
           <section className="conversation-view">
             <header className="conversation-header">
               <button
@@ -521,7 +516,7 @@ export default function QrChatApp() {
           </section>
         )}
 
-        {directId && !backend.error && (
+        {view === "chats" && directId && !backend.error && (
           <section className="conversation-view">
             <header className="conversation-header direct-conversation-header">
               <button type="button" aria-label="Back to chats" onClick={() => { switchDirectConversation(null); setDraft(""); }}>‹</button>
@@ -555,19 +550,11 @@ export default function QrChatApp() {
 
       </main>
 
-      {!active && !directId && <div className="scan-overlay">
+      {view === "chats" && !active && !directId && <div className="scan-overlay">
         <button type="button" className="floating-scan" aria-label="Scan a QR code" disabled={!ready || !!backend.error} onClick={startEntry}>
           <span className="scan-symbol" aria-hidden="true"><CornersOut size={34} weight="bold" /><QrCode size={21} weight="bold" /></span>
         </button>
       </div>}
-
-      <dialog ref={profileDialog} className="profile-sheet" aria-label="Your profile" onCancel={(event) => { if (event.target === profileDialog.current) setProfileOpen(false); }} onClose={(event) => { if (event.target !== profileDialog.current) return; setProfileOpen(false); if (new URLSearchParams(window.location.search).has("profile")) router.replace("/"); }} onClick={(event) => { if (event.target === profileDialog.current) setProfileOpen(false); }}>
-        <div className="profile-sheet-panel">
-          <span className="sheet-grabber" aria-hidden="true" />
-          <button type="button" className="modal-close" aria-label="Close your profile" onClick={() => setProfileOpen(false)}><X size={20} /></button>
-          {profileOpen && <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />}
-        </div>
-      </dialog>
 
       {personId && session && <MemberProfile key={personId} person={person} friend={personFriend} userId={session.id} canRequest={!!personMember} busy={busy} error={personError || backend.error} onClose={() => setPersonId(null)}
         onRequest={() => { if (personMember) void changeFriend(() => api.requestFriend(personMember.id)); }}

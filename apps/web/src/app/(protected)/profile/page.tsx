@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import QrChatApp from "@/components/mobile-chat";
 
 export default function ProfilePage() {
-  redirect("/?profile=open");
+  return <QrChatApp view="profile" />;
 }

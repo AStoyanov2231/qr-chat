@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
-import { Bell, BookmarkSimple, CaretRight, Gear, LockSimple, PencilSimple, Question, User, X } from "@phosphor-icons/react";
+import { Bell, BookmarkSimple, CaretLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, User, X } from "@phosphor-icons/react";
 import type { Group, Session } from "@/lib/chat-view";
 
 type Props = {
@@ -51,7 +52,7 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
     { label: "Help & Feedback", icon: Question },
   ];
   return <section className="profile-view">
-    <div className="profile-toolbar"><button className="icon-button" aria-label="Settings" onClick={() => open("Settings")}><Gear size={26} /></button></div>
+    <div className="profile-toolbar"><Link href="/" className="icon-button" aria-label="Back to chats"><CaretLeft size={26} /></Link><button className="icon-button" aria-label="Settings" onClick={() => open("Settings")}><Gear size={26} /></button></div>
     <div className="profile-identity">
       <div className="avatar-wrap"><span className="profile-avatar">{session?.avatarUrl && session.avatarUrl !== failedAvatar ? <Image src={session.avatarUrl} alt="" width={130} height={130} unoptimized onError={() => setFailedAvatar(session.avatarUrl ?? null)} /> : <User size={70} weight="light" />}</span><button className="avatar-edit" aria-label="Edit profile" onClick={() => open("Edit Profile")}><PencilSimple size={20} /></button></div>
       <strong>{session?.name || "Your profile"}</strong>
