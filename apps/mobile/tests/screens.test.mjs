@@ -231,7 +231,7 @@ for (const platform of ['ios', 'android']) {
     assert.equal(state.watchers[0].stopped, true);
   });
 
-  test(`${platform}: every direct message shows the actual sender photo and opens that profile`, async (t) => {
+  test(`${platform}: direct messages keep sent bubbles compact and received avatars open the sender profile`, async (t) => {
     reset(); process.env.EXPO_OS = platform; state.params = { id: friendId };
     const ownAvatar = 'https://images.example/andy.jpg';
     const peerAvatar = 'https://images.example/sam.jpg';
@@ -245,13 +245,13 @@ for (const platform of ['ios', 'android']) {
       { id: 2, sender_id: 'me', body: 'My reply', created_at: '2026-09-19T10:01:00Z' },
     ], nextCursor: null });
     const screen = await render(t, Direct);
-    const sources = screen.root.findAllByType('Image').map(image => image.props.source);
-    assert.ok(sources.includes(ownAvatar), 'the own-message avatar uses the signed-in profile photo');
+    const conversation = screen.root.findByType('FlatList');
+    const sources = conversation.findAllByType('Image').map(image => image.props.source);
+    assert.equal(sources.includes(ownAvatar), false, 'sent messages have no avatar');
     assert.ok(sources.includes(peerAvatar), 'the received-message avatar uses the friend profile photo');
     assert.match(screen.text(), /Incoming note/);
     assert.match(screen.text(), /My reply/);
-    await screen.press("View Andy's profile");
-    assert.deepEqual(state.navigation.at(-1), ['push', '/edit-profile']);
+    assert.equal(conversation.findAllByType('Pressable').some(button => button.props.accessibilityLabel === "View Andy's profile"), false);
     await screen.press("View Sam's profile");
     assert.deepEqual(state.navigation.at(-1), ['push', { pathname: '/person/[id]', params: { id: 'peer' } }]);
   });

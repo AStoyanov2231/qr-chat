@@ -291,7 +291,7 @@ test('first-DM copy and composer keep the addressed friend and recoverable draft
   assert.match(pendingComposer, /disabled/);
 });
 
-test('direct-message bubbles show the actual sender avatar and keep known profile actions', () => {
+test('direct-message bubbles keep sent messages compact and show received sender avatars and profile actions', () => {
   const session = { id: sessionId, name: 'Current User', avatarUrl: 'https://images.example/current.jpg' };
   const peer = { id: 'user-jordan', display_name: 'Jordan Lee', avatar_url: 'https://images.example/jordan.jpg' };
   const renderBubble = (senderId) => renderToStaticMarkup(React.createElement(directParts.DirectMessageBubble, {
@@ -303,24 +303,24 @@ test('direct-message bubbles show the actual sender avatar and keep known profil
 
   const own = renderBubble(sessionId);
   assert.match(own, /class="own"/);
-  assert.match(own, /src="https:\/\/images\.example\/current\.jpg"/);
-  assert.match(own, /View Current User&#x27;s profile/);
-  assert.match(own, />You<\/span>/);
+  assert.match(own, /<p>Hello there<\/p>/);
+  assert.doesNotMatch(own, /<button|<img|message-meta/);
 
   const received = renderBubble(peer.id);
   assert.match(received, /src="https:\/\/images\.example\/jordan\.jpg"/);
   assert.match(received, /View Jordan Lee&#x27;s profile/);
-  assert.match(received, />Jordan Lee<\/span>/);
+  assert.match(received, /<p>Hello there<\/p>/);
+  assert.doesNotMatch(received, /message-meta/);
 
   const opened = [];
-  const ownElement = directParts.DirectMessageBubble({
-    message: { id: 11, sender_id: sessionId, body: 'Private note', created_at: '2026-10-01T11:00:00.000Z' },
+  const receivedElement = directParts.DirectMessageBubble({
+    message: { id: 11, sender_id: peer.id, body: 'Private note', created_at: '2026-10-01T11:00:00.000Z' },
     session,
     peer,
     onOpenProfile: (id) => opened.push(id),
   });
-  ownElement.props.children[0].props.onClick();
-  assert.deepEqual(opened, [sessionId]);
+  receivedElement.props.children[0].props.onClick();
+  assert.deepEqual(opened, [peer.id]);
 
   const deleted = renderBubble(null);
   assert.match(deleted, /Former participant/);
@@ -334,7 +334,7 @@ test('direct-message bubbles show the actual sender avatar and keep known profil
   });
   assert.equal(deletedElement.props.children[0].props.disabled, true);
   deletedElement.props.children[0].props.onClick();
-  assert.deepEqual(opened, [sessionId]);
+  assert.deepEqual(opened, [peer.id]);
 });
 
 
