@@ -19,10 +19,10 @@ export default function AppLayout() {
     <Stack.Screen name="profile" options={{ title: 'Your profile', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true, sheetCornerRadius: 28, headerRight: modal.headerRight }} />
     <Stack.Screen name="scan" options={{ ...modal, title: 'Scan a code' }} />
     <Stack.Screen name="join" options={{ ...modal, title: 'Join the room' }} />
-    <Stack.Screen name="room" options={{ title: 'Group' }} />
+    <Stack.Screen name="room" options={{ title: 'Group', headerShown: false, statusBarStyle: 'light' }} />
     <Stack.Screen name="members" options={{ ...modal, title: 'Members' }} />
     <Stack.Screen name="person/[id]" options={{ ...modal, title: 'Profile' }} />
-    <Stack.Screen name="direct/[id]" options={{ title: 'Direct message' }} />
+    <Stack.Screen name="direct/[id]" options={{ title: 'Direct message', headerShown: false, statusBarStyle: 'light' }} />
     <Stack.Screen name="edit-profile" options={{ ...modal, title: 'Edit Profile' }} />
     <Stack.Screen name="settings" options={{ ...modal, title: 'Settings' }} />
   </Stack></ChatProvider>;

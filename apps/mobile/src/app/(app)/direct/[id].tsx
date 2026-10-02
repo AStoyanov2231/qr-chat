@@ -43,7 +43,6 @@ export default function DirectScreen() {
     <Conversation
       key={id}
       avatars
-      showNames={false}
       messages={messages}
       userId={userId!}
       loading={(!chat.ready && !chat.error) || (!!friend && direct.loading)}

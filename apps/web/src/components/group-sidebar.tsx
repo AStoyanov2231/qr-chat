@@ -8,6 +8,13 @@ export function GroupSidebar({ group, userId, busy, onClose, onProfile, onLeave 
   const dialog = useRef<HTMLDialogElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [qrError, setQrError] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const afterClose = useRef(onClose);
+  function closeSidebar(action = onClose) {
+    if (closing) return;
+    afterClose.current = action;
+    setClosing(true);
+  }
   const code = group.venue.codes[0];
   useEffect(() => {
     const element = dialog.current;
@@ -18,16 +25,16 @@ export function GroupSidebar({ group, userId, busy, onClose, onProfile, onLeave 
     if (!canvas.current) return;
     void QRCode.toCanvas(canvas.current, code, { width: 200, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#101820', light: '#ffffff' } }).then(() => setQrError(false), () => setQrError(true));
   }, [code]);
-  return <dialog ref={dialog} className="group-sidebar" aria-labelledby="group-sidebar-title" onCancel={onClose} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="group-sidebar-panel">
-      <button type="button" className="sidebar-close" aria-label="Close group settings" onClick={onClose}><X size={20} /></button>
+  return <dialog ref={dialog} className={`group-sidebar${closing ? ' is-closing' : ''}`} aria-labelledby="group-sidebar-title" onCancel={(event) => { event.preventDefault(); closeSidebar(); }} onClick={(event) => { if (event.target === event.currentTarget) closeSidebar(); }}>
+    <section className="group-sidebar-panel" onAnimationEnd={(event) => { if (closing && event.target === event.currentTarget) afterClose.current(); }}>
+      <button type="button" className="sidebar-close" aria-label="Close group settings" onClick={() => closeSidebar()}><X size={20} /></button>
       <div className="group-sidebar-identity">
         <canvas ref={canvas} role="img" aria-label="Group QR code" hidden={qrError} />
         {qrError && <p role="alert">QR code could not be displayed.</p>}
         <h2 id="group-sidebar-title">{group.venue.name}</h2>
         <p>{group.members.length} members</p>
       </div>
-      <div className="group-sidebar-members">{group.members.map((member) => <button type="button" className="member-row" key={member.id} aria-label={`View ${member.name}'s profile`} onClick={() => { onClose(); onProfile(member.id); }}><Avatar name={member.name} url={member.avatarUrl} size={44} /><span>{member.id === userId ? 'You' : member.name}</span><CaretRight size={18} /></button>)}</div>
+      <div className="group-sidebar-members">{group.members.map((member) => <button type="button" className="member-row" key={member.id} aria-label={`View ${member.name}'s profile`} onClick={() => closeSidebar(() => { onClose(); onProfile(member.id); })}><Avatar name={member.name} url={member.avatarUrl} size={44} /><span>{member.id === userId ? 'You' : member.name}</span><CaretRight size={18} /></button>)}</div>
       <button type="button" className="group-leave" disabled={busy} onClick={onLeave}><SignOut size={20} />Leave group</button>
     </section>
   </dialog>;

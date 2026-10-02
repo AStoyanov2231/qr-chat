@@ -36,7 +36,6 @@ export function DirectMessageBubble({
       ><Avatar name={authorName} url={avatarUrl} size={44} /></button>}
       <div>
         <p>{message.body}</p>
-        <time>{new Date(message.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</time>
       </div>
     </article>
   );

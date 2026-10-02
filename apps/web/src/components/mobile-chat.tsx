@@ -1,7 +1,7 @@
 "use client";
 
 import { messageDayLabel } from "@qr-chat/domain";
-import type { ChatNameResolution } from "@qr-chat/api";
+import type { ChatApi, ChatNameResolution } from "@qr-chat/api";
 import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
 import {
@@ -40,16 +40,34 @@ function MessageSkeleton() {
   );
 }
 
+type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "signOut";
+export type ChatViewApi = Pick<ChatApi, "joinNamedGroup" | "nameCurrentQrChatIfEmpty" | "resolveQrChatName" | "resolveQrChatImage"> & {
+  [K in PreviewCommands]: (...args: Parameters<ChatApi[K]>) => Promise<unknown>;
+};
+export type ChatViewBackend = Omit<ReturnType<typeof useChatBackend>, "api"> & { api: ChatViewApi };
+type ChatViewProps = {
+  view?: "chats" | "profile";
+  backend: ChatViewBackend;
+  direct: ReturnType<typeof useDirectMessages>;
+  directId: string | null;
+  setDirectId: (id: string | null) => void;
+};
+
 export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profile" }) {
-  const router = useRouter();
   const backend = useChatBackend();
+  const [directId, setDirectId] = useState<string | null>(null);
+  const friend = backend.friends.find((friend) => friend.id === directId && friend.accepted_at);
+  const direct = useDirectMessages(backend.api, friend?.id ?? null);
+  return <ChatView view={view} backend={backend} direct={direct} directId={directId} setDirectId={setDirectId} />;
+}
+
+export function ChatView({ view = "chats", backend, direct, directId, setDirectId }: ChatViewProps) {
+  const router = useRouter();
   const { session, api, ready } = backend;
   const groups = backend.group ? [backend.group] : [];
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const [directId, setDirectId] = useState<string | null>(null);
   const directFriend = backend.friends.find((friend) => friend.id === directId && friend.accepted_at);
-  const direct = useDirectMessages(api, directFriend?.id ?? null);
   const peer = directFriend?.user_a_id === session?.id ? directFriend?.user_b : directFriend?.user_a;
   const [sidebar, setSidebar] = useState(false);
   const [groupPhoto, setGroupPhoto] = useState<{ code: string; url: string | null } | null>(null);
@@ -77,6 +95,7 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
   const [cameraError, setCameraError] = useState("");
   const [cameraAttempt, setCameraAttempt] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null);
+  const app = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const directBottom = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -251,11 +270,43 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
   }, [entry, pending, cameraAttempt]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const element = app.current;
+    if (!element || view !== "chats") return;
+    let touchY = 0;
+    const stopPageScroll = (event: Event, delta: number) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("dialog")) return;
+      const stream = target?.closest<HTMLElement>(".message-stream, .dm-list, .dm-loading-list");
+      if (!stream || ((active || directId) && ((delta < 0 && stream.scrollTop <= 0) || (delta > 0 && stream.scrollTop + stream.clientHeight >= stream.scrollHeight - 1)))) {
+        if (event.cancelable) event.preventDefault();
+      }
+    };
+    const startTouch = (event: TouchEvent) => { touchY = event.touches[0]?.clientY ?? 0; };
+    const moveTouch = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const nextY = event.touches[0].clientY;
+      stopPageScroll(event, touchY - nextY);
+      touchY = nextY;
+    };
+    const wheel = (event: WheelEvent) => stopPageScroll(event, event.deltaY);
+    element.addEventListener("touchstart", startTouch, { passive: true });
+    element.addEventListener("touchmove", moveTouch, { passive: false });
+    element.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      element.removeEventListener("touchstart", startTouch);
+      element.removeEventListener("touchmove", moveTouch);
+      element.removeEventListener("wheel", wheel);
+    };
+  }, [active, directId, view]);
+
+  useEffect(() => {
+    const stream = bottom.current?.parentElement;
+    stream?.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
   }, [latestGroupMessageId, active]);
 
   useEffect(() => {
-    directBottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const stream = directBottom.current?.parentElement;
+    stream?.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
   }, [latestDirectMessageId, directId]);
 
   useEffect(() => {
@@ -383,8 +434,8 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
   }
 
   return (
-    <div className="qr-app">
-      <main className={`app-content ${view === "chats" && (active || directId) ? "has-chat" : ""}`}>
+    <div ref={app} className="qr-app">
+      <main className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : ""}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
           <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
@@ -427,7 +478,6 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
           <section className="conversation-view">
             <ConversationHeader title={active.name} subtitle={`${group?.members.length ?? 0} members`} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={() => { setSidebar(false); setActive(null); router.push("/"); }} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
-              <div className="chat-surface-handle" aria-hidden="true" />
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
                 {!group?.messages.length && (
@@ -441,16 +491,7 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
                       <article className={message.user === session?.id ? "own" : ""}>
                         {message.user !== session?.id && <button className="message-profile" aria-label={`View ${message.name}'s profile`} disabled={!profileAvailable} onClick={() => openPerson(message.user)}><Avatar name={message.name} url={message.avatarUrl} size={44} /></button>}
                         <div>
-                          {message.user !== session?.id && <span className="message-meta">
-                            <button className="person-link" disabled={!profileAvailable} onClick={() => openPerson(message.user)}>{message.name}</button>
-                          </span>}
                           <p>{message.text}</p>
-                          <time>
-                            {new Date(message.time).toLocaleTimeString(undefined, {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </time>
                         </div>
                       </article>
                     </Fragment>
@@ -500,7 +541,6 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
           <section className="conversation-view">
             <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? "Friend" : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={() => { switchDirectConversation(null); setDraft(""); }} settingsLabel="Conversation settings" disabled={!peer?.id} onSettings={() => { if (peer?.id) openPerson(peer.id); }} />
             <div className="chat-conversation-surface">
-              <div className="chat-surface-handle" aria-hidden="true" />
               {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
                 <div className="message-stream" aria-live="polite">
                   {direct.error && <div className="connection-banner dm-load-error" role="alert">Couldn’t load messages. Your draft stays here. <button onClick={() => void perform(direct.refresh)}>Retry</button></div>}
