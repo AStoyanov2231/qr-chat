@@ -52,7 +52,7 @@ function LoadingRow() {
 function ChatsHeader({ profileName = "You", profileAvatarUrl, connected, onOpenOwnProfile }: HeaderProps) {
   return <div className="view-heading">
     <h1>Chats</h1>
-    <button type="button" className="profile-trigger" aria-label="Open your profile" aria-haspopup="dialog" disabled={!onOpenOwnProfile} onClick={onOpenOwnProfile}>
+    <button type="button" className="profile-trigger" aria-label="Open your profile" disabled={!onOpenOwnProfile} onClick={onOpenOwnProfile}>
       <Avatar name={profileName} url={profileAvatarUrl} size={44} />
       <span className={`profile-connection-dot ${connected ? "connected" : ""}`} aria-hidden="true" />
     </button>

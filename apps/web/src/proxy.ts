@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { safeAuthDestination } from "@/lib/auth/redirect";
 import { isRouteAuthenticatedApiPath } from "@/lib/qr-name-route";
+import { isLocalDesignPreviewHost } from "@/lib/local-design-preview";
 import { updateSession } from "@/lib/supabase/proxy";
 
 function copyAuthCookies(from: NextResponse, to: NextResponse) {
@@ -14,8 +15,17 @@ function copyAuthCookies(from: NextResponse, to: NextResponse) {
 }
 
 export async function proxy(request: NextRequest) {
-  const { response, userId } = await updateSession(request);
   const { pathname, search } = request.nextUrl;
+  const preview = isLocalDesignPreviewHost(request.headers.get("host") ?? "");
+  if (pathname === "/design-preview") return preview ? NextResponse.next() : new NextResponse(null, { status: 404 });
+  if (preview && ["/", "/chats", "/profile", "/sign-in"].includes(pathname)) {
+    const url = new URL(request.url);
+    url.host = request.headers.get("host") ?? url.host;
+    url.pathname = "/design-preview";
+    url.searchParams.set("view", pathname === "/profile" ? "profile" : "chats");
+    return NextResponse.rewrite(url);
+  }
+  const { response, userId } = await updateSession(request);
   const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/auth/");
 
   if (!userId && !isAuthRoute && !isRouteAuthenticatedApiPath(pathname)) {
@@ -41,6 +51,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|_vercel/insights/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

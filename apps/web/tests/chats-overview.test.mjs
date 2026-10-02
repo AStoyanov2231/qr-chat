@@ -16,7 +16,7 @@ const Avatar = ({ name, url, size = 44 }) => React.createElement('span', {
   style: { width: size, height: size },
 }, url ? React.createElement('img', { src: url, alt: '' }) : name.slice(0, 2).toUpperCase());
 const Icon = ({ name }) => React.createElement('span', { 'data-icon': name, 'aria-hidden': 'true' });
-const icons = Object.fromEntries(['CaretRight', 'Clock', 'MagnifyingGlass', 'X'].map((name) => [
+const icons = Object.fromEntries(['CaretLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
   name,
   (props) => React.createElement('svg', { ...props, 'data-icon': name, 'aria-hidden': 'true' }),
 ]));
@@ -41,6 +41,8 @@ async function loadTsxModule(relativePath) {
     if (specifier === './avatar') return { Avatar };
     if (specifier === '@/components/avatar') return { Avatar };
     if (specifier === '@/components/icon') return { Icon };
+    if (specifier === '@/components/mobile-chat') return { default: () => null };
+    if (specifier === '@/lib/avatar') return { prepareAvatar: async () => null };
     return requireFromTest(specifier);
   };
   const evaluate = runInThisContext(`(function (require, module, exports) { ${output}\n})`, {
@@ -339,11 +341,19 @@ test('legacy chats links reach the single home page without changing the QR key'
   });
 });
 
-test('legacy profile links open the profile sheet on the home page', async () => {
+test('the profile route renders a full profile page', async () => {
   const { default: ProfilePage } = await loadTsxModule('../src/app/(protected)/profile/page.tsx');
-  const { getURLFromRedirectError } = requireFromTest('next/dist/client/components/redirect');
-  assert.throws(() => ProfilePage(), (error) => {
-    assert.equal(getURLFromRedirectError(error), '/?profile=open');
-    return true;
-  });
+  assert.equal(ProfilePage().props.view, 'profile');
+});
+
+test('the profile page provides a back link to Chats and keeps its actions', async () => {
+  const { ProfileView } = await loadTsxModule('../src/components/profile-view.tsx');
+  const html = renderToStaticMarkup(React.createElement(ProfileView, {
+    session: { id: sessionId, name: 'Andy' }, group: null, ready: true, busy: false,
+    onSave: async () => true, onLeave: noOp, onSignOut: noOp,
+  }));
+  assert.match(html, /<a[^>]*aria-label="Back to chats"[^>]*href="\/"/);
+  assert.match(html, /aria-label="Settings"/);
+  assert.match(html, /Edit Profile/);
+  assert.doesNotMatch(html, /profile-sheet|sheet-grabber/);
 });

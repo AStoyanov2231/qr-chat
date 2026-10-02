@@ -11,8 +11,9 @@ function subscribe(callback: () => void) {
 }
 
 /** A viewport gate, not an authorization boundary. Auth remains server-enforced. */
-export function MobileOnly({ children }: { children: ReactNode }) {
-  const mobile = useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => false);
+export function MobileOnly({ children, preview = false }: { children: ReactNode; preview?: boolean }) {
+  const mobile = useSyncExternalStore(subscribe, () => preview || window.matchMedia(query).matches, () => false);
+  if (preview) return <div className="local-design-frame">{mobile ? children : null}</div>;
   if (mobile) return children;
   return (
     <main className="mobile-only-notice">

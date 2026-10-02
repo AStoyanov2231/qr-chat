@@ -7,6 +7,7 @@ import { errorMessage } from '@/providers/chat-provider';
 
 export const colors = { paper: '#fdfdfe', ink: '#0d1114', muted: '#626a78', line: '#eeeff2', soft: '#f3f4f6', blue: '#e9eff8', green: '#29bc68', danger: '#b62929' };
 const symbols = {
+  back: ['chevron.left', 'arrow_back'], send: ['paperplane', 'send'], exit: ['rectangle.portrait.and.arrow.right', 'logout'],
   qr: ['qrcode', 'qr_code'],
   scan: ['qrcode.viewfinder', 'qr_code_scanner'], group: ['person.2', 'group'], user: ['person', 'person'],
   settings: ['gearshape', 'settings'], edit: ['pencil', 'edit'], search: ['magnifyingglass', 'search'],

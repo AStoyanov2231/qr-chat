@@ -4,6 +4,18 @@ export type Member = { id: string; name: string; avatarUrl?: string | null };
 export type Message = { id: string; user: string; name: string; avatarUrl?: string | null; text: string; time: number };
 export type Group = { id: string; venue: Venue; members: Member[]; messages: Message[]; nextCursor: number | null };
 
+/** A calendar-day divider for chronologically ordered messages, in the viewer's timezone. */
+export function messageDayLabel(time: number, previousTime?: number): string | null {
+  const date = new Date(time);
+  if (previousTime !== undefined && date.toDateString() === new Date(previousTime).toDateString()) return null;
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return "Today";
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+}
+
 export type QrPageNameMetadata = {
   structuredData: { types: string[]; names: string[] }[];
   openGraphTitles: string[];
