@@ -124,19 +124,18 @@ const group = {
   nextCursor: null,
 };
 
-test('Chats loading skeleton follows the group, requests, and direct-message structure with the persistent header and search placeholder', () => {
+test('Chats loading uses one scrolling list below the persistent header and search placeholder', () => {
   const html = renderOverview({ loading: true });
   assert.match(html, /<h1>Chats<\/h1>/);
-  assert.match(html, /Active group/);
-  assert.match(html, /Friend requests/);
-  assert.match(html, /Direct messages/);
+  assert.match(html, /class="chat-list-scroll"/);
+  assert.doesNotMatch(html, /Active group|Friend requests|Direct messages/);
   assert.match(html, /Loading chats…/);
-  assert.equal((html.match(/class="dm-loading-row"/g) ?? []).length, 3);
+  assert.equal((html.match(/class="dm-loading-row"/g) ?? []).length, 5);
   assert.match(html, /aria-label="Open your profile"/);
   assert.doesNotMatch(html, /Recent|Nearby|My Groups/);
 });
 
-test('active Chats overview shows real group details, collapsed requests, ordered DMs, previews, ages, and avatars', () => {
+test('Chats orders the active group before individual requests and ordered DMs', () => {
   const mayaMessage = {
     id: 'direct-message-1',
     friend_connection_id: acceptedMaya.id,
@@ -155,7 +154,7 @@ test('active Chats overview shows real group details, collapsed requests, ordere
   }));
 
   assert.match(html, /<h1>Chats<\/h1>/);
-  assert.match(html, /Active group/);
+  assert.doesNotMatch(html, /<h2|<details|<summary/);
   assert.match(html, /class="group-initials"[^>]*>BC<\/span>/);
   assert.match(html, /Brew &amp; Chat/);
   assert.match(html, /2 members/);
@@ -164,14 +163,14 @@ test('active Chats overview shows real group details, collapsed requests, ordere
   assert.doesNotMatch(groupTitleRow, /2 members/);
   assert.match(html, /class="group-meta"/);
   assert.match(html, /Maya Chen: Anyone here for the workshop\?/);
-  assert.match(html, /Expires in 18h/);
+  assert.match(html, /Access ends in 18h/);
   assert.match(html, /Your group access ends in 18 hours\./);
   assert.match(html, /group-title-row/);
   assert.match(html, /group-preview-row/);
   assert.match(html, /data-icon="MagnifyingGlass"/);
-  assert.match(html, /Friend requests \(2\)/);
-  assert.match(html, /2 pending requests/);
-  assert.match(html, /placeholder="Search groups or people..."/);
+  assert.match(html, /Incoming friend request/);
+  assert.match(html, /Friend request sent/);
+  assert.match(html, /placeholder="Search chats and people..."/);
   assert.doesNotMatch(html, /search-toggle/);
   assert.match(html, /Accept Bea Kim&#x27;s friend request/);
   assert.match(html, /Decline Bea Kim&#x27;s friend request/);
@@ -181,7 +180,7 @@ test('active Chats overview shows real group details, collapsed requests, ordere
   assert.match(html, /You: Thanks for the welcome!/);
   assert.match(html, /Say hello/);
   assert.match(html, /12m/);
-  const dmStart = html.indexOf('<ul class="dm-list">');
+  const dmStart = html.indexOf('<ul class="chat-list" aria-label="Chats and friend requests">');
   const dmEnd = html.indexOf('</ul>', dmStart);
   const dmList = html.slice(dmStart, dmEnd);
   assert.doesNotMatch(dmList, /CaretRight/);
@@ -191,13 +190,15 @@ test('active Chats overview shows real group details, collapsed requests, ordere
   const mayaRow = dmList.indexOf('Open direct message with Maya Chen');
   const jordanRow = dmList.indexOf('Open direct message with Jordan Lee');
   assert.ok(mayaRow >= 0 && jordanRow >= 0 && mayaRow < jordanRow, 'the newest conversation appears before other DM rows');
+  assert.ok(dmList.indexOf('Open Brew') < dmList.indexOf("View Bea"));
+  assert.ok(dmList.indexOf('Cancel friend request to Kai') < mayaRow);
+  assert.equal((html.match(/class="chat-list-scroll"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /Recent|Nearby|My Groups|Alexandra Petrov|Niko/);
 });
 
-test('first-time and observed access-ended states stay distinct and keep friend chats visible', () => {
+test('missing groups take no placeholder space and access-ended notices keep friend chats visible', () => {
   const initial = renderOverview(props({ friends: [acceptedJordan], directPreviews: { [acceptedJordan.id]: { status: 'ready', message: null } } }));
-  assert.match(initial, /No group yet/);
-  assert.match(initial, /Scan a QR code/);
+  assert.doesNotMatch(initial, /No group yet|Your chats start with a scan|No pending requests/);
   assert.doesNotMatch(initial, /Your group access ended/);
   assert.match(initial, /Jordan Lee/);
 
@@ -208,7 +209,7 @@ test('first-time and observed access-ended states stay distinct and keep friend 
   }));
   assert.match(ended, /Your group access ended/);
   assert.match(ended, /Your friends and DMs stay\./);
-  assert.match(ended, /Scan a QR code/);
+  assert.match(ended, /Dismiss group access notice/);
   assert.match(ended, /Jordan Lee/);
   assert.doesNotMatch(ended, /No group yet/);
 });
@@ -225,7 +226,7 @@ test('failed chat loads and individual preview failures have explicit recovery w
     friends: [acceptedMaya],
     directPreviews: { [acceptedMaya.id]: { status: 'error' } },
   }));
-  assert.match(previewError, /Could not load message/);
+  assert.match(previewError, /Preview unavailable/);
   assert.match(previewError, /aria-label="Retry loading message preview for Maya Chen"/);
 });
 
@@ -234,6 +235,18 @@ test('search matches group and friend names case-insensitively and reports no ma
   assert.equal(chatNameMatches('Brew & Chat', 'BREW'), true);
   assert.equal(chatNameMatches('Alexandra Petrov', 'venue'), false);
   assert.equal(chatNameMatches('Alexandra Petrov', '  '), true);
+});
+
+test('requests are newest first, and requests alone prevent the onboarding empty state', () => {
+  const older = { ...incomingRequest, requested_at: '2026-09-29T10:00:00Z' };
+  const newer = { ...outgoingRequest, requested_at: '2026-10-01T10:00:00Z' };
+  const html = renderOverview(props({ friends: [older, newer] }));
+  assert.ok(html.indexOf('View Kai') < html.indexOf('View Bea'));
+  assert.doesNotMatch(html, /Your chats start with a scan|No pending requests|Direct messages/);
+  const empty = renderOverview();
+  assert.match(empty, /Your chats start with a scan/);
+  assert.match(empty, /Scan a QR code/);
+  assert.doesNotMatch(empty, /No group yet|No pending requests/);
 });
 
 test('first-DM copy and composer keep the addressed friend and recoverable draft visible', () => {

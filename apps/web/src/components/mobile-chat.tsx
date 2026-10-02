@@ -276,7 +276,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     const stopPageScroll = (event: Event, delta: number) => {
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("dialog")) return;
-      const stream = target?.closest<HTMLElement>(".message-stream, .dm-list, .dm-loading-list");
+      const stream = target?.closest<HTMLElement>(".message-stream, .chat-list-scroll");
       if (!stream || ((active || directId) && ((delta < 0 && stream.scrollTop <= 0) || (delta > 0 && stream.scrollTop + stream.clientHeight >= stream.scrollHeight - 1)))) {
         if (event.cancelable) event.preventDefault();
       }
@@ -458,8 +458,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             onOpenGroup={() => { if (backend.group) openConversation(backend.group.venue); }}
             onOpenDirect={openDirectMessage}
             onOpenProfile={openPerson}
-            onAcceptRequest={(friendId) => { void perform(async () => { await api.acceptFriend(friendId); await backend.refresh(); }); }}
-            onRemoveRequest={(friendId) => { void perform(async () => { await api.removeFriend(friendId); await backend.refresh(); }); }}
+            onAcceptRequest={async (friendId) => { await api.acceptFriend(friendId); await backend.refresh(); }}
+            onRemoveRequest={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
           />
         )}
 
