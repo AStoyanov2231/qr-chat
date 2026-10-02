@@ -250,6 +250,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_chat_overview: { Args: never; Returns: Json }
+      get_chat_access: { Args: never; Returns: Json }
       accept_friend_request: {
         Args: { p_connection_id: string }
         Returns: boolean

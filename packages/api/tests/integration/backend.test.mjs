@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { createChatApi, watchChanges } from '../../src/index.ts';
+import { createChatApi, createChatStore, createObservedFetch, watchChanges } from '../../src/index.ts';
 
 // Supply three disposable, confirmed test users. No admin key or fixture creation here.
 // The SQL authorization suite separately tests expiration and hostile direct writes.
@@ -29,12 +29,13 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
     }
   });
   for (const user of users.slice(0, 3)) {
-    const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const requests = [];
+    const client = createClient(url, key, { global: { fetch: createObservedFetch(fetch,request=>requests.push(request),()=> 'integration') }, auth: { persistSession: false, autoRefreshToken: false } });
     const { error, data } = await client.auth.signInWithPassword({ email: user.email, password: user.password });
     assert.equal(error, null, error?.message);
     assert.equal(data.user.id, user.id);
     const api = createChatApi(client);
-    actors.push({ client, api, id: user.id });
+    actors.push({ client, api, id: user.id, requests });
     await api.saveProfile({ display_name: `QA ${actors.length}` });
   }
   const [alice, bob, eve] = actors;
@@ -76,10 +77,16 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
     await assert.rejects(alice.api.sendDirectMessage(friendship, 'pending'));
     await bob.api.acceptFriend(friendship);
     await alice.api.sendDirectMessage(friendship, 'private hello');
+    const overview = await bob.api.overview();
+    assert.equal(overview.userId,bob.id);
+    assert.equal(overview.directPreviews[friendship].body,'private hello');
+    assert.ok((await bob.api.access()).acceptedConnectionIds.includes(friendship));
     assert.equal((await bob.api.directMessages(friendship)).items[0].body, 'private hello');
     assert.equal((await eve.api.directMessages(friendship)).items.length, 0);
     await assert.rejects(eve.api.sendDirectMessage(friendship, 'outside'));
     await bob.api.removeFriend(friendship);
+    assert.equal((await alice.api.overview()).directPreviews[friendship],undefined);
+    assert.ok(!(await alice.api.access()).acceptedConnectionIds.includes(friendship));
     assert.equal((await alice.api.directMessages(friendship)).items.length, 0);
     await assert.rejects(alice.api.sendDirectMessage(friendship, 'removed'));
   });
@@ -99,6 +106,29 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
       bob.client.realtime.connect();
       await eventually(() => connected && bodies.includes('while disconnected'), 'reconnect must recover missed data');
     } finally { watcher.stop(); }
+  });
+  await t.test('shared store delivers within two seconds, pauses and recovers without remote user lookups', async () => {
+    const store = createChatStore(bob.api);
+    const close = store.openGroup();
+    try {
+      await store.start();
+      await eventually(()=>store.getState().connection==='connected','shared store must reach replication readiness');
+      await delay(300);bob.requests.length=0;
+      const started=Date.now();
+      await alice.api.sendGroupMessage(group,'shared store live message');
+      await eventually(()=>store.getState().snapshot.group?.messages.some(row=>row.text==='shared store live message'),'shared store must publish the live message');
+      assert.ok(Date.now()-started<=2000,'controlled healthy delivery must stay within two seconds');
+      assert.equal(bob.requests.filter(row=>row.category==='auth').length,0);
+      await delay(300);bob.requests.length=0;
+      await store.refresh('safety');
+      assert.deepEqual(bob.requests.map(row=>row.category),['overview']);
+      store.pause();bob.requests.length=0;
+      await alice.api.sendGroupMessage(group,'shared store missed message');await delay(300);
+      assert.equal(bob.requests.length,0);
+      assert.equal(store.getState().snapshot.group,null);
+      await store.start();
+      assert.ok(store.getState().snapshot.group.messages.some(row=>row.text==='shared store missed message'));
+    } finally {close();store.dispose();}
   });
   await t.test('leaving immediately revokes access and sign-out ends the session', async () => {
     await eve.api.leaveGroup();

@@ -19,6 +19,7 @@ const mocks = {
   'react-native': `
     import React from 'react';
     export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', Button='Button', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView', ActivityIndicator='ActivityIndicator';
+    export const Animated={Value:class {setValue(){} interpolate(){return 0;}},View:'AnimatedView',timing:()=>({start:callback=>callback?.({finished:true})})};
     export const Modal=({visible,...props})=>visible?React.createElement('Modal',{visible,...props},props.children):null;
     export const StyleSheet={create: value => value};
     export const useWindowDimensions=()=>({width:390,height:844});
@@ -42,13 +43,16 @@ const mocks = {
     router.canGoBack=()=>true;
     export {useLocalSearchParams} from 'expo-router/build/hooks/useLocalSearchParams.js';
     export {useRoute} from 'expo-router/build/react-navigation/core/useRoute.js';
-    export const useFocusEffect=useEffect;
+    export const useFocusEffect=callback=>useEffect(callback,[callback]);
     export const Redirect=({href})=>{useEffect(()=>{router.replace(href);},[href]);return null;};
     export const Stack=({children,...props})=>React.createElement('NativeStack',props,children);
     Stack.Screen=props=>React.createElement('NativeStackScreen',props);`,
   'expo-router/react-navigation': 'export const useHeaderHeight=()=>64;',
   'react-native-safe-area-context': 'export const useSafeAreaInsets=()=>({top:24,right:0,bottom:24,left:0});',
   'react-native-screens/experimental': "export const SafeAreaView='NativeSafeAreaView';",
+  'react-native-reanimated': "export const useReducedMotion=()=>true;",
+  'expo-network': "export const useNetworkState=()=>globalThis.__qrChatNativeTest.networkState ?? {isConnected:true,isInternetReachable:true};",
+  'expo-glass-effect': "export const GlassView='GlassView';export const isGlassEffectAPIAvailable=()=>false;",
   'expo-image': "export const Image='Image';",
   'expo-crypto': "export const randomUUID=()=> '22222222-2222-4222-8222-222222222222';",
   'expo-image-picker': `export async function launchImageLibraryAsync(options) {
@@ -70,6 +74,7 @@ const mocks = {
   '@/providers/chat-provider': 'export const useChat=()=>globalThis.__qrChatNativeTest.chat; export const ChatProvider=({children})=>children; export const errorMessage=error=>error.message || "Could not connect. Please try again.";',
   '@/lib/supabase': 'export const webOrigin="https://chat.example"; export const getNativeApi=()=>globalThis.__qrChatNativeTest.nativeApi ?? null;',
   '@qr-chat/api': `
+    export {getChatStore} from '${new URL('./chat-store.mjs', import.meta.url).href}';
     export const loadDirectSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadDirectSnapshot(...args);
     export const loadChatSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadChatSnapshot(...args);
     export const emptySnapshot={session:null,group:null,friends:[],expiresAt:null,directPreviews:{}};
@@ -81,6 +86,7 @@ const mocks = {
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    if (specifier === 'qrcode/lib/core/qrcode') return nextResolve('qrcode/lib/core/qrcode.js', context);
     if (specifier in mocks) return { url: `qr-chat-test:${specifier}`, shortCircuit: true };
     if (specifier === './auth-provider' && context.parentURL?.endsWith('/providers/chat-provider.tsx')) return { url: 'qr-chat-test:@/providers/auth-provider', shortCircuit: true };
     if (context.parentURL?.startsWith('qr-chat-test:')) return nextResolve(specifier, { ...context, parentURL: import.meta.url });
@@ -121,8 +127,8 @@ export function reset() {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
-    auth: { userId: 'me', active: true, api: {} },
-    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, group: null, expiresAt: null, friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
+    auth: { userId: 'me', active: true, api: { resolveQrChatImage: async () => null } },
+    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, group: null, expiresAt: null, friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
     loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},group:null,friends:[],expiresAt:null,directPreviews:{}}),
   });
 }

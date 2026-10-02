@@ -1,5 +1,6 @@
 import { createContext, use, useCallback, useEffect, useState, type PropsWithChildren } from 'react';
 import { AppState, Linking } from 'react-native';
+import { useNetworkState } from 'expo-network';
 import { getNativeApi, webOrigin } from '@/lib/supabase';
 import { codeFromLink } from '@/lib/qr-link';
 
@@ -10,7 +11,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [active, setActive] = useState(AppState.currentState === 'active');
+  const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  const network = useNetworkState();
+  const active = foreground && network.isConnected !== false && network.isInternetReachable !== false;
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const clearPendingCode = useCallback(() => setPendingCode(null), []);
   useEffect(() => {
@@ -39,14 +42,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setLoading(false);
     }).catch(() => { if (!stopped) { setError('Could not read secure storage. Restart the app and try again.'); setLoading(false); } });
     const change = (state: string) => {
-      setActive(state === 'active');
-      if (state === 'active') void api.client.auth.startAutoRefresh();
-      else void api.client.auth.stopAutoRefresh();
+      setForeground(state === 'active');
     };
     change(AppState.currentState);
     const subscription = AppState.addEventListener('change', change);
     return () => { stopped = true; data.subscription.unsubscribe(); subscription.remove(); void api.client.auth.stopAutoRefresh(); };
   }, [api]);
+  useEffect(() => {
+    if (!api) return;
+    if (active) void api.client.auth.startAutoRefresh();
+    else void api.client.auth.stopAutoRefresh();
+  }, [api, active]);
   return <Context value={{ api, userId, loading: !!api && loading, active, error, pendingCode, clearPendingCode }}>{children}</Context>;
 }
 export function useAuth() {

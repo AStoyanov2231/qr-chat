@@ -1,11 +1,11 @@
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Animated, Modal, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConversationHeader } from '@/components/conversation-header';
 import { GroupDetails } from '@/components/group-details';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import { Conversation } from '@/components/conversation';
 import { Button, Icon } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
@@ -15,6 +15,8 @@ import { useRoomParams } from '@/hooks/use-room-params';
 export default function RoomScreen() {
   const { groupId, name } = useRoomParams();
   const chat = useChat();
+  const openGroup = chat.openGroup;
+  useFocusEffect(useCallback(() => groupId ? openGroup(groupId) : undefined, [openGroup, groupId]));
   const { api, userId } = useAuth();
   const [sidebar, setSidebar] = useState(false);
   const [sidebarProgress] = useState(() => new Animated.Value(1));
@@ -54,9 +56,9 @@ export default function RoomScreen() {
     <Conversation
       composerLabel={`Message ${title}`}
       avatars key={groupId ?? 'ended'} messages={group?.messages ?? []} userId={userId!}
-      loading={!chat.ready && !chat.error} error={chat.error} available={!!group && chat.ready}
+      loading={(!chat.ready || chat.groupLoading) && !chat.error} error={chat.error} available={!!group && chat.ready}
       connected={chat.connection === 'connected'} nextCursor={group?.nextCursor ?? null}
-      loadOlder={chat.loadOlder} refresh={chat.refresh} send={sendMessage}
+      loadOlder={chat.loadOlder} refresh={chat.refreshGroup} send={sendMessage}
       unavailable={chat.error ? 'Reconnect to open this conversation.' : 'Your membership has ended.'}
       canOpenProfile={(message) => !!group?.members.some((member) => member.id === message.user) || chat.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user)}
       openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}

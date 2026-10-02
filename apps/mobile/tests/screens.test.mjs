@@ -345,3 +345,13 @@ test('retrying a direct conversation after a backend failure reconciles the frie
   await screen.press('Retry');
   assert.equal(refreshed, true);
 });
+
+test('sending a native DM refreshes its conversation without reloading the overview', async t => {
+  reset();state.params={id:friendId};
+  state.chat.friends=[{id:friendId,user_a_id:'me',user_b_id:'peer',accepted_at:'yes',user_b:{id:'peer',display_name:'Sam',avatar_url:null}}];
+  let overviewReads=0;let sends=0;
+  state.chat.refresh=async()=>{overviewReads++;};
+  state.auth.api.sendDirectMessage=async()=>{sends++;return{id:3};};
+  const screen=await render(t,Direct);await screen.type('Message Sam','Hello');await screen.press('Send message');
+  assert.equal(sends,1);assert.equal(overviewReads,0);
+});

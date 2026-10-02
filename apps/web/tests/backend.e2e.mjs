@@ -4,6 +4,7 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { createServerClient } from '@supabase/ssr';
 import { createChatApi } from '@qr-chat/api';
+assert.ok(process.env.QR_CHAT_TEST_USERS_FILE, 'Set QR_CHAT_TEST_USERS_FILE to disposable, confirmed test accounts before running browser E2E.');
 const { chromium } = await import(process.env.QR_CHAT_PLAYWRIGHT_MODULE || 'playwright');
 const users = JSON.parse(readFileSync(process.env.QR_CHAT_TEST_USERS_FILE, 'utf8'));
 const origin = process.env.QR_CHAT_WEB_URL || 'http://localhost:3000';
@@ -12,7 +13,7 @@ const accounts = [];
 const code = `qrchat-ui-${users[0].id}`;
 const output = process.env.QR_CHAT_TEST_OUTPUT || '/private/tmp/qr-chat-ui-checks';
 mkdirSync(output, { recursive: true });
-async function visible(page, text) { await page.getByText(text, { exact: true }).first().waitFor({ timeout: 45000 }); }
+async function visible(page, text) { await page.bringToFront();await page.getByText(text, { exact: true }).first().waitFor({ timeout: 45000 }); }
 async function noOverflow(page) {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'page must not overflow horizontally');
 }

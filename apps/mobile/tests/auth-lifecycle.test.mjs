@@ -75,3 +75,14 @@ test('a pending external QR opens the scanner', async (t) => {
   await screen.update();
   assert.equal(state.navigation.length, 1);
 });
+
+test('native offline state pauses networking and reconnect activates exactly once', async t => {
+  const fixture=authFixture();state.networkState={isConnected:false,isInternetReachable:false};
+  const screen=await render(t,fixture.App);
+  assert.equal(fixture.auth.active,false);assert.deepEqual(fixture.calls,['stop']);
+  state.networkState={isConnected:true,isInternetReachable:true};await screen.update();
+  assert.equal(fixture.auth.active,true);assert.deepEqual(fixture.calls,['stop','start']);
+  await screen.update();assert.deepEqual(fixture.calls,['stop','start']);
+  state.networkState={isConnected:true,isInternetReachable:false};await screen.update();
+  assert.equal(fixture.auth.active,false);assert.deepEqual(fixture.calls,['stop','start','stop']);
+});

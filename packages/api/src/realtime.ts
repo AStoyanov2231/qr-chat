@@ -10,6 +10,7 @@ export type ChangeFilter =
   | { table: "group_memberships"; column: "user_id"; id: string }
   | { table: "friend_connections"; column: "user_a_id" | "user_b_id"; id: string }
   | { table: "direct_messages"; column: "friend_connection_id"; id: string };
+export type ChangeEvent = { table: string; eventType: string; id: number | null; filterId?: string };
 
 /** Events invalidate queries; payloads are never treated as an authorized snapshot.
  * Periodic reconciliation also handles unfilterable DELETEs and expiry without events.
@@ -19,7 +20,7 @@ export function watchChanges(
   filters: ChangeFilter[],
   refresh: () => void | Promise<void>,
   onState: (state: ConnectionState) => void,
-  options: { pollMs?: number; retryMs?: number } = {},
+  options: { pollMs?: number; retryMs?: number; onChange?: (event: ChangeEvent) => void; random?: () => number; coordinated?: boolean } = {},
 ) {
   filters.forEach((filter) => userIdSchema.parse(filter.id));
   let stopped = false;
@@ -31,6 +32,11 @@ export function watchChanges(
   let dirty = false;
   async function reconcile() {
     if (stopped) return;
+    if (options.coordinated) {
+      try { await refresh(); if (!stopped && subscribed) onState("connected"); }
+      catch { if (!stopped) onState("reconnecting"); }
+      return;
+    }
     dirty = true;
     if (running) return;
     running = true;
@@ -57,13 +63,18 @@ export function watchChanges(
       onState("reconnecting");
       channel = undefined;
       void client.removeChannel(current);
-      retry = setTimeout(connect, Math.min((options.retryMs ?? 1000) * 2 ** attempt++, 30000));
+      retry = setTimeout(connect, Math.min((options.retryMs ?? 1000) * 2 ** attempt++, 30000) * (0.8 + (options.random ?? Math.random)() * 0.2));
     };
     for (const filter of filters) {
       current.on("postgres_changes", {
         event: "*", schema: "public", table: filter.table,
         filter: `${filter.column}=eq.${filter.id}`,
-      }, () => { void reconcile(); });
+      }, (payload) => {
+        if (stopped || channel !== current) return;
+        const id = payload?.new && "id" in payload.new ? Number(payload.new.id) : null;
+        if (options.onChange) options.onChange({ table: filter.table, eventType: payload?.eventType ?? "UNKNOWN", filterId: filter.id, id: Number.isSafeInteger(id) && id! > 0 ? id : null });
+        else void reconcile();
+      });
     }
     // The channel join acknowledgement can precede PostgreSQL replication readiness.
     // Refetch again after the system acknowledgement to close that startup gap.
@@ -86,7 +97,8 @@ export function watchChanges(
       }
     });
   }
-  const interval = setInterval(() => { void reconcile(); }, options.pollMs ?? 30000);
+  // Hosts own the safety scheduler; explicit polling remains for standalone callers.
+  const interval = options.pollMs ? setInterval(() => { void reconcile(); }, options.pollMs) : undefined;
   connect();
   return {
     refresh: reconcile,

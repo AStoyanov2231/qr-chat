@@ -112,6 +112,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   // The current-membership query is authoritative, even if the member list is capped.
   const group = groups.find((item) => item.id === active?.id);
   const groupCode = group?.venue.codes[0];
+  const openGroup = backend.openGroup;
+  useEffect(() => active && view !== "profile" && !directId ? openGroup(active.id) : undefined, [active, view, directId, openGroup]);
   useEffect(() => {
     if (!api || !groupCode) return;
     const controller = new AbortController();
@@ -366,7 +368,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     void perform(async () => {
       await api.sendGroupMessage(active.id, draft);
       setDraft("");
-      await backend.refresh();
+      await backend.refreshGroup();
     });
   }
 
@@ -474,13 +476,14 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           </section>
         )}
 
-        {view === "chats" && active && !backend.error && (
+        {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
             <ConversationHeader title={active.name} subtitle={`${group?.members.length ?? 0} members`} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={() => { setSidebar(false); setActive(null); router.push("/"); }} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
-                {!group?.messages.length && (
+                {backend.groupLoading && <MessageSkeleton />}
+                {!backend.groupLoading && !group?.messages.length && (
                   <p className="first-message">{group ? "Be the first to say hello." : "Your membership has ended."}</p>
                 )}
                 {visibleGroupMessages.map((message, index) => {
@@ -537,7 +540,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           </section>
         )}
 
-        {view === "chats" && directId && !backend.error && (
+        {view === "chats" && directId && ready && !backend.error && (
           <section className="conversation-view">
             <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? "Friend" : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={() => { switchDirectConversation(null); setDraft(""); }} settingsLabel="Conversation settings" disabled={!peer?.id} onSettings={() => { if (peer?.id) openPerson(peer.id); }} />
             <div className="chat-conversation-surface">

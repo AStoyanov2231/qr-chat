@@ -7,5 +7,8 @@ node_modules/
 .env*
 !.env.example
 
-# Local Supabase migrations
-/supabase/migrations/
+# Local migrations stay private except the additive traffic rollout.
+/supabase/migrations/*
+!/supabase/migrations/20261002170940_chat_traffic_optimization.sql
+!/supabase/migrations/20261002174918_chat_overview_preview.sql
+/supabase/.temp/

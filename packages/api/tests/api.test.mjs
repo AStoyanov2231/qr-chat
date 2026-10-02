@@ -52,7 +52,7 @@ test('name resolution prefers a shared saved name, otherwise returns only a boun
       calls.push([name, args]);
       return { abortSignal(signal) { rpcSignal = signal; return Promise.resolve({ data: savedName, error: null }); } };
     },
-    auth: { getSession: async () => ({ data: { session: { access_token: 'native-token' } }, error: null }) },
+    auth: { getSession: async () => ({ data: { session: { access_token: 'native-token', user: { id } } }, error: null }) },
   };
   const api = createChatApi(client, { fetcher: async (url, options) => {
     fetched = true;
@@ -90,7 +90,7 @@ test('name lookup caller cancellation bounds an unresolved saved-name RPC', asyn
 test('writes derive the sender from auth and exclude arbitrary write fields', async () => {
   let inserted;
   const api = createChatApi({
-    auth: { getUser: async () => ({ data: { user: { id } }, error: null }) },
+    auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
     from: () => ({ insert: (row) => { inserted = row; return { select: () => ({ single: async () => ({ data: row, error: null }) }) }; } }),
   });
   await api.sendGroupMessage(id, ' hello ');
@@ -117,4 +117,42 @@ test('failed sign-out surfaces the error; success removes channels', async () =>
   client.auth.signOut = async () => ({ error: null });
   await createChatApi(client).signOut();
   assert.equal(removed, true);
+});
+
+test('QR name and image share concurrent metadata and successful session cache; failures are retried', async () => {
+  let requests = 0;
+  let succeeds = true;
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user: { id }, access_token: 'test-token' } }, error: null }) },
+    rpc: () => ({ abortSignal: async () => ({ data: null, error: null }) }),
+  };
+  const api = createChatApi(client, { fetcher: async () => {
+    requests++;
+    await new Promise(resolve => setTimeout(resolve, 5));
+    return Response.json(succeeds ? { name: 'Cafe', imageUrl: 'https://public.example/cafe.jpg' } : { name: null, imageUrl: null });
+  } });
+  const [name, image] = await Promise.all([api.resolveQrChatName('https://public.example/menu'), api.resolveQrChatImage('https://public.example/menu')]);
+  assert.equal(requests, 1);
+  assert.deepEqual(name, { kind: 'suggested', name: 'Cafe' });
+  assert.equal(image, 'https://public.example/cafe.jpg');
+  await api.resolveQrChatImage('https://public.example/menu');
+  assert.equal(requests, 1);
+  api.clearSessionCache();
+  succeeds = false;
+  await api.resolveQrChatImage('https://public.example/menu');
+  succeeds = true;
+  await api.resolveQrChatImage('https://public.example/menu');
+  assert.equal(requests, 3);
+});
+
+test('previous-session metadata cannot be returned or cached after invalidation', async () => {
+  let finish;
+  const api = createChatApi({ auth: { getSession: async () => ({ data: { session: { user: { id }, access_token: 'test-token' } }, error: null }) } }, {
+    fetcher: () => new Promise(resolve => { finish = resolve; }),
+  });
+  const request = api.resolveQrChatImage('https://public.example/menu');
+  await new Promise(resolve => setTimeout(resolve, 1));
+  api.clearSessionCache();
+  finish(Response.json({ name: 'Old session', imageUrl: 'https://public.example/old.jpg' }));
+  assert.equal(await request, null);
 });
