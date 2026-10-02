@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { Analytics } from "@vercel/analytics/next";
 import { isLocalDesignPreviewHost } from "@/lib/local-design-preview";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
@@ -27,7 +28,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col"><MobileOnly preview={preview}>{children}</MobileOnly></body>
+      <body className="min-h-full flex flex-col">
+        <MobileOnly preview={preview}>{children}</MobileOnly>
+        <Analytics />
+      </body>
     </html>
   );
 }
