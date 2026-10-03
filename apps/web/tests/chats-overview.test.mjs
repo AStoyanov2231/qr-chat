@@ -354,9 +354,9 @@ test('legacy chats links reach the single home page without changing the QR key'
   });
 });
 
-test('the profile route renders a full profile page', async () => {
+test('the profile route leaves rendering to the persistent protected layout', async () => {
   const { default: ProfilePage } = await loadTsxModule('../src/app/(protected)/profile/page.tsx');
-  assert.equal(ProfilePage().props.view, 'profile');
+  assert.equal(ProfilePage(), null);
 });
 
 test('the profile page provides a back link to Chats and keeps its actions', async () => {

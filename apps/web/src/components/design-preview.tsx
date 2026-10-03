@@ -56,6 +56,16 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
   const photoUrls = useRef<string[]>([]);
   useEffect(() => () => { photoUrls.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
 
+  useEffect(() => {
+    // Local fixture control for rendered scanner entry/expiry regressions only.
+    const change = (event: Event) => setSnapshot((current) => ({
+      ...current, group: null, expiresAt: null,
+      ...((event as CustomEvent).detail === "empty" ? { friends: [], directPreviews: {} } : {}),
+    }));
+    window.addEventListener("qrchat-preview-state", change);
+    return () => window.removeEventListener("qrchat-preview-state", change);
+  }, []);
+
   const api = useMemo<ChatViewApi>(() => ({
     async saveProfile(input) {
       const { display_name } = profileSchema.parse(input);

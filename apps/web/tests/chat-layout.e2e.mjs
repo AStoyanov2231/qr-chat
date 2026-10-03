@@ -114,6 +114,7 @@ try {
     assert.ok(samples.some(sample => sample.composer > 431 && sample.composer < closed.composer.bottom - 1), 'Composer has intermediate resize frames instead of jumping to its final position');
     assert.ok(samples.every(sample => sample.persistent && sample.reachable), 'The original controls stay mounted and above the moving chat throughout expansion');
     assert.ok(samples.every(sample => sample.radius === '28px'), 'Expansion never changes the chat curve');
+    await settle();
     const opened = await geometry();
     assert.equal(opened.state, 'open');
     assert.equal(opened.surface.top, opened.app.top);
@@ -139,6 +140,7 @@ try {
     for (let i = 1; i < closing.length; i++) assert.ok(closing[i].surface >= closing[i - 1].surface - .1, 'Surface restores smoothly downward');
     assert.ok(closing.every(sample => sample.controls === closed.controls.top && sample.persistent && sample.reachable), 'The original controls stay anchored above the layers throughout restoration');
     assert.ok(closing.every(sample => sample.radius === '28px'), 'Restoration never changes the chat curve');
+    await settle();
     assert.equal((await geometry()).surface.top, closed.surface.top, 'Photo and surface restore');
     for (let i = 0; i < 3; i++) { await resize(430); await resize(844); }
     await page.evaluate(async () => {

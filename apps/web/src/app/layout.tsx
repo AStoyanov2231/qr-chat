@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { isLocalDesignPreviewHost } from "@/lib/local-design-preview";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { AppArrival } from "@/components/app-arrival";
 import { MobileOnly } from "@/components/mobile-only";
 
 export const metadata: Metadata = {
@@ -27,7 +28,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col">
-        <MobileOnly preview={preview}>{children}</MobileOnly>
+        <AppArrival><MobileOnly preview={preview}>{children}</MobileOnly></AppArrival>
+        <span className="browser-edge-tint browser-edge-top" aria-hidden="true" />
+        <span className="browser-edge-tint browser-edge-bottom" aria-hidden="true" />
         <Analytics />
       </body>
     </html>

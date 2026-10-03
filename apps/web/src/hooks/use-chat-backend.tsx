@@ -1,5 +1,6 @@
 "use client";
 import { createContext, use, useEffect, useState, useSyncExternalStore, type PropsWithChildren } from "react";
+import { flushSync } from "react-dom";
 import { createChatApi, getChatStore } from "@qr-chat/api";
 import { createClient } from "@/lib/supabase/client";
 import { z } from "@qr-chat/validation";
@@ -17,6 +18,7 @@ export function errorMessage(error: unknown) {
 
 /** Mounted in the protected layout so route navigation retains data and subscriptions. */
 export function ChatSessionProvider({ children }: PropsWithChildren) {
+  const [signedOut, setSignedOut] = useState(false);
   const [value] = useState(() => {
     const api = createChatApi(createClient(), { qrNameEndpoint: "/api/qr-name" });
     return { api, store: getChatStore(api) };
@@ -31,7 +33,10 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
     window.addEventListener("offline", activity);
     document.addEventListener("visibilitychange", activity);
     const { data } = value.api.client.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") window.location.replace("/sign-in");
+      if (event === "SIGNED_OUT") {
+        flushSync(() => setSignedOut(true));
+        window.location.replace("/sign-in");
+      }
     });
     return () => {
       value.store.dispose(); data.subscription.unsubscribe();
@@ -39,7 +44,7 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
       document.removeEventListener("visibilitychange", activity);
     };
   }, [value]);
-  return <Context value={value}>{children}</Context>;
+  return signedOut ? null : <Context value={value}>{children}</Context>;
 }
 function useSession() {
   const value = use(Context);

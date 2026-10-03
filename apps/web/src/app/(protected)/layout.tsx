@@ -1,3 +1,4 @@
+import QrChatApp from "@/components/mobile-chat";
 import { ChatSessionProvider } from "@/hooks/use-chat-backend";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -10,5 +11,5 @@ export default async function ProtectedLayout({ children }: LayoutProps<"/">) {
     redirect("/sign-in");
   }
 
-  return <ChatSessionProvider>{children}</ChatSessionProvider>;
+  return <ChatSessionProvider><QrChatApp />{children}</ChatSessionProvider>;
 }
