@@ -16,6 +16,7 @@ import {
 } from "react";
 import { CornersOut, QrCode } from "@phosphor-icons/react";
 import { cameraErrorMessage } from "@/lib/camera-error";
+import { observeChatViewport } from "@/lib/chat-viewport";
 import { ConversationHeader } from "@/components/conversation-header";
 import { GroupSidebar } from "@/components/group-sidebar";
 import { ProfileView } from "@/components/profile-view";
@@ -127,22 +128,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const openGroup = backend.openGroup;
   useEffect(() => {
     const element = app.current;
-    const viewport = window.visualViewport;
-    if (!element || !viewport) return;
-    const resize = () => {
-      if (viewport.scale !== 1) return;
-      element.style.setProperty("--app-height", `${viewport.height}px`);
-      element.style.setProperty("--app-top", `${viewport.offsetTop}px`);
-    };
-    resize();
-    viewport.addEventListener("resize", resize);
-    viewport.addEventListener("scroll", resize);
-    return () => {
-      viewport.removeEventListener("resize", resize);
-      viewport.removeEventListener("scroll", resize);
-      element.style.removeProperty("--app-height");
-      element.style.removeProperty("--app-top");
-    };
+    if (element) return observeChatViewport(element);
   }, []);
   useEffect(() => active && view !== "profile" && !directId ? openGroup(active.id) : undefined, [active, view, directId, openGroup]);
   useEffect(() => {
@@ -337,6 +323,19 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     const stream = directBottom.current?.parentElement;
     stream?.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
   }, [latestDirectMessageId, directId]);
+
+  useEffect(() => {
+    const stream = (directId ? directBottom : bottom).current?.parentElement;
+    if (!stream) return;
+    let atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32;
+    const trackScroll = () => { atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32; };
+    const observer = new ResizeObserver(() => {
+      if (atBottom) stream.scrollTop = stream.scrollHeight;
+    });
+    observer.observe(stream);
+    stream.addEventListener("scroll", trackScroll, { passive: true });
+    return () => { observer.disconnect(); stream.removeEventListener("scroll", trackScroll); };
+  }, [active, directId, ready, view, backend.error]);
 
   useEffect(() => {
     if (!notice) return;
