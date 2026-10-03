@@ -1,6 +1,0 @@
-PASS: Landing 1440px: no overflow; minimum 44px targets; web entry and empty unavailable native slots
-PASS: Landing 768px: no overflow; minimum 44px targets; web entry and empty unavailable native slots
-PASS: Landing 390px: no overflow; minimum 44px targets; web entry and empty unavailable native slots
-PASS: Landing 320px: no overflow; minimum 44px targets; web entry and empty unavailable native slots
-PASS: Generated web QR independently decodes to the web sign-in route
-PASS: Touch mobile sign-in offers Google only in portrait and landscape; mouse desktop stays on landing even at 390px

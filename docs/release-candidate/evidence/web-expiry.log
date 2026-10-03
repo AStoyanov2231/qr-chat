@@ -1,2 +1,0 @@
-READY root may expire only Web Pair QA; watching already-open group without reload.
-PASS own expiry clears private group UI without reload, server denies group access, accepted DMs remain usable.

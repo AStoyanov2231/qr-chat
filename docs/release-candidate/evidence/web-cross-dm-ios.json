@@ -1,8 +1,0 @@
-{
-  "peer": "RC IOS Native",
-  "outgoing": "dm-web-ios-rc-01",
-  "incoming": "Dm-iOS-web-to-01",
-  "outgoingCount": 1,
-  "incomingCount": 1,
-  "timestamp": "2026-10-03T01:10:15.574Z"
-}

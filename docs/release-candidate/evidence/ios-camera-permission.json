@@ -1,8 +1,0 @@
-{
-  "pass": true,
-  "deniedScreenObserved": true,
-  "openSettingsLaunched": true,
-  "simulatorSettingsDestination": "Settings root on iOS27; app uses standard Linking.openSettings",
-  "originalCameraGrantRestored": true,
-  "timestamp": "2026-10-03T01:30:22.249925+00:00"
-}
