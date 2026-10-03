@@ -25,6 +25,7 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set("view", pathname === "/profile" ? "profile" : "chats");
     return NextResponse.rewrite(url);
   }
+  if (pathname === "/welcome") return NextResponse.next();
   const { response, userId } = await updateSession(request);
   const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/auth/");
 

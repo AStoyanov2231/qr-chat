@@ -81,6 +81,8 @@ begin
   execute 'set local role authenticated';
   perform public.join_qr_group(room_key);
   assert (select count(*) = 1 from public.group_messages where group_id = room), 'member reads shared messages';
+  assert public.get_chat_overview()->'membership'->>'group_id' = room::text, 'overview is scoped to authorized membership';
+  assert jsonb_array_length(public.get_chat_overview()->'groupHeadIds') = 1, 'overview recovers authorized message heads';
   assert (select count(*) = 2 from public.profiles where id in (a,b)), 'members see each other';
   execute 'reset role';
 
@@ -115,6 +117,7 @@ begin
   perform set_config('request.jwt.claim.sub', outsider::text, true);
   execute 'set local role authenticated';
   assert (select count(*) = 0 from public.direct_messages where friend_connection_id = connection), 'outsider cannot read DMs';
+  assert public.get_chat_overview()->'directPreviews' = '{}'::jsonb, 'overview cannot leak outsider previews';
   denied := false;
   begin insert into public.direct_messages(friend_connection_id,sender_id,body) values(connection,outsider,'outside'); exception when insufficient_privilege then denied := true; end;
   assert denied, 'outsider cannot send DMs';
@@ -130,6 +133,9 @@ begin
   begin insert into public.group_messages(group_id,sender_id,body) values(room,a,'expired'); exception when insufficient_privilege then denied:=true; end;
   assert denied, 'expired member cannot send';
   assert (select count(*) = 1 from public.direct_messages where friend_connection_id=connection), 'friendship survives expiration';
+  assert public.get_chat_access()->'membership' = 'null'::jsonb, 'access RPC rejects expiration before cleanup';
+  assert public.get_chat_overview()->'membership' = 'null'::jsonb, 'overview rejects expiration before cleanup';
+  assert public.get_chat_overview()->'directPreviews'->connection::text->>'body' = 'accepted', 'batched DM previews survive group expiry';
   insert into public.direct_messages(friend_connection_id,sender_id,body) values(connection,a,'still friends');
   perform public.leave_qr_group();
   execute 'reset role';

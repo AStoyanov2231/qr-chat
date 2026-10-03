@@ -57,9 +57,9 @@ async function isAuthenticated(request: Request, createClient: Dependencies["cre
   try {
     const client = await createClient();
     const { data, error } = bearer
-      ? await client.auth.getUser(bearer)
-      : await client.auth.getUser();
-    return !error && !!data.user;
+      ? await client.auth.getClaims(bearer)
+      : await client.auth.getClaims();
+    return !error && !!data?.claims.sub;
   } catch {
     return false;
   }

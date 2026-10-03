@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
 import { codeKeySchema, qrNameSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
+import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage } from "./overview.ts";
+export { getChatStore, createChatStore } from "./store.ts";
+export { createObservedFetch } from "./requests.ts";
+export type { RequestObservation, RequestObserver } from "./requests.ts";
+export type { ChatOverview, ChatAccess } from "./overview.ts";
 export type AvatarUpload = { uploadId: string; data: ArrayBuffer };
 export { watchChanges } from "./realtime.ts";
 export type { ConnectionState, ChangeFilter } from "./realtime.ts";
@@ -59,10 +64,50 @@ export function createChatApi(
 ) {
   const fetcher = options.fetcher ?? fetch;
   const qrNameEndpoint = options.qrNameEndpoint ?? "/api/qr-name";
+  const mutations = new Set<(event: ChatMutation) => void>();
+  const emit = (event: ChatMutation) => { for (const listener of mutations) listener(event); };
   async function userId() {
-    const { data, error } = await client.auth.getUser();
-    if (error || !data.user) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
-    return data.user.id;
+    // This ID supplies query filters, never authorization. PostgreSQL enforces RLS.
+    const { data, error } = await client.auth.getSession();
+    if (error || !data.session?.user) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
+    return data.session.user.id;
+  }
+  const metadata = new Map<string, { userId: string; expires: number; value: { name: string | null; imageUrl?: string | null } }>();
+  const metadataRequests = new Map<string, Promise<{ name: string | null; imageUrl?: string | null }>>();
+  let sessionGeneration = 0;
+  async function lookupMetadata(code: string) {
+    if (!qrNameEndpoint) return { name: null, imageUrl: null };
+    const { data, error } = await client.auth.getSession();
+    const session = data.session;
+    if (error || !session) return { name: null, imageUrl: null };
+    const key = `${session.user.id}:${code}`;
+    const cached = metadata.get(key);
+    if (cached && cached.expires > Date.now()) return cached.value;
+    const pending = metadataRequests.get(key);
+    if (pending) return pending;
+    const request = (async () => {
+      const generation = sessionGeneration;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3500);
+      try {
+        const response = await fetcher(qrNameEndpoint, {
+          method: "POST", credentials: "same-origin",
+          headers: { authorization: `Bearer ${session.access_token}`, "content-type": "application/json" },
+          body: JSON.stringify({ code }), signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Metadata unavailable");
+        const value = qrNameLookupResponseSchema.parse(await response.json());
+        const currentId = await userId();
+        if (generation !== sessionGeneration || currentId !== session.user.id) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
+        if (value.name || value.imageUrl) {
+          if (metadata.size >= 100) metadata.delete(metadata.keys().next().value!);
+          metadata.set(key, { userId: session.user.id, expires: Date.now() + 3600000, value });
+        }
+        return value;
+      } finally { clearTimeout(timeout); }
+    })();
+    metadataRequests.set(key, request);
+    try { return await request; } finally { if (metadataRequests.get(key) === request) metadataRequests.delete(key); }
   }
   async function qrChatName(code: unknown, signal?: AbortSignal): Promise<string | null> {
     let request = client.rpc("get_qr_chat_name", {
@@ -75,6 +120,18 @@ export function createChatApi(
   const api = {
     client,
     userId,
+    onMutation(listener: (event: ChatMutation) => void) { mutations.add(listener); return () => { mutations.delete(listener); }; },
+    clearSessionCache() { sessionGeneration++; metadata.clear(); metadataRequests.clear(); },
+    async overview(signal?: AbortSignal): Promise<ChatOverview> {
+      let query = client.rpc("get_chat_overview");
+      if (signal) query = query.abortSignal(signal);
+      return await result(query) as unknown as ChatOverview;
+    },
+    async access(signal?: AbortSignal): Promise<ChatAccess> {
+      let query = client.rpc("get_chat_access");
+      if (signal) query = query.abortSignal(signal);
+      return await result(query) as unknown as ChatAccess;
+    },
     async profile(): Promise<Tables<"profiles"> | null> {
       return nullableResult(client.from("profiles").select("*").eq("id", await userId()).maybeSingle());
     },
@@ -143,71 +200,28 @@ export function createChatApi(
       }));
     },
     async resolveQrChatImage(code: unknown, signal?: AbortSignal): Promise<string | null> {
-      if (!qrNameEndpoint) return null;
-      const controller = new AbortController();
-      const cancel = () => controller.abort();
-      if (signal?.aborted) cancel();
-      else signal?.addEventListener("abort", cancel, { once: true });
-      const timeout = setTimeout(cancel, 5000);
       try {
-        const { data, error } = await abortable(client.auth.getSession(), controller.signal);
-        if (error || !data.session?.access_token || controller.signal.aborted) return null;
-        const response = await fetcher(qrNameEndpoint, {
-          method: "POST", credentials: "same-origin",
-          headers: { authorization: `Bearer ${data.session.access_token}`, "content-type": "application/json" },
-          body: JSON.stringify({ code: codeKeySchema.parse(code) }),
-          signal: controller.signal,
-        });
-        if (!response.ok) return null;
-        const parsed = qrNameLookupResponseSchema.safeParse(await response.json());
-        return parsed.success ? parsed.data.imageUrl ?? null : null;
+        const request = lookupMetadata(codeKeySchema.parse(code));
+        const value = signal ? await abortable(request, signal) : await request;
+        return value.imageUrl ?? null;
       } catch { return null; }
-      finally {
-        clearTimeout(timeout);
-        signal?.removeEventListener("abort", cancel);
-      }
     },
     async resolveQrChatName(code: unknown, signal?: AbortSignal): Promise<ChatNameResolution> {
       const codeKey = codeKeySchema.parse(code);
       const controller = new AbortController();
-      const relayAbort = () => controller.abort(signal?.reason);
-      if (signal?.aborted) relayAbort();
-      else signal?.addEventListener("abort", relayAbort, { once: true });
-      const timeout = setTimeout(() => controller.abort(new Error("Name lookup timed out")), 3500);
+      const cancel = () => controller.abort();
+      if (signal?.aborted) cancel();
+      else signal?.addEventListener("abort", cancel, { once: true });
+      const timeout = setTimeout(cancel, 3500);
       try {
         let saved: string | null = null;
-        try {
-          saved = await abortable(qrChatName(codeKey, controller.signal), controller.signal);
-        } catch {
-          // A page suggestion can still help if the saved-name read fails.
-        }
+        try { saved = await abortable(qrChatName(codeKey, controller.signal), controller.signal); } catch { /* Try optional metadata. */ }
         if (saved) return { kind: "saved", name: saved };
-        if (controller.signal.aborted || !qrNameEndpoint) return { kind: "missing" };
-        const sessionResult = await abortable(client.auth.getSession(), controller.signal);
-        const accessToken = sessionResult.error ? null : sessionResult.data.session?.access_token ?? null;
-        if (!accessToken) return { kind: "missing" };
-        const response = await abortable(fetcher(qrNameEndpoint, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            authorization: `Bearer ${accessToken}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ code: codeKey }),
-          signal: controller.signal,
-        }), controller.signal);
-        if (!response.ok) return { kind: "missing" };
-        const body: unknown = await abortable(response.json(), controller.signal);
-        const parsed = qrNameLookupResponseSchema.safeParse(body);
-        return parsed.success && parsed.data.name
-          ? { kind: "suggested", name: parsed.data.name }
-          : { kind: "missing" };
-      } catch {
-        return { kind: "missing" };
-      } finally {
-        clearTimeout(timeout);
-        signal?.removeEventListener("abort", relayAbort);
-      }
+        if (controller.signal.aborted) return { kind: "missing" };
+        const value = await abortable(lookupMetadata(codeKey), controller.signal);
+        return value.name ? { kind: "suggested", name: value.name } : { kind: "missing" };
+      } catch { return { kind: "missing" }; }
+      finally { clearTimeout(timeout); signal?.removeEventListener("abort", cancel); }
     },
     leaveGroup: () => nullableResult(client.rpc("leave_qr_group")),
     async currentMembership() {
@@ -218,19 +232,35 @@ export function createChatApi(
       return result(client.from("group_memberships").select("*, profiles(*)")
         .eq("group_id", userIdSchema.parse(groupId)).order("joined_at"));
     },
-    async groupMessages(groupId: string, options: { before?: number; limit?: number } = {}) {
+    async groupMessages(groupId: string, options: { before?: number; limit?: number } = {}, signal?: AbortSignal) {
       const { before, limit } = pageSchema.parse(options);
       let query = client.from("group_messages").select("*, profiles(display_name, avatar_url)")
         .eq("group_id", userIdSchema.parse(groupId)).order("id", { ascending: false }).limit(limit + 1);
       if (before !== undefined) query = query.lt("id", before);
+      if (signal) query = query.abortSignal(signal);
       const rows = await result(query);
       const items = rows.slice(0, limit);
       return { items, nextCursor: rows.length > limit ? items.at(-1)!.id : null };
     },
+    async groupMessageIds(groupId: string, ids: number[], signal?: AbortSignal): Promise<GroupMessage[]> {
+      let query = client.from("group_messages").select("*, profiles(display_name, avatar_url)")
+        .eq("group_id", userIdSchema.parse(groupId)).in("id", ids.map((id) => pageSchema.parse({ before: id }).before!));
+      if (signal) query = query.abortSignal(signal);
+      return result(query);
+    },
+    async directMessageIds(connectionId: string, ids: number[], signal?: AbortSignal) {
+      let query = client.from("direct_messages").select("*")
+        .eq("friend_connection_id", userIdSchema.parse(connectionId)).in("id", ids.map((id) => pageSchema.parse({ before: id }).before!));
+      if (signal) query = query.abortSignal(signal);
+      return result(query);
+    },
     async sendGroupMessage(groupId: string, body: unknown) {
       const group_id = userIdSchema.parse(groupId);
       const content = messageBodySchema.parse(body);
-      return result(client.from("group_messages").insert({ group_id, body: content, sender_id: await userId() }).select().single());
+      const id = await userId();
+      const message = await result(client.from("group_messages").insert({ group_id, body: content, sender_id: id }).select("*, profiles(display_name, avatar_url)").single());
+      emit({ kind: "group", userId: id, message });
+      return message;
     },
     async friends() {
       const id = await userId();
@@ -247,11 +277,12 @@ export function createChatApi(
       const removed = await result(client.rpc("remove_friend_connection", { p_connection_id: userIdSchema.parse(connectionId) }));
       if (!removed) throw new ChatApiError("This connection is no longer available.", "NOT_AVAILABLE");
     },
-    async directMessages(connectionId: string, options: { before?: number; limit?: number } = {}) {
+    async directMessages(connectionId: string, options: { before?: number; limit?: number } = {}, signal?: AbortSignal) {
       const { before, limit } = pageSchema.parse(options);
       let query = client.from("direct_messages").select("*")
         .eq("friend_connection_id", userIdSchema.parse(connectionId)).order("id", { ascending: false }).limit(limit + 1);
       if (before !== undefined) query = query.lt("id", before);
+      if (signal) query = query.abortSignal(signal);
       const rows = await result(query);
       const items = rows.slice(0, limit);
       return { items, nextCursor: rows.length > limit ? items.at(-1)!.id : null };
@@ -259,11 +290,15 @@ export function createChatApi(
     async sendDirectMessage(connectionId: string, body: unknown) {
       const friend_connection_id = userIdSchema.parse(connectionId);
       const content = messageBodySchema.parse(body);
-      return result(client.from("direct_messages").insert({ friend_connection_id, body: content, sender_id: await userId() }).select().single());
+      const id = await userId();
+      const message = await result(client.from("direct_messages").insert({ friend_connection_id, body: content, sender_id: id }).select().single());
+      emit({ kind: "direct", userId: id, message });
+      return message;
     },
     async signOut() {
       const { error } = await client.auth.signOut({ scope: "local" });
       if (error) throw new ChatApiError(error.message, "SIGN_OUT_FAILED");
+      api.clearSessionCache();
       await client.removeAllChannels();
     },
   };

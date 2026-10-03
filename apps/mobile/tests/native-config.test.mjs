@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const expoCli = join(dirname(require.resolve('expo/package.json')), 'bin/cli');
 
-test('iOS generation declares the scene lifecycle required to launch on iOS 27', () => {
+test('iOS generation supports scene lifecycle and native screen status-bar navigation', () => {
   // A clean fixture prevents a stale generated Info.plist from hiding a regression.
   const fixture = mkdtempSync(join(tmpdir(), 'qr-chat-native-config-'));
   try {
@@ -38,6 +38,8 @@ test('iOS generation declares the scene lifecycle required to launch on iOS 27',
       manifest.UISceneConfigurations.UIWindowSceneSessionRoleApplication[0].UISceneDelegateClassName,
       'EXExpoAppSceneDelegate',
     );
+    assert.equal(config._internal.modResults.ios.infoPlist.UIViewControllerBasedStatusBarAppearance, true,
+      'Native screens assert when per-screen statusBarStyle conflicts with application-level appearance');
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

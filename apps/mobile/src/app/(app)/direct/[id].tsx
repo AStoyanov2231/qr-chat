@@ -35,7 +35,7 @@ export default function DirectScreen() {
     </View>
     : undefined;
   async function refresh() {
-    await chat.refresh();
+    if (chat.error || !chat.ready) await chat.refresh();
     await direct.refresh();
   }
   return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false, statusBarStyle: 'light' }} />

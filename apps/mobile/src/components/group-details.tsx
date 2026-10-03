@@ -32,7 +32,7 @@ export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?:
     <View style={{ alignItems: 'center', gap: 8, paddingVertical: 18 }}>
       <GroupQr code={group.venue.codes[0]} />
       <Copy accessibilityRole="header" style={{ fontSize: 23, fontWeight: '600', textAlign: 'center' }}>{group.venue.name}</Copy>
-      <Copy style={styles.muted}>{group.members.length} members</Copy>
+      <Copy style={styles.muted}>{group.members.length} {group.members.length === 1 ? 'member' : 'members'}</Copy>
     </View>
     <ErrorNotice message={action.error || chat.error} />
     {group.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => { onNavigate?.(); router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } }); }} style={[styles.row, { minHeight: 60, paddingVertical: 8 }]}>

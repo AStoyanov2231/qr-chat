@@ -48,10 +48,10 @@ export function Conversation({ messages, userId, loading, error, available, conn
     }
   }
 
-  return <KeyboardAvoidingView style={[styles.screen, { marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }]} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
+  return <KeyboardAvoidingView style={[styles.screen, { marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }]} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
     <View style={{ paddingHorizontal: 22, gap: 8 }}>
       <ErrorNotice message={error || action.error} retry={() => { void action.run(refresh); }} />
-      {!connected && available && !error && <Copy accessibilityLiveRegion="polite" style={styles.muted}>Reconnecting…</Copy>}
+      {!connected && !error && <Copy accessibilityLiveRegion="polite" style={styles.muted}>Reconnecting…</Copy>}
     </View>
     {loading ? <View style={{ flex: 1, padding: 22 }}><Skeleton view="messages" /></View> : <FlatList
       ref={list}
@@ -82,7 +82,7 @@ export function Conversation({ messages, userId, loading, error, available, conn
     />}
     <View style={{ paddingHorizontal: 22, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 12) }}>
       {available ? <View style={{ width: '100%', maxWidth: 520, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 30, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.line }}>
-        <TextInput accessibilityLabel={composerLabel} placeholder={`${composerLabel}…`} placeholderTextColor={colors.muted} value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy && !sending} style={{ flex: 1, minWidth: 0, minHeight: 48, maxHeight: 150, paddingHorizontal: 10, paddingVertical: 10, fontSize: 16, color: colors.ink }} />
+        <TextInput accessibilityLabel={composerLabel} placeholder="Message…" placeholderTextColor={colors.muted} value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy && !sending} style={{ flex: 1, minWidth: 0, minHeight: 48, maxHeight: 150, paddingHorizontal: 10, paddingVertical: 10, fontSize: 16, color: colors.ink }} />
         <Pressable accessibilityRole="button" accessibilityLabel={sending ? 'Sending message' : 'Send message'} accessibilityState={{ disabled: sendDisabled }} disabled={sendDisabled} onPress={() => { void submit(); }} style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: colors.ink, opacity: sendDisabled && !sending ? 0.45 : pressed ? 0.75 : 1 })}>
           {sending ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="send" size={20} color="#fff" />}
         </Pressable>

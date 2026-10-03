@@ -16,7 +16,7 @@ const data = `${work}/data`;
 const socket = `${work}/socket`;
 mkdirSync(socket);
 const port = 20_000 + (process.pid % 40_000);
-const fixture = fileURLToPath(new URL('./sql/qr-group-names-regression.sql', import.meta.url));
+const fixture = fileURLToPath(new URL(process.argv[2] ?? './sql/qr-group-names-regression.sql', import.meta.url));
 let started = false;
 let stopped = false;
 let testFailure;

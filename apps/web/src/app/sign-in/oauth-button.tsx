@@ -1,24 +1,17 @@
 "use client";
 
-import { AppleLogo, GoogleLogo } from "@phosphor-icons/react";
+import { GoogleLogo } from "@phosphor-icons/react";
 import { useState } from "react";
 import { safeAuthDestination } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
-type Provider = "google" | "apple";
-
 export function OAuthButton({
-  provider,
   next,
 }: {
-  provider: Provider;
   next: string;
 }) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const label =
-    provider === "google" ? "Continue with Google" : "Continue with Apple";
-  const ProviderIcon = provider === "google" ? GoogleLogo : AppleLogo;
 
   async function signIn() {
     setError("");
@@ -29,14 +22,16 @@ export function OAuthButton({
     callbackUrl.searchParams.set("next", destination);
 
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: callbackUrl.toString(),
-      },
-    });
+    try {
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: callbackUrl.toString(),
+        },
+      });
 
-    if (authError) {
+      if (authError) throw authError;
+    } catch {
       setError("Sign in could not start. Please try again.");
       setPending(false);
     }
@@ -45,19 +40,19 @@ export function OAuthButton({
   return (
     <div className="auth-provider-wrap">
       <button
-        className={`auth-provider auth-provider-${provider}`}
+        className="auth-provider auth-provider-google"
         type="button"
         onClick={signIn}
         disabled={pending}
-        aria-describedby={error ? `${provider}-auth-error` : undefined}
+        aria-describedby={error ? "google-auth-error" : undefined}
       >
-        <ProviderIcon size={22} weight="bold" aria-hidden="true" />
-        <span>{pending ? "Opening sign in..." : label}</span>
+        <GoogleLogo size={22} weight="bold" aria-hidden="true" />
+        <span>{pending ? "Opening sign in..." : "Continue with Google"}</span>
       </button>
       {error && (
         <p
           className="auth-inline-error"
-          id={`${provider}-auth-error`}
+          id="google-auth-error"
           role="alert"
         >
           {error}

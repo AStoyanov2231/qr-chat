@@ -13,7 +13,7 @@ function fixture(avatar_url = `${base}${id}/${oldId}.jpg`) {
   let profile={id,display_name:'Andy',avatar_url};
   const failures={};
   const client={
-    auth:{getUser:async()=>({data:{user:{id}},error:null})},
+    auth:{getSession:async()=>({data:{session:{user:{id}}},error:null})},
     from:()=>({
       select:()=>({eq:()=>({maybeSingle:async()=>({data:profile,error:null})})}),
       update:row=>({eq:()=>({select:()=>({single:async()=>{

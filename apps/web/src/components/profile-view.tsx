@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
-import { Bell, BookmarkSimple, CaretLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, User, X } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, User, X } from "@phosphor-icons/react";
 import type { Group, Session } from "@/lib/chat-view";
 
 type Props = {
@@ -46,8 +46,6 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
     dialog.current?.showModal();
   }
   const rows = [
-    { label: "Saved Places", icon: BookmarkSimple },
-    { label: "Notifications", icon: Bell },
     { label: "Privacy", icon: LockSimple },
     { label: "Help & Feedback", icon: Question },
   ];
@@ -58,11 +56,7 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
       <strong>{session?.name || "Your profile"}</strong>
       <small>QR Chat member</small>
     </div>
-    <div className="profile-stats">
-      <div><strong>{group ? 1 : 0}</strong><span>Groups</span></div>
-      <div title="Lifetime message totals are not available yet"><strong>-</strong><span>Messages</span></div>
-      <div title="Saved places are not available yet"><strong>-</strong><span>Places</span></div>
-    </div>
+    <div className="profile-membership">{!ready ? "Loading your profile…" : group ? <><strong>{group.venue.name}</strong>Your current group</> : "Scan a QR code to join a group."}</div>
     <button className="profile-menu-row edit-profile-row" onClick={() => open("Edit Profile")}><User size={25} /><span>Edit Profile</span><CaretRight size={19} /></button>
     <div className="profile-menu">{rows.map(({ label, icon: RowIcon }) => <button key={label} className="profile-menu-row" onClick={() => open(label)}><RowIcon size={25} /><span>{label}</span><CaretRight size={19} /></button>)}</div>
     <dialog ref={dialog} className="profile-dialog" aria-label={panel} onCancel={(event) => { if (saving) event.preventDefault(); }} onClick={(event) => { if (event.target === dialog.current && !saving) dialog.current?.close(); }}>
@@ -96,10 +90,8 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
         </form>}
         {panel === "Settings" && <div className="settings-actions">{group && <button className="profile-action danger" disabled={busy} onClick={onLeave}>Leave current chat<CaretRight size={18} /></button>}<button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button></div>}
-        {panel === "Saved Places" && <p>Saving places is not available yet. Scan a place’s QR code to join its group.</p>}
-        {panel === "Notifications" && <p>No new notifications. Group messages appear live while you have the chat open.</p>}
-        {panel === "Privacy" && <p>Only members of your current group can read its messages. Direct messages are shared with your accepted friends.</p>}
-        {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code, then join the group. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
+        {panel === "Privacy" && <p>Group messages are available to members with active access. Your name and photo are visible to people in your group and your friends. Direct messages are shared with accepted friends. Group access ends after 24 hours; leaving or joining another group also ends that access.</p>}
+        {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code, then join the group. You can be in one group at a time. To keep talking after group access ends, open a member’s profile and send a friend request. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
       </div>
     </dialog>
   </section>;

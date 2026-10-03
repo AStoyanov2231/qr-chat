@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { createChatApi, type Database } from '@qr-chat/api';
+import { createChatApi, createObservedFetch, type RequestObserver, type Database } from '@qr-chat/api';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { createSessionStorage } from './secure-storage';
@@ -8,7 +8,6 @@ export const authCallback = 'qrchat://auth/callback';
 export const webOrigin = process.env.EXPO_PUBLIC_WEB_ORIGIN ?? '';
 export const providers = {
   google: process.env.EXPO_PUBLIC_ENABLE_GOOGLE_AUTH === 'true',
-  apple: process.env.EXPO_PUBLIC_ENABLE_APPLE_AUTH === 'true',
 };
 
 // Supabase uses WebCrypto for S256 PKCE. Supply only missing native primitives.
@@ -25,7 +24,7 @@ function installCrypto() {
 }
 
 let api: ReturnType<typeof createChatApi> | undefined;
-export function getNativeApi() {
+export function getNativeApi(observer?: RequestObserver) {
   if (api) return api;
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -37,7 +36,7 @@ export function getNativeApi() {
     setItem: (name, value) => SecureStore.setItemAsync(name, value, options),
     removeItem: (name) => SecureStore.deleteItemAsync(name, options),
   }, Crypto.randomUUID);
-  api = createChatApi(createClient<Database>(url, key, { auth: {
+  api = createChatApi(createClient<Database>(url, key, { global: { fetch: createObservedFetch(fetch, observer) }, auth: {
     storage, storageKey: 'qrchat.auth', persistSession: true, autoRefreshToken: true,
     detectSessionInUrl: false, flowType: 'pkce',
   } }), {

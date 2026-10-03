@@ -4,19 +4,21 @@
     "slug": "qr-chat",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/qr-chat-icon.png",
     "scheme": "qrchat",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.qrchat.mobile"
+      "icon": "./assets/qr-chat.icon",
+      "bundleIdentifier": "com.qrchat.mobile",
+      "infoPlist": {
+        "UIViewControllerBasedStatusBarAppearance": true
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#142b40",
+        "foregroundImage": "./assets/images/qr-chat-foreground.png",
+        "monochromeImage": "./assets/images/qr-chat-foreground.png"
       },
       "predictiveBackGestureEnabled": true,
       "softwareKeyboardLayoutMode": "resize",

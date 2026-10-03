@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { act, render, reset, state } from './support/native-harness.mjs';
 
-const { ChatProvider, useChat } = await import(new URL('../src/providers/chat-provider.tsx', import.meta.url).href);
+const { ChatProvider, useChat, errorMessage } = await import(new URL('../src/providers/chat-provider.tsx', import.meta.url).href);
+
+test('network failures explain recovery without exposing transport implementation text', () => {
+  for (const message of ['Network request failed', 'TypeError: Failed to fetch', 'Load failed']) {
+    assert.equal(errorMessage(new Error(message)), 'Could not connect. Check your internet connection and try again.');
+  }
+  assert.equal(errorMessage(new Error('Group access ended')), 'Group access ended');
+});
 
 test('group access is ended only after a successful snapshot observes active-to-none', async (t) => {
   reset();

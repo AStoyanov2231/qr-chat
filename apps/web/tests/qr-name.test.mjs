@@ -115,8 +115,8 @@ test('the name API route enforces bearer or cookie authentication after proxy by
   let lookups = 0;
   let cookieSession = false;
   const dependencies = {
-    createClient: async () => ({ auth: { getUser: async (token) => ({
-      data: { user: token === 'native-token' || (!token && cookieSession) ? { id: 'member' } : null },
+    createClient: async () => ({ auth: { getClaims: async (token) => ({
+      data: { claims: token === 'native-token' || (!token && cookieSession) ? { sub: 'member' } : {} },
       error: token === 'bad-token' ? new Error('invalid token') : null,
     }) } }),
     lookupName: async (code) => { lookups += 1; return `Venue ${code}`; },

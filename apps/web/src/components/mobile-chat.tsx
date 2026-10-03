@@ -11,9 +11,12 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
 } from "react";
 import { CornersOut, QrCode } from "@phosphor-icons/react";
+import { cameraErrorMessage } from "@/lib/camera-error";
+import { observeChatViewport } from "@/lib/chat-viewport";
 import { ConversationHeader } from "@/components/conversation-header";
 import { GroupSidebar } from "@/components/group-sidebar";
 import { ProfileView } from "@/components/profile-view";
@@ -24,6 +27,12 @@ import { MemberProfile } from "@/components/member-profile";
 import { Icon } from "@/components/icon";
 import { directConversationScopeIsCurrent, resolveCode, type DirectConversationScope, type Venue } from "@/lib/chat-view";
 import { useChatBackend, useDirectMessages, errorMessage } from "@/hooks/use-chat-backend";
+
+function subscribeNetwork(callback: () => void) {
+  window.addEventListener("online", callback);
+  window.addEventListener("offline", callback);
+  return () => { window.removeEventListener("online", callback); window.removeEventListener("offline", callback); };
+}
 
 function MessageDay({ time, previousTime }: { time: number; previousTime?: number }) {
   const label = messageDayLabel(time, previousTime);
@@ -63,6 +72,7 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
 
 export function ChatView({ view = "chats", backend, direct, directId, setDirectId }: ChatViewProps) {
   const router = useRouter();
+  const online = useSyncExternalStore(subscribeNetwork, () => navigator.onLine, () => true);
   const { session, api, ready } = backend;
   const groups = backend.group ? [backend.group] : [];
   const [busy, setBusy] = useState(false);
@@ -79,6 +89,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const [name, setName] = useState("");
   const [draft, setDraft] = useState("");
   const [directSendError, setDirectSendError] = useState("");
+  const [groupSendError, setGroupSendError] = useState("");
   const [sendingDirect, setSendingDirect] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -100,18 +111,26 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const directBottom = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const scanLocked = useRef(false);
+  const initialCodeHandled = useRef(false);
   const directScope = useRef<DirectConversationScope>({ connectionId: null, version: 0 });
 
   function switchDirectConversation(connectionId: string | null) {
     directScope.current = { connectionId, version: directScope.current.version + 1 };
     setDirectId(connectionId);
     setDirectSendError("");
+    setGroupSendError("");
     setSendingDirect(false);
   }
 
   // The current-membership query is authoritative, even if the member list is capped.
   const group = groups.find((item) => item.id === active?.id);
   const groupCode = group?.venue.codes[0];
+  const openGroup = backend.openGroup;
+  useEffect(() => {
+    const element = app.current;
+    if (element) return observeChatViewport(element);
+  }, []);
+  useEffect(() => active && view !== "profile" && !directId ? openGroup(active.id) : undefined, [active, view, directId, openGroup]);
   useEffect(() => {
     if (!api || !groupCode) return;
     const controller = new AbortController();
@@ -199,8 +218,9 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const openScannedCode = useEffectEvent((value: string) => openCode(value));
 
   useEffect(() => {
-    if (!ready || view === "profile") return;
+    if (!ready || view === "profile" || initialCodeHandled.current) return;
     const init = window.setTimeout(() => {
+      initialCodeHandled.current = true;
       const params = new URLSearchParams(window.location.search);
       const query = params.get("code");
       if (query !== null) openInitialCode(query);
@@ -249,17 +269,12 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       .then(() => {
         if (!disposed) setCameraState("active");
       })
-      .catch((reason: unknown) => {
+      .catch(async (reason: unknown) => {
         if (disposed) return;
-        const message = reason instanceof Error ? reason.message : String(reason);
+        const message = await cameraErrorMessage(reason, navigator.permissions);
+        if (disposed) return;
         setCameraState("error");
-        setCameraError(
-          /permission|denied|notallowed/i.test(message)
-            ? "Camera access is blocked. Allow it in your browser settings, then try again."
-            : /notfound|device|camera/i.test(message)
-              ? "No camera was found on this device."
-              : "The camera could not start. Check your browser permissions and try again.",
-        );
+        setCameraError(message);
       });
 
     return () => {
@@ -276,7 +291,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     const stopPageScroll = (event: Event, delta: number) => {
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("dialog")) return;
-      const stream = target?.closest<HTMLElement>(".message-stream, .dm-list, .dm-loading-list");
+      const stream = target?.closest<HTMLElement>(".message-stream, .chat-list-scroll");
       if (!stream || ((active || directId) && ((delta < 0 && stream.scrollTop <= 0) || (delta > 0 && stream.scrollTop + stream.clientHeight >= stream.scrollHeight - 1)))) {
         if (event.cancelable) event.preventDefault();
       }
@@ -310,12 +325,26 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   }, [latestDirectMessageId, directId]);
 
   useEffect(() => {
+    const stream = (directId ? directBottom : bottom).current?.parentElement;
+    if (!stream) return;
+    let atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32;
+    const trackScroll = () => { atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32; };
+    const observer = new ResizeObserver(() => {
+      if (atBottom) stream.scrollTop = stream.scrollHeight;
+    });
+    observer.observe(stream);
+    stream.addEventListener("scroll", trackScroll, { passive: true });
+    return () => { observer.disconnect(); stream.removeEventListener("scroll", trackScroll); };
+  }, [active, directId, ready, view, backend.error]);
+
+  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 4500);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
   function startEntry() {
+    setCameraAttempt((attempt) => attempt + 1);
     setError("");
     setPending(null);
     setCameraError("");
@@ -340,33 +369,47 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     event.preventDefault();
     if (!pending || !session || !name.trim() || !pendingNameResult || !chosenChatName) return;
     void perform(async () => {
-      await api.saveProfile({ display_name: name });
-      const current = backend.group?.venue.codes[0] === pending.codes[0] ? backend.group : null;
-      let destination: Venue;
-      if (current) {
-        const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chosenChatName);
-        destination = { ...current.venue, name: canonicalName, nameMissing: false };
-      } else {
-        const membership = await api.joinNamedGroup(pending.codes[0], chosenChatName);
-        destination = { ...pending, id: membership.group_id, name: membership.display_name, nameMissing: false };
-      }
-      await backend.refresh();
-      switchDirectConversation(null);
-      setActive(destination);
-      setEntry(false);
-      setPending(null);
-      setDraft("");
-      router.push(`/?code=${encodeURIComponent(pending.codes[0])}`);
+      setError("");
+      try {
+        await api.saveProfile({ display_name: name });
+        const current = backend.group?.venue.codes[0] === pending.codes[0] ? backend.group : null;
+        let destination: Venue;
+        if (current) {
+          const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chosenChatName);
+          destination = { ...current.venue, name: canonicalName, nameMissing: false };
+        } else {
+          const membership = await api.joinNamedGroup(pending.codes[0], chosenChatName);
+          destination = { ...pending, id: membership.group_id, name: membership.display_name, nameMissing: false };
+        }
+        await backend.refresh();
+        switchDirectConversation(null);
+        setActive(destination);
+        setEntry(false);
+        setPending(null);
+        setDraft("");
+        router.push(`/?code=${encodeURIComponent(pending.codes[0])}`);
+      } catch (reason) { setError(errorMessage(reason)); throw reason; }
     });
   }
 
   function submitMessage(event: FormEvent) {
     event.preventDefault();
     if (!active || !session || !draft.trim()) return;
+    const expectedScope = directScope.current;
+    const isCurrent = () => directConversationScopeIsCurrent(directScope.current, expectedScope);
     void perform(async () => {
-      await api.sendGroupMessage(active.id, draft);
+      setGroupSendError("");
+      try { await api.sendGroupMessage(active.id, draft); }
+      catch (reason) {
+        if (isCurrent()) setGroupSendError("Could not send your message. Your draft is still here; try again.");
+        throw reason;
+      }
+      if (!isCurrent()) return;
       setDraft("");
-      await backend.refresh();
+      try { await backend.refreshGroup(); }
+      catch {
+        if (isCurrent()) setGroupSendError("Your message was sent, but the chat could not refresh. Retry loading messages to confirm it appears.");
+      }
     });
   }
 
@@ -429,12 +472,14 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       await api.leaveGroup();
       await backend.refresh();
       setActive(null);
+      switchDirectConversation(null);
       router.push("/");
     });
   }
 
   return (
     <div ref={app} className="qr-app">
+      {(!online || backend.connection === "reconnecting") && <div className="connection-status" role="status">{online ? "Reconnecting… Your chats will refresh when connected." : "You’re offline. Reconnect to load chats and send messages."}</div>}
       <main className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : ""}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
@@ -458,8 +503,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             onOpenGroup={() => { if (backend.group) openConversation(backend.group.venue); }}
             onOpenDirect={openDirectMessage}
             onOpenProfile={openPerson}
-            onAcceptRequest={(friendId) => { void perform(async () => { await api.acceptFriend(friendId); await backend.refresh(); }); }}
-            onRemoveRequest={(friendId) => { void perform(async () => { await api.removeFriend(friendId); await backend.refresh(); }); }}
+            onAcceptRequest={async (friendId) => { await api.acceptFriend(friendId); await backend.refresh(); }}
+            onRemoveRequest={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
           />
         )}
 
@@ -474,13 +519,14 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           </section>
         )}
 
-        {view === "chats" && active && !backend.error && (
+        {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={active.name} subtitle={`${group?.members.length ?? 0} members`} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={() => { setSidebar(false); setActive(null); router.push("/"); }} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
+            <ConversationHeader title={active.name} subtitle={`${group?.members.length ?? 0} ${group?.members.length === 1 ? "member" : "members"}`} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={() => { setSidebar(false); setActive(null); switchDirectConversation(null); router.push("/"); }} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
-                {!group?.messages.length && (
+                {backend.groupLoading && <MessageSkeleton />}
+                {!backend.groupLoading && !group?.messages.length && (
                   <p className="first-message">{group ? "Be the first to say hello." : "Your membership has ended."}</p>
                 )}
                 {visibleGroupMessages.map((message, index) => {
@@ -500,7 +546,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
               </div>
 
               {group ? (
-                <form className="message-composer" onSubmit={submitMessage}>
+                <form className="message-composer" onSubmit={submitMessage} aria-busy={busy}>
                   <div className="message-composer-pill">
                     <label className="sr-only" htmlFor="message">Message</label>
                     <input
@@ -508,7 +554,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                       value={draft}
                       disabled={busy}
                       maxLength={4000}
-                      onChange={(event) => setDraft(event.target.value)}
+                      onChange={(event) => { setDraft(event.target.value); setGroupSendError(""); }}
                       placeholder={`Message ${active.name}…`}
                       autoComplete="off"
                     />
@@ -521,6 +567,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                       {busy ? <span className="send-spinner" aria-hidden="true" /> : <Icon name="send" size={19} />}
                     </button>
                   </div>
+                  {groupSendError && <p className="composer-error" role="alert">{groupSendError}</p>}
                 </form>
               ) : (
                 <button
@@ -537,7 +584,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           </section>
         )}
 
-        {view === "chats" && directId && !backend.error && (
+        {view === "chats" && directId && ready && !backend.error && (
           <section className="conversation-view">
             <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? "Friend" : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={() => { switchDirectConversation(null); setDraft(""); }} settingsLabel="Conversation settings" disabled={!peer?.id} onSettings={() => { if (peer?.id) openPerson(peer.id); }} />
             <div className="chat-conversation-surface">
@@ -588,9 +635,9 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
         className={pending ? "join-dialog" : "camera-dialog"}
         ref={dialog}
         aria-label="Join a conversation"
-        onCancel={() => setEntry(false)}
+        onCancel={(event) => { if (busy) event.preventDefault(); else setEntry(false); }}
         onClick={(event) => {
-          if (event.target === dialog.current) setEntry(false);
+          if (event.target === dialog.current && !busy) setEntry(false);
         }}
       >
         <div className={pending ? "entry-panel" : "camera-panel"}>
@@ -598,6 +645,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             type="button"
             className="modal-close"
             aria-label="Close"
+            disabled={busy}
             onClick={() => setEntry(false)}
           >
             <Icon name="close" size={20} />
@@ -618,6 +666,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 <label htmlFor="name">Your name</label>
                 <input
                   id="name"
+                  disabled={busy}
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Capybara"
@@ -629,6 +678,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                   <label htmlFor="chat-name">Chat name</label>
                   <input
                     id="chat-name"
+                    disabled={busy}
                     value={chatNameDraft}
                     onChange={(event) => setChatNameDraftState({ code: pending.codes[0], value: event.target.value })}
                     placeholder="Cafe name"
@@ -638,17 +688,18 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                   <p>We couldn’t identify this place. Give this chat a name for everyone.</p>
                 </>}
                 <button type="submit" className="scan-primary" disabled={busy || !ready || findingChatName || !chosenChatName || !name.trim()}>
-                  Join chat <Icon name="arrow" size={18} />
+                  {busy ? "Joining…" : "Join chat"} <Icon name="arrow" size={18} />
                 </button>
+                {error && <p className="form-error" role="alert">{error}</p>}
               </form>
-              <button type="button" className="text-button" onClick={() => setPending(null)}>
+              <button type="button" className="text-button" disabled={busy} onClick={() => { setPending(null); setError(""); }}>
                 Scan another code
               </button>
             </>
           ) : (
             <>
               <div className="camera-frame">
-                <video ref={video} muted playsInline aria-label="Camera preview" />
+                <video key={cameraAttempt} ref={video} muted playsInline aria-label="Camera preview" />
                 <span className="camera-shade camera-shade-top" />
                 <span className="camera-shade camera-shade-right" />
                 <span className="camera-shade camera-shade-bottom" />

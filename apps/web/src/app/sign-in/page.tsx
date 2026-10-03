@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { safeAuthDestination } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
@@ -24,15 +25,13 @@ export default async function SignInPage({
     redirect(next);
   }
 
-  const appleEnabled = process.env.NEXT_PUBLIC_ENABLE_APPLE_AUTH === "true";
-
   return (
     <main className="auth-page">
       <header className="auth-header">
-        <span className="app-brand" aria-label="QR Chat">
+        <Link href="/welcome" className="app-brand" aria-label="About QR Chat">
           <span><Icon name="qr" size={19} /></span>
           QR Chat
-        </span>
+        </Link>
       </header>
 
       <section className="auth-shell">
@@ -41,8 +40,7 @@ export default async function SignInPage({
           <p>Sign in, scan the code, join the room.</p>
 
           <div className="auth-actions">
-            <OAuthButton provider="google" next={next} />
-            {appleEnabled && <OAuthButton provider="apple" next={next} />}
+            <OAuthButton next={next} />
           </div>
 
           {authErrors[errorCode] && (

@@ -48,7 +48,7 @@ export default function ScanScreen() {
   const cameraVisible = permission?.granted && focused && active && !cameraError;
   const targetSize = Math.min(width * 0.7, 340);
   return <View style={{ flex: 1, backgroundColor: '#07090b' }}>
-    <Stack.Screen options={{ headerTransparent: true, headerTintColor: '#fff', title: '', headerRight: () => <Pressable accessibilityRole="button" accessibilityLabel="Close scanner" style={styles.iconButton} onPress={() => router.back()}><Icon name="close" color="#fff" /></Pressable> }} />
+    <Stack.Screen options={{ statusBarStyle: 'light', headerTransparent: true, headerTintColor: '#fff', title: '', headerRight: () => <Pressable accessibilityRole="button" accessibilityLabel="Close scanner" style={styles.iconButton} onPress={() => router.back()}><Icon name="close" color="#fff" /></Pressable> }} />
     {cameraVisible && <CameraView key={attempt} accessibilityLabel="Camera preview" style={{ position: 'absolute', inset: 0 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={({ data }) => accept(data)} onMountError={() => setCameraError('The camera could not start. Check camera access and try again.')} />}
     <View pointerEvents="none" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: insets.top + 48 }}>
       {cameraVisible && <View style={{ width: targetSize, height: targetSize, borderWidth: 2, borderColor: '#ffffffeb', borderRadius: 28, boxShadow: '0 0 0 2000px #03050770' }} />}
