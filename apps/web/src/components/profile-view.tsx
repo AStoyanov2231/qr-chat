@@ -14,12 +14,13 @@ type Props = {
   group: Group | null;
   ready: boolean;
   busy: boolean;
+  onBack?: () => void;
   onSave: (name: string, photo?: AvatarUpload | null) => Promise<boolean | undefined>;
   onLeave: () => void;
   onSignOut: () => void;
 };
 
-export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSignOut }: Props) {
+export function ProfileView({ session, group, ready, busy, onBack, onSave, onLeave, onSignOut }: Props) {
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const [panel, setPanel] = useState("");
@@ -50,7 +51,7 @@ export function ProfileView({ session, group, ready, busy, onSave, onLeave, onSi
     { label: "Help & Feedback", icon: Question },
   ];
   return <section className="profile-view">
-    <div className="profile-toolbar"><Link href="/" className="icon-button" aria-label="Back to chats"><CaretLeft size={26} /></Link><button className="icon-button" aria-label="Settings" onClick={() => open("Settings")}><Gear size={26} /></button></div>
+    <div className="profile-toolbar"><Link href="/" onClick={(event) => { if (onBack && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onBack(); } }} className="icon-button" aria-label="Back to chats"><CaretLeft size={26} /></Link><button className="icon-button" aria-label="Settings" onClick={() => open("Settings")}><Gear size={26} /></button></div>
     <div className="profile-identity">
       <div className="avatar-wrap"><span className="profile-avatar">{session?.avatarUrl && session.avatarUrl !== failedAvatar ? <Image src={session.avatarUrl} alt="" width={130} height={130} unoptimized onError={() => setFailedAvatar(session.avatarUrl ?? null)} /> : <User size={70} weight="light" />}</span><button className="avatar-edit" aria-label="Edit profile" onClick={() => open("Edit Profile")}><PencilSimple size={20} /></button></div>
       <strong>{session?.name || "Your profile"}</strong>

@@ -3,7 +3,7 @@
 import type { ChatSnapshot } from "@qr-chat/api";
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from "@qr-chat/domain";
 import { MagnifyingGlass, X } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Avatar } from "./avatar";
 
 type FriendConnection = ChatSnapshot["friends"][number];
@@ -28,7 +28,7 @@ type ReadyProps = HeaderProps & {
   busy: boolean;
   error?: string;
   onRetry: () => void;
-  onScan: () => void;
+  onScan: (event: MouseEvent<HTMLButtonElement>) => void;
   onOpenGroup: (groupId: string) => void;
   onOpenDirect: (friendId: string) => void;
   onOpenProfile: (userId: string) => void;

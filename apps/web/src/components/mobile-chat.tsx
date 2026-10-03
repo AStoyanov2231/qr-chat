@@ -2,23 +2,28 @@
 
 import { messageDayLabel } from "@qr-chat/domain";
 import type { ChatApi, ChatNameResolution } from "@qr-chat/api";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import QrScanner from "qr-scanner";
 import {
   Fragment,
   useEffect,
   useEffectEvent,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
   type FormEvent,
+  type MouseEvent,
 } from "react";
 import { CornersOut, QrCode } from "@phosphor-icons/react";
+import { useScreenTransition } from "@/hooks/use-screen-transition";
+import { useScannerDialog } from "@/hooks/use-scanner-dialog";
 import { cameraErrorMessage } from "@/lib/camera-error";
 import { observeChatViewport } from "@/lib/chat-viewport";
 import { ConversationHeader } from "@/components/conversation-header";
 import { GroupSidebar } from "@/components/group-sidebar";
+import { SettingsSidebar } from "@/components/settings-sidebar";
 import { ProfileView } from "@/components/profile-view";
 import { ChatsOverview } from "@/components/chats-overview";
 import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty } from "@/components/direct-message-parts";
@@ -62,7 +67,8 @@ type ChatViewProps = {
   setDirectId: (id: string | null) => void;
 };
 
-export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profile" }) {
+export default function QrChatApp() {
+  const view = usePathname() === "/profile" ? "profile" : "chats";
   const backend = useChatBackend();
   const [directId, setDirectId] = useState<string | null>(null);
   const friend = backend.friends.find((friend) => friend.id === directId && friend.accepted_at);
@@ -72,6 +78,11 @@ export default function QrChatApp({ view = "chats" }: { view?: "chats" | "profil
 
 export function ChatView({ view = "chats", backend, direct, directId, setDirectId }: ChatViewProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const preview = pathname === "/design-preview";
+  const chatsUrl = preview ? "/design-preview" : "/";
+  const profileUrl = preview ? "/design-preview?view=profile" : "/profile";
   const online = useSyncExternalStore(subscribeNetwork, () => navigator.onLine, () => true);
   const { session, api, ready } = backend;
   const groups = backend.group ? [backend.group] : [];
@@ -105,12 +116,24 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   >("idle");
   const [cameraError, setCameraError] = useState("");
   const [cameraAttempt, setCameraAttempt] = useState(0);
-  const dialog = useRef<HTMLDialogElement>(null);
+  const scannerTrigger = useRef<HTMLElement | null>(null);
+  const entryRequested = useRef(false);
+  const afterEntry = useRef<(() => void) | null>(null);
+  const stopCamera = useRef<(() => void) | null>(null);
+  const dialog = useScannerDialog(entry, !!pending, scannerTrigger, () => {
+    setPending(null);
+    const action = afterEntry.current;
+    afterEntry.current = null;
+    action?.();
+  });
+  const screen = view === "profile" ? "profile" : directId ? `direct:${directId}` : active ? `group:${active.codes[0]}` : "overview";
+  const motion = useScreenTransition(screen);
   const app = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const directBottom = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const scanLocked = useRef(false);
+  const historyPosition = useRef(0);
   const initialCodeHandled = useRef(false);
   const directScope = useRef<DirectConversationScope>({ connectionId: null, version: 0 });
 
@@ -179,7 +202,6 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     let accepted = false;
     try {
       const venue = resolveCode(value, window.location.origin);
-      setEntry(true);
       setPending(null);
       setError("");
 
@@ -192,11 +214,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           setName(session?.name ?? "");
           setChatNameDraftState({ code: venue.codes[0], value: "" });
         } else {
-          switchDirectConversation(null);
-          setActive(current.venue);
-          setEntry(false);
-          setDraft("");
-          router.push(`/?code=${encodeURIComponent(venue.codes[0])}`);
+          dismissEntry(() => openConversation(current.venue));
         }
       } else {
         setPending(venue);
@@ -212,10 +230,48 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const openInitialCode = useEffectEvent((value: string) => {
     // External links can open an authorized current group. New joins require the camera.
     const current = backend.group;
-    if (current?.venue.codes[0] === value) openConversation(current.venue);
+    if (current?.venue.codes[0] === value) {
+      motion.initialScreen(`group:${current.venue.codes[0]}`);
+      setActive(current.venue);
+      switchDirectConversation(null);
+    }
     else startEntry();
   });
   const openScannedCode = useEffectEvent((value: string) => openCode(value));
+
+  const restoreHistory = useEffectEvent(() => {
+    if (!initialCodeHandled.current || view === "profile" || dialog.current?.open) return;
+    const code = new URLSearchParams(window.location.search).get("code");
+    const connectionId = window.history.state?.qrChatDirect ?? null;
+    const venue = code && backend.group?.venue.codes.includes(code) ? backend.group.venue : null;
+    if (active?.codes[0] === venue?.codes[0] && directId === connectionId) return;
+    setSidebar(false);
+    setPersonId(null);
+    switchDirectConversation(connectionId);
+    setActive(venue);
+    setDraft("");
+  });
+  const historyChanged = useEffectEvent(() => {
+    const nextPosition = window.history.state?.qrChatPosition ?? 0;
+    motion.prepare(nextPosition > historyPosition.current ? 1 : -1);
+    historyPosition.current = nextPosition;
+    dismissEntry(() => restoreHistory());
+  });
+  useEffect(() => {
+    const pop = () => historyChanged();
+    window.addEventListener("popstate", pop, true);
+    return () => window.removeEventListener("popstate", pop, true);
+  }, []);
+  useLayoutEffect(() => {
+    const position = window.history.state?.qrChatPosition;
+    if (position === undefined) {
+      window.history.replaceState({ ...window.history.state, qrChatPosition: historyPosition.current }, "");
+    } else historyPosition.current = position;
+  }, [view]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => restoreHistory(), 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams, view]);
 
   useEffect(() => {
     if (!ready || view === "profile" || initialCodeHandled.current) return;
@@ -229,26 +285,18 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   }, [ready, view]);
 
   useEffect(() => {
-    if (entry) {
-      dialog.current?.showModal();
-    } else {
-      dialog.current?.close();
-    }
-  }, [entry]);
-
-  useEffect(() => {
-    if (!entry || pending || !video.current) return;
+    if (!entry || view !== "chats" || pending || !video.current) return;
 
     let disposed = false;
     const scanner = new QrScanner(
       video.current,
       (result) => {
-        if (disposed || scanLocked.current) return;
+        if (disposed || !entryRequested.current || scanLocked.current) return;
         scanLocked.current = true;
         const accepted = openScannedCode(result.data);
         if (!accepted) {
           window.setTimeout(() => {
-            scanLocked.current = false;
+            if (!disposed && entryRequested.current) scanLocked.current = false;
           }, 1200);
         }
       },
@@ -277,12 +325,18 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
         setCameraError(message);
       });
 
-    return () => {
+    const stop = () => {
       disposed = true;
+      void scanner.pause(true);
       scanner.destroy();
+    };
+    stopCamera.current = stop;
+    return () => {
+      stop();
+      if (stopCamera.current === stop) stopCamera.current = null;
       setCameraState("idle");
     };
-  }, [entry, pending, cameraAttempt]);
+  }, [entry, pending, cameraAttempt, view]);
 
   useEffect(() => {
     const element = app.current;
@@ -343,7 +397,18 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  function startEntry() {
+  function dismissEntry(action?: () => void) {
+    entryRequested.current = false;
+    stopCamera.current?.();
+    if (!dialog.current?.open) { action?.(); return; }
+    afterEntry.current = action ?? null;
+    setEntry(false);
+  }
+
+  function startEntry(event?: MouseEvent<HTMLButtonElement>) {
+    scannerTrigger.current = event?.currentTarget ?? null;
+    afterEntry.current = null;
+    entryRequested.current = true;
     setCameraAttempt((attempt) => attempt + 1);
     setError("");
     setPending(null);
@@ -353,7 +418,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   }
 
   function openPerson(id: string) {
-    if (id === session?.id) { router.push("/profile"); return; }
+    if (id === session?.id) { openOwnProfile(); return; }
     setPersonError(""); setPersonId(id);
   }
 
@@ -382,12 +447,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           destination = { ...pending, id: membership.group_id, name: membership.display_name, nameMissing: false };
         }
         await backend.refresh();
-        switchDirectConversation(null);
-        setActive(destination);
-        setEntry(false);
-        setPending(null);
-        setDraft("");
-        router.push(`/?code=${encodeURIComponent(pending.codes[0])}`);
+        dismissEntry(() => openConversation(destination));
       } catch (reason) { setError(errorMessage(reason)); throw reason; }
     });
   }
@@ -448,22 +508,50 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     }
   }
 
+  function navigateChat(code: string | null, connectionId: string | null) {
+    const url = code ? `${chatsUrl}?code=${encodeURIComponent(code)}` : chatsUrl;
+    if (`${window.location.pathname}${window.location.search}` === url && (window.history.state?.qrChatDirect ?? null) === connectionId) return;
+    window.history.pushState({ qrChatDirect: connectionId, qrChatPosition: ++historyPosition.current }, "", url);
+  }
+
+  function openOwnProfile() {
+    if (view === "profile") return;
+    motion.prepare(1);
+    setSidebar(false);
+    ++historyPosition.current;
+    router.push(profileUrl);
+  }
+
+  function backToChats() {
+    motion.prepare(-1);
+    setSidebar(false);
+    setActive(null);
+    switchDirectConversation(null);
+    if (directId) setDraft("");
+    if (view === "profile") { ++historyPosition.current; router.push(chatsUrl); }
+    else navigateChat(null, null);
+  }
+
   function openConversation(venue: Venue) {
+    if (view === "chats" && active?.codes[0] === venue.codes[0] && !directId) return;
+    motion.prepare(1);
     setSidebar(false);
     setActive(venue);
     switchDirectConversation(null);
     setDraft("");
     setDirectSendError("");
-    router.push(`/?code=${encodeURIComponent(venue.codes[0])}`);
+    navigateChat(venue.codes[0], null);
   }
 
   function openDirectMessage(friendId: string) {
+    if (view === "chats" && directId === friendId) return;
+    motion.prepare(1);
     setSidebar(false);
     setActive(null);
     switchDirectConversation(friendId);
     setDraft("");
     setDirectSendError("");
-    router.push("/");
+    navigateChat(null, friendId);
   }
 
   function leaveCurrentChat() {
@@ -471,25 +559,23 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     void perform(async () => {
       await api.leaveGroup();
       await backend.refresh();
-      setActive(null);
-      switchDirectConversation(null);
-      router.push("/");
+      backToChats();
     });
   }
 
   return (
     <div ref={app} className="qr-app">
       {(!online || backend.connection === "reconnecting") && <div className="connection-status" role="status">{online ? "Reconnecting… Your chats will refresh when connected." : "You’re offline. Reconnect to load chats and send messages."}</div>}
-      <main className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : ""}`}>
+      <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : ""}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
-          <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
-        </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={() => router.push("/profile")} /> : !active && !directId && (
+          <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
+        </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={openOwnProfile} /> : !active && !directId && (
           <ChatsOverview
             profileName={session?.name}
             profileAvatarUrl={session?.avatarUrl}
             connected={backend.connection === "connected"}
-            onOpenOwnProfile={() => router.push("/profile")}
+            onOpenOwnProfile={openOwnProfile}
             group={backend.group}
             friends={backend.friends}
             directPreviews={backend.directPreviews}
@@ -510,7 +596,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && backend.error && (active || directId) && (
           <section className="conversation-view">
-            <ConversationHeader title={active?.name ?? peer?.display_name ?? "Direct message"} subtitle="Access could not be checked" onBack={() => { setSidebar(false); setActive(null); switchDirectConversation(null); router.push("/"); }} settingsLabel="Conversation settings" disabled onSettings={() => {}} />
+            <ConversationHeader title={active?.name ?? peer?.display_name ?? "Direct message"} subtitle="Access could not be checked" onBack={backToChats} settingsLabel="Conversation settings" disabled onSettings={() => {}} />
             <div className="chat-conversation-surface conversation-load-error" role="alert">
               <h2>Couldn’t load this chat.</h2>
               <p>We couldn’t verify your access. Try again to reload the conversation.</p>
@@ -521,7 +607,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={active.name} subtitle={`${group?.members.length ?? 0} ${group?.members.length === 1 ? "member" : "members"}`} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={() => { setSidebar(false); setActive(null); switchDirectConversation(null); router.push("/"); }} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
+            <ConversationHeader title={active.name} subtitle={`${group?.members.length ?? 0} ${group?.members.length === 1 ? "member" : "members"}`} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
@@ -586,7 +672,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && directId && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? "Friend" : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={() => { switchDirectConversation(null); setDraft(""); }} settingsLabel="Conversation settings" disabled={!peer?.id} onSettings={() => { if (peer?.id) openPerson(peer.id); }} />
+            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? "Friend" : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={backToChats} settingsLabel="Conversation settings" disabled={!peer?.id} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
                 <div className="message-stream" aria-live="polite">
@@ -614,16 +700,21 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 />
               </>}
             </div>
+            {sidebar && peer && <SettingsSidebar key={directId} label="Conversation settings" onClose={() => setSidebar(false)}>{() => <div className="group-sidebar-identity">
+              <Avatar name={peer.display_name ?? "Participant"} url={peer.avatar_url} size={130} />
+              <h2>{peer.display_name ?? "Participant"}</h2>
+              <p>Friend</p>
+            </div>}</SettingsSidebar>}
           </section>
         )}
-
-      </main>
 
       {view === "chats" && !active && !directId && <div className="scan-overlay">
         <button type="button" className="floating-scan" aria-label="Scan a QR code" disabled={!ready || !!backend.error} onClick={startEntry}>
           <span className="scan-symbol" aria-hidden="true"><CornersOut size={34} weight="bold" /><QrCode size={21} weight="bold" /></span>
         </button>
       </div>}
+
+      </main>
 
       {personId && session && <MemberProfile key={personId} person={person} friend={personFriend} userId={session.id} canRequest={!!personMember} busy={busy} error={personError || backend.error} onClose={() => setPersonId(null)}
         onRequest={() => { if (personMember) void changeFriend(() => api.requestFriend(personMember.id)); }}
@@ -635,9 +726,9 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
         className={pending ? "join-dialog" : "camera-dialog"}
         ref={dialog}
         aria-label="Join a conversation"
-        onCancel={(event) => { if (busy) event.preventDefault(); else setEntry(false); }}
+        onCancel={(event) => { event.preventDefault(); if (!busy) dismissEntry(); }}
         onClick={(event) => {
-          if (event.target === dialog.current && !busy) setEntry(false);
+          if (event.target === dialog.current && !busy) dismissEntry();
         }}
       >
         <div className={pending ? "entry-panel" : "camera-panel"}>
@@ -646,7 +737,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             className="modal-close"
             aria-label="Close"
             disabled={busy}
-            onClick={() => setEntry(false)}
+            onClick={() => dismissEntry()}
           >
             <Icon name="close" size={20} />
           </button>
@@ -698,6 +789,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             </>
           ) : (
             <>
+              <span className="browser-edge-tint browser-edge-top" aria-hidden="true" />
+              <span className="browser-edge-tint browser-edge-bottom" aria-hidden="true" />
               <div className="camera-frame">
                 <video key={cameraAttempt} ref={video} muted playsInline aria-label="Camera preview" />
                 <span className="camera-shade camera-shade-top" />

@@ -46,18 +46,19 @@ test('metadata cache stays outside auth, lasts one hour and excludes transient f
 });
 
 test('web session host pauses on hidden/offline, resumes once and removes lifecycle listeners', async t => {
-  const effects=[];const events=new Map();let starts=0;let pauses=0;let active=false;let disposed=false;let authCleaned=false;
+  const effects=[];const events=new Map();let starts=0;let pauses=0;let active=false;let disposed=false;let authCleaned=false;let authListener;let revoked=false;
   const listen=(name,fn)=>events.set(name,fn);const remove=name=>events.delete(name);
   const previous = Object.fromEntries(['document','navigator','window'].map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
   t.after(()=>{for(const [name,descriptor] of Object.entries(previous)) {if(descriptor) Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
   Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener:listen,removeEventListener:remove},configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
-  Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener:remove,location:{replace(){}}},configurable:true});
-  const api={client:{auth:{onAuthStateChange:()=>({data:{subscription:{unsubscribe(){authCleaned=true;}}}})}}};
+  Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener:remove,location:{replace(path){assert.equal(revoked,true,"Access must be revoked before redirect");assert.equal(path,"/sign-in");}}},configurable:true});
+  const api={client:{auth:{onAuthStateChange:fn=>{authListener=fn;return {data:{subscription:{unsubscribe(){authCleaned=true;}}}};}}}};
   const store={async start(){if(!active){active=true;starts++;}},pause(){if(active){active=false;pauses++;}},dispose(){disposed=true;}};
   const { ChatSessionProvider }=await load('../src/hooks/use-chat-backend.tsx',{
-    react:{createContext:()=>({}),useState:fn=>[fn()],useEffect:fn=>effects.push(fn)},
-    'react/jsx-runtime':{jsx:()=>null},
+    react:{createContext:()=>({}),useState:fn=>typeof fn === "function" ? [fn()] : [revoked, value=>{revoked=value;}],useEffect:fn=>effects.push(fn)},
+    'react/jsx-runtime':{jsx:()=>({protected:true})},
+    'react-dom':{flushSync:fn=>fn()},
     '@qr-chat/api':{createChatApi:()=>api,getChatStore:()=>store},
     '@/lib/supabase/client':{createClient:()=>api.client},
   });
@@ -66,6 +67,7 @@ test('web session host pauses on hidden/offline, resumes once and removes lifecy
   navigator.onLine=false;events.get('offline')();assert.equal(pauses,1);
   document.hidden=false;events.get('visibilitychange')();assert.equal(starts,1);
   navigator.onLine=true;events.get('online')();events.get('visibilitychange')();assert.equal(starts,2);
+  authListener("SIGNED_OUT");assert.equal(ChatSessionProvider({children:"Protected content"}),null);
   cleanup();assert.equal(events.size,0);assert.ok(disposed&&authCleaned);
 });
 

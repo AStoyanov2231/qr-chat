@@ -1,8 +1,11 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { View } from 'react-native';
 import { userIdSchema } from '@qr-chat/validation';
 import { Conversation } from '@/components/conversation';
 import { ConversationHeader } from '@/components/conversation-header';
+import { Avatar } from '@/components/avatar';
+import { SettingsSidebar } from '@/components/settings-sidebar';
 import { Copy, styles } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
@@ -11,6 +14,7 @@ import { useDirectMessages } from '@/hooks/use-direct-messages';
 export default function DirectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const chat = useChat();
+  const [sidebar, setSidebar] = useState(false);
   const { api, userId } = useAuth();
   const friend = userIdSchema.safeParse(id).success ? chat.friends.find((friend) => friend.id === id && friend.accepted_at) : undefined;
   const peer = friend?.user_a_id === userId ? friend.user_b : friend?.user_a;
@@ -39,7 +43,7 @@ export default function DirectScreen() {
     await direct.refresh();
   }
   return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false, statusBarStyle: 'light' }} />
-    <ConversationHeader title={peerName} subtitle={direct.connection === 'connected' ? 'Friend' : 'Reconnecting…'} imageUrl={peer?.avatar_url} settingsLabel="Conversation settings" disabled={!peer} settings={() => { if (peer) router.push({ pathname: '/person/[id]', params: { id: peer.id } }); }} />
+    <ConversationHeader title={peerName} subtitle={direct.connection === 'connected' ? 'Friend' : 'Reconnecting…'} imageUrl={peer?.avatar_url} settingsLabel="Conversation settings" disabled={!peer} settings={() => setSidebar(true)} />
     <Conversation
       key={id}
       avatars
@@ -59,5 +63,10 @@ export default function DirectScreen() {
       canOpenProfile={(message) => message.user === userId || message.user === peer?.id}
       openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
     />
+    {sidebar && peer && <SettingsSidebar key={id} label="Conversation settings" onClose={() => setSidebar(false)}>{() => <View style={{ alignItems: 'center', gap: 8, paddingVertical: 18 }}>
+      <Avatar name={peerName} url={peer.avatar_url} size={130} />
+      <Copy accessibilityRole="header" style={{ fontSize: 23, fontWeight: '600', textAlign: 'center' }}>{peerName}</Copy>
+      <Copy style={styles.muted}>Friend</Copy>
+    </View>}</SettingsSidebar>}
   </View>;
 }

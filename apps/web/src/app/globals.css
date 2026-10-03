@@ -384,6 +384,8 @@ dialog {
   background: transparent;
 }
 
+/* The camera covers the viewport; safe-area padding belongs to controls only. */
+html:has(.camera-dialog[open]), body:has(.camera-dialog[open]) { background: #07090b; }
 .camera-dialog {
   width: 100%;
   max-width: none;
@@ -530,9 +532,9 @@ dialog::backdrop {
 .camera-copy {
   position: absolute;
   z-index: 5;
-  right: 24px;
+  right: max(24px, env(safe-area-inset-right));
   bottom: max(30px, calc(env(safe-area-inset-bottom) + 22px));
-  left: 24px;
+  left: max(24px, env(safe-area-inset-left));
   text-align: center;
   text-wrap: balance;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.7);
@@ -890,3 +892,21 @@ body:has(.app-content:is(.has-chat, .has-overview)) { position: fixed; inset: 0;
 .qr-app[data-short-viewport="true"] .chat-header-title p { font-size: 12px; }
 .qr-app[data-short-viewport="true"] .chat-header-controls { padding-top: calc(10px + env(safe-area-inset-top)); }
 @media (prefers-reduced-motion: reduce) { .qr-app:has(.has-chat), .chat-photo-header, .chat-conversation-surface, .chat-conversation-surface .message-stream, .chat-conversation-surface .message-composer { transition: none; } }
+
+/* Navigation snapshots are visual only; the current screen remains interactive. */
+.app-content { overflow-x: clip; background: var(--surface); }
+.screen-snapshot { overflow: hidden; }
+.app-arrival { width: 100%; height: 100%; min-height: 100%; animation: app-fade-in 160ms ease-out; }
+@keyframes app-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.camera-dialog::backdrop { background: transparent; backdrop-filter: none; }
+@media (prefers-reduced-motion: reduce) { .app-arrival { animation: none; } }
+
+/* Safari retains the old tint for viewport-sized dialogs. Ordinary fixed edge
+   strips give it an opaque camera color, then the page color after dismissal. */
+.browser-edge-tint { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .browser-edge-tint { display: block; position: fixed; left: 0; right: 0; height: 12px; background: var(--paper); pointer-events: none; z-index: 1; }
+  .browser-edge-top { top: 0; }
+  .browser-edge-bottom { bottom: 0; }
+  .camera-panel .browser-edge-tint { background: #07090b; z-index: 4; }
+}
