@@ -84,3 +84,12 @@ node apps/web/tests/chat-layout.e2e.mjs
 ```
 
 The production build required worker-port permission outside the filesystem sandbox. A cached initial sandbox error was cleared and the exact requested build then passed. Temporary disk exhaustion was recovered by removing this task's discarded build cache. Neither changed application configuration.
+
+
+## Camera follow-up: 2026-10-04
+
+- Implemented: absolutely positioned video waits for a painted frame and two browser frames before a brief opacity reveal. This addresses the reported initial letterboxing without changing camera acquisition or scan decoding. Pending frame callbacks are canceled on dismissal.
+- Implemented: the circular reveal clips only camera content. Separate top/bottom bands enter downward/upward and reverse on dismissal, sharing the same duration, reduced-motion fallback, viewport interruption handling and cancellation lifecycle.
+- Scope: web only. Safari owns the spatial animation of its status/address bars; app-owned edge bands provide the visible inward/outward motion and tint sampling.
+- PASS: web TypeScript compilation. Updated rendered assertions cover both edge directions and the new camera-content animation target.
+- UNVERIFIED: updated browser regressions and physical iPhone appearance. Tests remain skipped at the user's request; earlier recordings predate this follow-up.

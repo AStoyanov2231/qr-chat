@@ -27,8 +27,8 @@ await page.addInitScript(() => {
   const animate = Element.prototype.animate;
   Element.prototype.animate = function(frames, options) {
     const animation = animate.call(this, frames, options);
-    if (this.matches('.app-content:not(.screen-snapshot), .camera-dialog, .join-dialog')) {
-      window.motionTimeline.push({ type: this.matches('dialog') ? 'scanner' : 'screen', screen: this.dataset.screen, frames, at: performance.now(), duration: options.duration });
+    if (this.matches('.app-content:not(.screen-snapshot), .camera-panel, .join-dialog')) {
+      window.motionTimeline.push({ type: this.matches('.camera-panel, dialog') ? 'scanner' : 'screen', screen: this.dataset.screen, frames, at: performance.now(), duration: options.duration });
     }
     return animation;
   };
@@ -104,7 +104,7 @@ await joiningPage.addInitScript(() => {
   window.transitions = [];
   const animate = Element.prototype.animate;
   Element.prototype.animate = function(frames, options) {
-    if (this.matches('dialog, .app-content:not(.screen-snapshot)')) window.transitions.push({ frames, duration: options.duration });
+    if (this.matches('dialog, .camera-panel, .app-content:not(.screen-snapshot)')) window.transitions.push({ frames, duration: options.duration });
     return animate.call(this, frames, options);
   };
 });

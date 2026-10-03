@@ -54,7 +54,18 @@ export function useScannerDialog(open: boolean, joining: boolean, trigger: RefOb
         closed();
       }
     };
-    const cancel = animateMotion(element, frames, circle ? 300 : 160, finish);
+    const duration = circle ? 300 : 160;
+    const edgeCancels = Array.from(element.querySelectorAll<HTMLElement>("[data-camera-edge]"), edge => {
+      const outside = edge.dataset.cameraEdge === "top" ? "translateY(-100%)" : "translateY(100%)";
+      return animateMotion(edge, [
+        { transform: open ? outside : "translateY(0)" },
+        { transform: open ? "translateY(0)" : outside },
+      ], duration);
+    });
+    // Keep the edge bands outside the circular mask so they can meet the camera.
+    const surface = element.querySelector<HTMLElement>(".camera-panel") ?? element;
+    const cancelSurface = animateMotion(surface, frames, duration, finish);
+    const cancel = () => { cancelSurface(); edgeCancels.forEach(stop => stop()); };
     // Recompute the exit origin at dismissal. If the viewport changes mid-motion,
     // complete the current reveal instead of leaving a stale clipping circle.
     const changed = () => { cancel(); finish(); };

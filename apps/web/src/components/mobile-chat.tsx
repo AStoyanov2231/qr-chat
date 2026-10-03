@@ -288,8 +288,11 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     if (!entry || view !== "chats" || pending || !video.current) return;
 
     let disposed = false;
+    let paintFrame = 0;
+    let videoFrame: number | undefined;
+    const previewVideo = video.current;
     const scanner = new QrScanner(
-      video.current,
+      previewVideo,
       (result) => {
         if (disposed || !entryRequested.current || scanLocked.current) return;
         scanLocked.current = true;
@@ -315,7 +318,18 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     scanner
       .start()
       .then(() => {
-        if (!disposed) setCameraState("active");
+        if (disposed) return;
+        // Let WebKit commit the first camera frame at its final cover size.
+        const reveal = () => {
+          if (disposed) return;
+          paintFrame = window.requestAnimationFrame(() => {
+            paintFrame = window.requestAnimationFrame(() => {
+              if (!disposed) setCameraState("active");
+            });
+          });
+        };
+        if (typeof previewVideo.requestVideoFrameCallback === "function") videoFrame = previewVideo.requestVideoFrameCallback(reveal);
+        else reveal();
       })
       .catch(async (reason: unknown) => {
         if (disposed) return;
@@ -327,6 +341,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
     const stop = () => {
       disposed = true;
+      window.cancelAnimationFrame(paintFrame);
+      if (videoFrame !== undefined) previewVideo.cancelVideoFrameCallback(videoFrame);
       void scanner.pause(true);
       scanner.destroy();
     };
@@ -731,6 +747,10 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           if (event.target === dialog.current && !busy) dismissEntry();
         }}
       >
+        {!pending && <>
+          <span className="browser-edge-tint browser-edge-top" data-camera-edge="top" aria-hidden="true" />
+          <span className="browser-edge-tint browser-edge-bottom" data-camera-edge="bottom" aria-hidden="true" />
+        </>}
         <div className={pending ? "entry-panel" : "camera-panel"}>
           <button
             type="button"
@@ -789,9 +809,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             </>
           ) : (
             <>
-              <span className="browser-edge-tint browser-edge-top" aria-hidden="true" />
-              <span className="browser-edge-tint browser-edge-bottom" aria-hidden="true" />
-              <div className="camera-frame">
+              <div className="camera-frame" data-ready={cameraState === "active"}>
                 <video key={cameraAttempt} ref={video} muted playsInline aria-label="Camera preview" />
                 <span className="camera-shade camera-shade-top" />
                 <span className="camera-shade camera-shade-right" />

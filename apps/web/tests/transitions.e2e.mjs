@@ -21,7 +21,7 @@ await page.addInitScript(() => {
   const animate = Element.prototype.animate;
   Element.prototype.animate = function(frames, options) {
     const animation = animate.call(this, frames, options);
-    if (this.matches('.app-content, .camera-dialog, .join-dialog, .app-arrival')) {
+    if (this.matches('.app-content, .camera-panel, [data-camera-edge], .join-dialog, .app-arrival')) {
       window.motionLog.push({ animation, element: this, frames, duration: options.duration });
       if (window.captureMotion) { animation.pause(); animation.currentTime = options.duration * .4; }
     }
@@ -98,8 +98,13 @@ try {
   await page.evaluate(() => { window.motionLog = []; window.captureMotion = true; });
   await scan.click();
   await page.locator('.camera-dialog[open]').waitFor();
-  const opening = await page.evaluate(() => window.motionLog.find(item => item.element.matches('.camera-dialog'))?.frames);
+  const opening = await page.evaluate(() => window.motionLog.find(item => item.element.matches('.camera-panel'))?.frames);
   assert.ok(opening?.[0].clipPath?.startsWith(`circle(${Math.min(trigger.width, trigger.height) / 2}px`));
+  const openingEdges = await page.evaluate(() => window.motionLog.filter(item => item.element.matches('[data-camera-edge]')).map(item => ({ edge: item.element.dataset.cameraEdge, frames: item.frames, duration: item.duration })));
+  assert.deepEqual(openingEdges.map(item => [item.edge, item.frames[0].transform, item.frames[1].transform, item.duration]), [
+    ['top', 'translateY(-100%)', 'translateY(0)', 300],
+    ['bottom', 'translateY(100%)', 'translateY(0)', 300],
+  ]);
   await page.screenshot({ path: `${output}/scanner-open-intermediate.png` });
   evidence.push({ name: 'scanner-open', trigger, frames: opening });
   await page.evaluate(() => { window.captureMotion = false; window.motionLog.forEach(item => item.animation.play()); });
@@ -112,8 +117,13 @@ try {
   const movedTrigger = await scan.boundingBox();
   await page.locator('.camera-dialog .modal-close').click();
   await page.waitForFunction(() => document.querySelector('.camera-dialog')?.dataset.motion === 'closing');
-  const closing = await page.evaluate(() => window.motionLog.find(item => item.element.matches('.camera-dialog'))?.frames);
+  const closing = await page.evaluate(() => window.motionLog.find(item => item.element.matches('.camera-panel'))?.frames);
   assert.ok(closing[1].clipPath.startsWith(`circle(${movedTrigger.width / 2}px`));
+  const closingEdges = await page.evaluate(() => window.motionLog.filter(item => item.element.matches('[data-camera-edge]')).map(item => ({ edge: item.element.dataset.cameraEdge, frames: item.frames, duration: item.duration })));
+  assert.deepEqual(closingEdges.map(item => [item.edge, item.frames[0].transform, item.frames[1].transform, item.duration]), [
+    ['top', 'translateY(0)', 'translateY(-100%)', 300],
+    ['bottom', 'translateY(0)', 'translateY(100%)', 300],
+  ]);
   await page.screenshot({ path: `${output}/scanner-close-resized-intermediate.png` });
   await page.evaluate(() => { window.captureMotion = false; window.motionLog.forEach(item => item.animation.play()); });
   await page.locator('.camera-dialog').waitFor({ state: 'hidden' });
@@ -138,7 +148,7 @@ try {
     const bounds = await triggerButton.boundingBox();
     await page.evaluate(() => { window.motionLog = []; window.captureMotion = true; });
     await triggerButton.click();
-    const frames = await page.evaluate(() => window.motionLog.find(item => item.element.matches('.camera-dialog'))?.frames);
+    const frames = await page.evaluate(() => window.motionLog.find(item => item.element.matches('.camera-panel'))?.frames);
     assert.ok(frames[0].clipPath.startsWith(`circle(${Math.min(bounds.width, bounds.height) / 2}px`));
     await page.screenshot({ path: `${output}/${name}-intermediate.png` });
     evidence.push({ name, bounds, frames });
