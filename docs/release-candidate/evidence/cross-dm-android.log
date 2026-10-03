@@ -1,0 +1,2 @@
+SENT dm-web-android-rc-02; awaiting native UI response dm-android-web-rc-02
+PASS native request accepted through web UI; actual bidirectional DM tokens appear once.

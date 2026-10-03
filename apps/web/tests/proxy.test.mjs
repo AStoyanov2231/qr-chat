@@ -33,3 +33,31 @@ test("application pages and APIs still pass through the authentication proxy", (
     assert.equal(unstable_doesMiddlewareMatch({ config, url }), true, url);
   }
 });
+
+test("the public landing needs no session while application routes still enforce sign-in", async () => {
+  let authCalls = 0;
+  const { NextRequest, NextResponse } = require("next/server");
+  const mockedModule = { exports: {} };
+  evaluate((specifier) => {
+    if (specifier === "@/lib/local-design-preview") return { isLocalDesignPreviewHost: () => false };
+    if (specifier === "@/lib/qr-name-route") return { isRouteAuthenticatedApiPath: () => false };
+    if (specifier === "@/lib/supabase/proxy") return { updateSession: async () => {
+      authCalls++;
+      return { response: NextResponse.next(), userId: null };
+    } };
+    if (specifier === "@/lib/auth/redirect") return { safeAuthDestination: () => "/" };
+    return require(specifier);
+  }, mockedModule, mockedModule.exports);
+
+  const landing = await mockedModule.exports.proxy(new NextRequest("https://qr-chat.example/welcome"));
+  assert.equal(landing.status, 200);
+  assert.equal(authCalls, 0, "a backend outage must not prevent the public landing from loading");
+  for (const path of ["/", "/profile", "/?code=Room%2B1"]) {
+    const protectedPage = await mockedModule.exports.proxy(new NextRequest(`https://qr-chat.example${path}`));
+    assert.equal(protectedPage.status, 307);
+    const destination = new URL(protectedPage.headers.get("location"));
+    assert.equal(destination.pathname, "/sign-in");
+    assert.equal(destination.searchParams.get("next"), path);
+  }
+  assert.equal(authCalls, 3);
+});

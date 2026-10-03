@@ -268,7 +268,8 @@ for (const platform of ['ios', 'android']) {
     assert.match(screen.text(), /Send your first message/);
     const composer = screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Message Sam');
     assert.ok(composer);
-    assert.equal(composer.props.placeholder, 'Message Sam…');
+    assert.equal(composer.props.placeholder, 'Message…');
+    assert.equal(composer.props.accessibilityLabel, 'Message Sam');
   });
 
   test(`${platform}: a failed empty-DM read keeps its retry state instead of showing a first-message greeting`, async (t) => {

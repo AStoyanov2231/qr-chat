@@ -1,0 +1,20 @@
+PASS: Camera denial explains recovery and retry works after granting permission
+PASS: Actual browser camera QR decoding, named joins, and shared membership
+Group reconnect retained the draft and did not replay the initial QR link.
+PASS: Failed group send retains its draft across reconnect and recovers on retry without reopening the scanner
+PASS: Bidirectional live group messages appear once; member settings display the group QR
+PASS: Group pagination loads all 57 messages exactly once
+Decline converged in 307ms
+PASS: Recipient decline and sender cancel both converge and remove pending requests
+PASS: Friend request, acceptance, and live direct message delivery
+PASS: Direct message pagination loads all 56 messages exactly once
+PASS: Failed direct send preserves the draft and one retry creates exactly one message
+PASS: Slow network shows disabled pending send and delivers one message
+PASS: Offline/reconnect recovers a missed live direct message exactly once
+PASS: Chat search matches names case-insensitively and clears an empty result
+PASS: Profile and uploaded avatar persist across same-account sessions; avatar removal persists; unsupported sections are absent
+PASS: Desktop authenticated routes show the responsive landing
+Membership leave converged in 475ms without navigation or reload
+PASS: Leave removes same-account group card and updates peer member count without reload
+PASS: Friend removal in another client clears the visible DM and server authorization rejects further access
+PASS: Leave converges across same-account clients while retaining friends; sign-out protects routes

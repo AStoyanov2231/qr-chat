@@ -1,0 +1,22 @@
+{
+  "completed": [
+    "Camera denial explains recovery and retry works after granting permission",
+    "Actual browser camera QR decoding, named joins, and shared membership",
+    "Failed group send retains its draft across reconnect and recovers on retry without reopening the scanner",
+    "Bidirectional live group messages appear once; member settings display the group QR",
+    "Group pagination loads all 57 messages exactly once",
+    "Recipient decline and sender cancel both converge and remove pending requests",
+    "Friend request, acceptance, and live direct message delivery",
+    "Direct message pagination loads all 56 messages exactly once",
+    "Failed direct send preserves the draft and one retry creates exactly one message",
+    "Slow network shows disabled pending send and delivers one message",
+    "Offline/reconnect recovers a missed live direct message exactly once",
+    "Chat search matches names case-insensitively and clears an empty result",
+    "Profile and uploaded avatar persist across same-account sessions; avatar removal persists; unsupported sections are absent",
+    "Desktop authenticated routes show the responsive landing",
+    "Leave removes same-account group card and updates peer member count without reload",
+    "Friend removal in another client clears the visible DM and server authorization rejects further access",
+    "Leave converges across same-account clients while retaining friends; sign-out protects routes"
+  ],
+  "timestamp": "2026-10-03T01:41:58.411Z"
+}

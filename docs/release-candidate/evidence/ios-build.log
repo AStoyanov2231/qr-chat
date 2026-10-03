@@ -1,0 +1,159 @@
+Stripped /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesCore.framework/ExpoModulesCore of architectures: x86_64
+Code Signing /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesCore.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesCore.framework'
+/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesCore.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/XCFrameworkIntermediates/ExpoModulesJSI/ExpoModulesJSI.framework" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks"
+Transfer starting: 5 files
+ExpoModulesJSI.framework/
+ExpoModulesJSI.framework/ExpoModulesJSI
+ExpoModulesJSI.framework/_CodeSignature/CodeResources
+
+sent 988070 bytes  received 70 bytes  139174647 bytes/sec
+total size is 988121  speedup is 1.00
+Stripped /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesJSI.framework/ExpoModulesJSI of architectures: x86_64
+Code Signing /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesJSI.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesJSI.framework'
+/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesJSI.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/XCFrameworkIntermediates/ExpoModulesWorklets/ExpoModulesWorklets.framework" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks"
+Transfer starting: 5 files
+ExpoModulesWorklets.framework/
+ExpoModulesWorklets.framework/ExpoModulesWorklets
+ExpoModulesWorklets.framework/Info.plist
+ExpoModulesWorklets.framework/_CodeSignature/
+ExpoModulesWorklets.framework/_CodeSignature/CodeResources
+
+sent 379719 bytes  received 98 bytes  92638292 bytes/sec
+total size is 379025  speedup is 1.00
+Stripped /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesWorklets.framework/ExpoModulesWorklets of architectures: x86_64
+Code Signing /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesWorklets.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesWorklets.framework'
+/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ExpoModulesWorklets.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/XCFrameworkIntermediates/React-Core-prebuilt/React.framework" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks"
+Transfer starting: 5 files
+React.framework/
+React.framework/Info.plist
+React.framework/React
+React.framework/_CodeSignature/
+React.framework/_CodeSignature/CodeResources
+
+sent 136967340 bytes  received 98 bytes  173794490 bytes/sec
+total size is 136950058  speedup is 1.00
+Stripped /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/React.framework/React of architectures: x86_64
+Code Signing /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/React.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/React.framework'
+/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/React.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/XCFrameworkIntermediates/ReactNativeDependencies/ReactNativeDependencies.framework" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks"
+Transfer starting: 32 files
+ReactNativeDependencies.framework/
+ReactNativeDependencies.framework/Info.plist
+ReactNativeDependencies.framework/ReactNativeDependencies
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/Info.plist
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/PrivacyInfo.xcprivacy
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/_CodeSignature/
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/_CodeSignature/CodeDirectory
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/_CodeSignature/CodeRequirements
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/_CodeSignature/CodeRequirements-1
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/_CodeSignature/CodeResources
+ReactNativeDependencies.framework/ReactNativeDependencies_boost.bundle/_CodeSignature/CodeSignature
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/Info.plist
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/PrivacyInfo.xcprivacy
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/_CodeSignature/
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/_CodeSignature/CodeDirectory
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/_CodeSignature/CodeRequirements
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/_CodeSignature/CodeRequirements-1
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/_CodeSignature/CodeResources
+ReactNativeDependencies.framework/ReactNativeDependencies_folly.bundle/_CodeSignature/CodeSignature
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/Info.plist
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/PrivacyInfo.xcprivacy
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/_CodeSignature/
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/_CodeSignature/CodeDirectory
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/_CodeSignature/CodeRequirements
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/_CodeSignature/CodeRequirements-1
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/_CodeSignature/CodeResources
+ReactNativeDependencies.framework/ReactNativeDependencies_glog.bundle/_CodeSignature/CodeSignature
+ReactNativeDependencies.framework/_CodeSignature/
+ReactNativeDependencies.framework/_CodeSignature/CodeResources
+
+sent 6984413 bytes  received 596 bytes  124509964 bytes/sec
+total size is 6978742  speedup is 1.00
+Stripped /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies of architectures: x86_64
+Code Signing /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ReactNativeDependencies.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ReactNativeDependencies.framework'
+/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/ReactNativeDependencies.framework: replacing existing signature
+rsync --delete -av --filter P .*.?????? --links --filter "- CVS/" --filter "- .svn/" --filter "- .git/" --filter "- .hg/" --filter "- Headers" --filter "- PrivateHeaders" --filter "- Modules" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/XCFrameworkIntermediates/hermes-engine/Pre-built/hermesvm.framework" "/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks"
+Transfer starting: 3 files
+deleting hermesvm.framework/_CodeSignature/CodeResources
+deleting hermesvm.framework/_CodeSignature/
+hermesvm.framework/
+hermesvm.framework/Info.plist
+hermesvm.framework/hermesvm
+
+sent 12243520 bytes  received 70 bytes  135888901 bytes/sec
+total size is 12241626  speedup is 1.00
+Stripped /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/hermesvm.framework/hermesvm of architectures: x86_64
+Code Signing /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/hermesvm.framework with Identity Sign to Run Locally
+/usr/bin/codesign --force --sign -  --preserve-metadata=identifier,entitlements '/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/hermesvm.framework'
+/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks/hermesvm.framework: replacing existing signature
+
+CopySwiftLibs /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app (in target 'QRChat' from project 'QRChat')
+    cd /Applications/Coding/qr-chat/apps/mobile/ios
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/QRChat.debug.dylib --scan-folder /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks --scan-folder /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/PlugIns --scan-folder /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/SystemExtensions --scan-folder /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'QRChat' from project 'QRChat')
+    cd /Applications/Coding/qr-chat/apps/mobile/ios
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name QRChat --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk --xcode-version 27A266a --platform-family iOS --deployment-target 16.4 --bundle-identifier com.qrchat.mobile --output /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app --target-triple arm64-apple-ios16.4-simulator --binary-file /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/QRChat --dependency-file /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/Objects-normal/arm64/QRChat_dependency_info.dat --stringsdata-file /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/Objects-normal/arm64/QRChat.SwiftFileList --metadata-file-list /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/QRChat.DependencyMetadataFileList --static-metadata-file-list /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/QRChat.DependencyStaticMetadataFileList --swift-const-vals-list /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/Objects-normal/arm64/QRChat.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-10-03 03:59:52.196 appintentsmetadataprocessor[62256:683742] Starting appintentsmetadataprocessor export
+2026-10-03 03:59:52.297 appintentsmetadataprocessor[62256:683742] Extracted no relevant App Intents symbols, skipping writing output
+
+AppIntentsSSUTraining (in target 'QRChat' from project 'QRChat')
+    cd /Applications/Coding/qr-chat/apps/mobile/ios
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Info.plist --temp-dir-path /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/ssu --bundle-id com.qrchat.mobile --product-path /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app --extracted-metadata-path /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Metadata.appintents --metadata-file-list /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/QRChat.DependencyMetadataFileList --source-file /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/Info.plist --archive-ssu-assets
+2026-10-03 03:59:52.338 appintentsnltrainingprocessor[62257:683757] Parsing options for appintentsnltrainingprocessor
+2026-10-03 03:59:52.339 appintentsnltrainingprocessor[62257:683757] Starting AppIntents SSU YAML Generation
+2026-10-03 03:59:52.341 appintentsnltrainingprocessor[62257:683757] No AppShortcuts found - Skipping.
+
+CodeSign /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/QRChat.debug.dylib (in target 'QRChat' from project 'QRChat')
+    cd /Applications/Coding/qr-chat/apps/mobile/ios
+
+    Signing Identity:     "Sign to Run Locally"
+
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/QRChat.debug.dylib
+
+CodeSign /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/__preview.dylib (in target 'QRChat' from project 'QRChat')
+    cd /Applications/Coding/qr-chat/apps/mobile/ios
+
+    Signing Identity:     "Sign to Run Locally"
+
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/__preview.dylib
+/Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app/__preview.dylib: replacing existing signature
+
+CodeSign /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app (in target 'QRChat' from project 'QRChat')
+    cd /Applications/Coding/qr-chat/apps/mobile/ios
+
+    Signing Identity:     "Sign to Run Locally"
+
+    /usr/bin/codesign --force --sign - --entitlements /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/QRChat.build/Debug-iphonesimulator/QRChat.build/QRChat.app.xcent --timestamp\=none --generate-entitlement-der /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app
+
+Validate /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app (in target 'QRChat' from project 'QRChat')
+    cd /Applications/Coding/qr-chat/apps/mobile/ios
+    builtin-validationUtility /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Products/Debug-iphonesimulator/QRChat.app -shallow-bundle -infoplist-subpath Info.plist
+
+PruneExplicitPrecompiledModules /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/andy/Library/Developer/XcodeBuildMCP/workspaces/qr-chat-244e741689cc/DerivedData/QRChat-3b8996b6ecd6/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+note: Run script build phase '[CP-User] [Expo] Switch ExpoModulesWorklets XCFramework for build configuration' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ExpoModulesWorklets' from project 'Pods')
+note: Run script build phase '[CP-User] [Expo] Switch ExpoImageManipulator XCFramework for build configuration' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ExpoImageManipulator' from project 'Pods')
+note: Run script build phase '[CP-User] [Expo] Switch ExpoImage XCFramework for build configuration' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ExpoImage' from project 'Pods')
+note: Run script build phase '[CP-User] [Expo] Switch ExpoFont XCFramework for build configuration' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ExpoFont' from project 'Pods')
+note: Run script build phase '[CP-User] [Expo] Switch ExpoCamera XCFramework for build configuration' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ExpoCamera' from project 'Pods')
+note: Run script build phase 'Bundle React Native code and images' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'QRChat' from project 'QRChat')
+note: Run script build phase '[Expo] Configure project' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'QRChat' from project 'QRChat')
+note: Run script build phase '[CP-User] [Expo] Switch ExpoFileSystem XCFramework for build configuration' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ExpoFileSystem' from project 'Pods')
+note: Run script build phase '[CP-User] [Expo] Switch ExpoCameraBarcodeScanning XCFramework for build configuration' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ExpoCameraBarcodeScanning' from project 'Pods')
+** BUILD SUCCEEDED **

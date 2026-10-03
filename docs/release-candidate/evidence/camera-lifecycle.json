@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "closeToReopenMs": 8.200000002980232,
+  "observedAfterMs": 650,
+  "tracks": [
+    "live"
+  ],
+  "realQrDecoded": true,
+  "groupSwitchConverged": true,
+  "sameCodeScanReopensWithoutDuplicate": true,
+  "maxTitleLength": 100,
+  "maxNameLength": 50,
+  "timestamp": "2026-10-03T01:03:43.362Z"
+}

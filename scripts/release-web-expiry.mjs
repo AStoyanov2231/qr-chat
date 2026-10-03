@@ -1,0 +1,48 @@
+// Observe root-coordinated expiry in the live web UI; never mutate the deadline here.
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFileSync, writeFileSync } from 'node:fs';
+const require = createRequire(new URL('../apps/web/package.json', import.meta.url));
+const { createServerClient } = require('@supabase/ssr');
+const { createChatApi } = await import(require.resolve('@qr-chat/api'));
+const { chromium } = await import(process.env.QR_CHAT_PLAYWRIGHT_MODULE || 'playwright');
+const user = JSON.parse(readFileSync(process.env.QR_CHAT_TEST_USERS_FILE, 'utf8'))[2];
+const fixture = JSON.parse(readFileSync('/private/tmp/qr-chat-release-evidence/cross-client-state.json', 'utf8'));
+const jar = new Map();
+const client = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, { cookies: { getAll: () => [...jar].map(([name,value]) => ({name,value})), setAll: (cookies) => { for (const cookie of cookies) jar.set(cookie.name,cookie.value); } } });
+const auth = await client.auth.signInWithPassword({email:user.email,password:user.password});
+assert.equal(auth.error,null,auth.error?.message);
+const api = createChatApi(client);
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+try {
+ let page;
+ for (const candidate of browser.contexts().flatMap(context=>context.pages())) if (await candidate.evaluate(()=>window.name==='qr-chat-release-cross-client').catch(()=>false)) page=candidate;
+ assert.ok(page);
+ await page.bringToFront();
+ await page.goto(`http://127.0.0.1:3000/?code=${encodeURIComponent(fixture.code)}`);
+ await page.getByLabel('Message',{exact:true}).waitFor({timeout:45000});
+ console.log('READY root may expire only Web Pair QA; watching already-open group without reload.');
+ await page.getByText('Your membership has ended.',{exact:true}).waitFor({timeout:180000});
+ const observedAt = new Date().toISOString();
+ assert.equal(await page.getByLabel('Message',{exact:true}).count(),0);
+ assert.equal(await page.locator('.message-stream article').count(),0);
+ await page.screenshot({path:'/private/tmp/qr-chat-release-evidence/web-expired-group.png'});
+ assert.equal(await api.currentMembership(),null);
+ assert.equal((await api.groupMessages(fixture.groupId)).items.length,0);
+ await assert.rejects(api.sendGroupMessage(fixture.groupId,'Expired membership must reject this'));
+ const friends=(await api.friends()).filter(friend=>friend.accepted_at);
+ assert.equal(friends.length,2);
+ const friend=friends.find(friend=>[friend.user_a?.display_name,friend.user_b?.display_name].includes('RC Android Synced'));
+ assert.ok(friend);
+ const peer=friend.user_a_id===user.id?friend.user_b:friend.user_a;
+ await page.getByRole('button',{name:'Back to chats',exact:true}).click();
+ await page.getByRole('button',{name:`Open direct message with ${peer.display_name}`,exact:true}).click();
+ await page.getByLabel('Direct message',{exact:true}).fill('web-after-expiry-dm-01');
+ await page.getByRole('button',{name:'Send direct message',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('#direct-message')?.value==='');
+ await page.getByText('web-after-expiry-dm-01',{exact:true}).waitFor();
+ await page.getByText('Friend',{exact:true}).waitFor({timeout:45000});
+ await page.screenshot({path:'/private/tmp/qr-chat-release-evidence/web-expired-retained-dm.png'});
+ writeFileSync('/private/tmp/qr-chat-release-evidence/web-expiry.json',JSON.stringify({pass:true,userId:user.id,observedAt,groupBodiesCleared:true,composerRemoved:true,serverReadCount:0,serverWriteRejected:true,acceptedFriendsRetained:2,directMessageSent:'web-after-expiry-dm-01'},null,2));
+ console.log('PASS own expiry clears private group UI without reload, server denies group access, accepted DMs remain usable.');
+} finally {await browser.close();await client.removeAllChannels();client.auth.stopAutoRefresh();}

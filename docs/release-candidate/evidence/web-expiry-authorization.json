@@ -1,0 +1,12 @@
+{
+  "pass": true,
+  "stage": "web",
+  "groupReadDenied": true,
+  "groupWriteDenied": true,
+  "acceptedFriendsRetained": 2,
+  "directHistoryCounts": [
+    50,
+    50
+  ],
+  "timestamp": "2026-10-03T01:22:16.107Z"
+}

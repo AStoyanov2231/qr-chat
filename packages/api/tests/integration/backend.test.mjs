@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createChatApi, createChatStore, createObservedFetch, watchChanges } from '../../src/index.ts';
 
@@ -90,6 +91,25 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
     assert.equal((await alice.api.directMessages(friendship)).items.length, 0);
     await assert.rejects(alice.api.sendDirectMessage(friendship, 'removed'));
   });
+  await t.test('avatar storage rejects writes and deletion outside the authenticated owner folder', async () => {
+    const path = `${alice.id}/${randomUUID()}.jpg`;
+    const bucket = alice.client.storage.from('avatars');
+    // Storage authorization only; rendered image conversion is exercised by UI tests.
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    assert.equal((await bucket.upload(path, bytes, { contentType: 'image/jpeg' })).error, null);
+    try {
+      const outsiderBucket = eve.client.storage.from('avatars');
+      assert.ok((await outsiderBucket.upload(path, bytes, { contentType: 'image/jpeg', upsert: true })).error);
+      const removal = await outsiderBucket.remove([path]);
+      assert.equal(removal.error, null);
+      assert.equal(removal.data.length, 0, 'outsider deletion must not remove the owner object');
+      const owned = await bucket.list(alice.id);
+      assert.equal(owned.error, null);
+      assert.ok(owned.data.some(object => `${alice.id}/${object.name}` === path));
+      const anonymous = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      assert.ok((await anonymous.storage.from('avatars').upload(`${alice.id}/${randomUUID()}.jpg`, bytes, { contentType: 'image/jpeg' })).error);
+    } finally { assert.equal((await bucket.remove([path])).error, null); }
+  });
   await t.test('filtered Realtime delivers changes and refetches missed messages after reconnect', async () => {
     let bodies = []; let connected = false;
     // Long polling interval ensures live delivery actually comes from Realtime.
@@ -129,6 +149,58 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
       await store.start();
       assert.ok(store.getState().snapshot.group.messages.some(row=>row.text==='shared store missed message'));
     } finally {close();store.dispose();}
+  });
+  await t.test('profile edits converge in peer and same-account stores including loaded message authors', async () => {
+    const peerStore = createChatStore(bob.api);
+    const otherClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const login = await otherClient.auth.signInWithPassword({ email: users[0].email, password: users[0].password });
+    assert.equal(login.error, null);
+    const sameAccountStore = createChatStore(createChatApi(otherClient));
+    const close = peerStore.openGroup();
+    try {
+      await Promise.all([peerStore.start(), sameAccountStore.start()]);
+      await eventually(() => peerStore.getState().connection === 'connected' && sameAccountStore.getState().connection === 'connected', 'profile subscriptions must be ready');
+      await alice.api.saveProfile({ display_name: 'Updated live profile' });
+      await eventually(() => sameAccountStore.getState().snapshot.session?.name === 'Updated live profile', 'same account must receive its profile edit');
+      await eventually(() => peerStore.getState().snapshot.group?.members.some(member => member.id === alice.id && member.name === 'Updated live profile'), 'peer membership must receive profile edit');
+      assert.ok(peerStore.getState().snapshot.group.messages.filter(message => message.user === alice.id).every(message => message.name === 'Updated live profile'), 'already loaded messages use the updated author');
+    } finally {
+      close();peerStore.dispose();sameAccountStore.dispose();
+      await otherClient.removeAllChannels();
+      await otherClient.auth.signOut({ scope: 'local' });
+    }
+  });
+  await t.test('peer declines and friendship removal invalidate visible stores without polling', async () => {
+    const connection = await alice.api.requestFriend(bob.id);
+    const store = createChatStore(alice.api, { safetyMs: 120000 });
+    try {
+      await store.start();
+      await eventually(() => store.getState().connection === 'connected', 'deletion subscriptions must be ready');
+      assert.ok(store.getState().snapshot.friends.some(row => row.id === connection));
+      await bob.api.removeFriend(connection);
+      await eventually(() => !store.getState().snapshot.friends.some(row => row.id === connection), 'recipient decline must clear the sender without safety polling');
+      const accepted = await alice.api.requestFriend(bob.id);
+      await bob.api.acceptFriend(accepted);
+      await eventually(() => store.getState().snapshot.friends.some(row => row.id === accepted && row.accepted_at), 'acceptance must converge');
+      const close = store.openDirect(accepted);
+      await alice.api.sendDirectMessage(accepted, 'removed friendship cache');
+      await eventually(() => store.getState().directs[accepted]?.messages.length > 0, 'direct history must be loaded');
+      await bob.api.removeFriend(accepted);
+      await eventually(() => !store.getState().directs[accepted] && !store.getState().snapshot.friends.some(row => row.id === accepted), 'removal must discard loaded direct messages');
+      close();
+    } finally { store.dispose(); }
+  });
+  await t.test('local sign-out clears its session while another session for the account can refresh', async () => {
+    const other = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const login = await other.auth.signInWithPassword({ email: users[2].email, password: users[2].password });
+    assert.equal(login.error, null);
+    await createChatApi(other).signOut();
+    assert.equal((await other.auth.getSession()).data.session, null);
+    await assert.rejects(createChatApi(other).profile());
+    const refreshed = await eve.client.auth.refreshSession();
+    assert.equal(refreshed.error, null);
+    assert.equal(refreshed.data.user.id, eve.id);
+    assert.equal((await eve.api.profile()).id, eve.id);
   });
   await t.test('leaving immediately revokes access and sign-out ends the session', async () => {
     await eve.api.leaveGroup();

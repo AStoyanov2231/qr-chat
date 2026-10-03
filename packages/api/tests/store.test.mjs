@@ -193,3 +193,64 @@ test('a replaced membership does not load the new room while the old conversatio
   f.overview.membership.group_id=nextRoom;f.overview.membership.qr_groups.id=nextRoom;
   await f.store.refresh('safety');assert.deepEqual(f.calls,['overview']);assert.equal(f.store.getState().snapshot.group.id,nextRoom);assert.deepEqual(f.store.getState().snapshot.group.messages,[]);
 });
+
+test('profile reconciliation updates cached message authors without reloading history', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup();await f.store.start();
+  f.overview.profile={id:self,display_name:'Updated name',avatar_url:'https://example.com/avatar.jpg'};
+  f.calls.length=0;await f.store.refresh('safety');
+  assert.deepEqual(f.calls,['overview']);
+  assert.equal(f.store.getState().snapshot.session.name,'Updated name');
+  assert.ok(f.store.getState().snapshot.group.messages.every(message=>message.name==='Updated name'&&message.avatarUrl==='https://example.com/avatar.jpg'));
+});
+
+test('profile events reconcile visible identities and dropped peers lose subscriptions', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());
+  const peer='44444444-4444-4444-8444-444444444444';
+  f.overview.members=[{user_id:peer,profiles:{id:peer,display_name:'Peer',avatar_url:null}}];
+  await f.store.start();
+  assert.deepEqual(f.channels.at(-1).callbacks.filter(entry=>entry.filter.table==='profiles').map(entry=>entry.filter.filter),[`id=eq.${self}`,`id=eq.${peer}`]);
+  f.overview.profile.display_name='Updated';f.calls.length=0;f.event('profiles',null);await tick();
+  assert.deepEqual(f.calls,['overview']);assert.equal(f.store.getState().snapshot.session.name,'Updated');
+  f.overview.members=[];await f.store.refresh();
+  assert.deepEqual(f.channels.at(-1).callbacks.filter(entry=>entry.filter.table==='profiles').map(entry=>entry.filter.filter),[`id=eq.${self}`]);
+});
+
+test('a delayed older page cannot restore profile data superseded by an overview', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup();
+  f.setGroup(Array.from({length:55},(_,i)=>row(55-i)));await f.store.start();
+  const original=f.api.groupMessages;let finish;
+  f.api.groupMessages=async(...args)=>{const page=await original(...args);await new Promise(resolve=>{finish=resolve;});return page;};
+  const older=f.store.loadOlderGroup();await tick();
+  f.overview.profile={id:self,display_name:'Updated during pagination',avatar_url:'https://example.com/new.jpg'};
+  await f.store.refresh('safety');finish();await older;
+  const messages=f.store.getState().snapshot.group.messages;
+  assert.equal(messages.length,55);
+  assert.ok(messages.every(message=>message.name==='Updated during pagination'&&message.avatarUrl==='https://example.com/new.jpg'));
+});
+
+test('a primary-key-only friendship deletion promptly drops cached direct access', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openDirect(friend);await f.store.start();
+  assert.ok(f.store.getState().directs[friend].messages.length);
+  const deletion=f.channels.at(-1).callbacks.find(({filter})=>filter.table==='friend_connections'&&filter.event==='DELETE');
+  assert.equal(deletion.filter.filter,`id=eq.${friend}`);
+  f.overview.friends=[];f.calls.length=0;
+  deletion.handler({eventType:'DELETE',old:{id:friend},new:{}});await tick();
+  assert.deepEqual(f.calls,['overview']);
+  assert.deepEqual(f.store.getState().snapshot.friends,[]);
+  assert.equal(f.store.getState().directs[friend],undefined);
+  assert.ok(f.channels.at(-1).callbacks.every(({filter})=>filter.filter!==`id=eq.${friend}`));
+});
+
+test('a peer expiry refreshes membership without waiting for the safety poll', async t => {
+  t.mock.timers.enable({apis:['setTimeout','Date']});
+  const flush=async()=>{for(let step=0;step<6;step++){for(let i=0;i<30;i++) await Promise.resolve();t.mock.timers.tick(1);}};
+  const f=fixture();t.after(()=>f.store.dispose());
+  const peer='44444444-4444-4444-8444-444444444444';
+  f.overview.members=[{user_id:peer,expires_at:new Date(Date.now()+5000).toISOString(),profiles:{display_name:'Expiring peer'}}];
+  const started=f.store.start();await flush();await started;f.calls.length=0;
+  assert.equal(f.store.getState().snapshot.group.members.length,1);
+  f.overview.members=[];
+  t.mock.timers.tick(5100);await flush();
+  assert.deepEqual(f.calls,['overview']);
+  assert.deepEqual(f.store.getState().snapshot.group.members,[]);
+});

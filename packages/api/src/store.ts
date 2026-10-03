@@ -2,7 +2,7 @@ import type { ChatApi } from './index.ts';
 import { createRefreshCoordinator } from './coordinator.ts';
 import { watchChanges, type ChangeEvent, type ChangeFilter, type ConnectionState } from './realtime.ts';
 import { emptySnapshot, snapshotFromOverview, groupMessageView, type ChatSnapshot } from './snapshot.ts';
-import type { ChatAccess, GroupMessage, ChatMutation } from './overview.ts';
+import type { ChatAccess, ChatOverview, GroupMessage, ChatMutation } from './overview.ts';
 import type { Tables } from '@qr-chat/types';
 
 type DirectMessage = Tables<'direct_messages'>;
@@ -50,13 +50,26 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!cache) { cache = { rows: new Map(), nextCursor: null, loaded: false, headIds: [] }; conversations.set(key, cache); }
     return cache;
   }
+  function groupMessageViews(rows: Row[], snapshot: ChatSnapshot) {
+    const profiles = new Map<string, { display_name: string | null; avatar_url: string | null }>();
+    for (const member of [snapshot.session, ...(snapshot.group?.members ?? [])]) {
+      if (member) profiles.set(member.id, { display_name: member.name, avatar_url: member.avatarUrl ?? null });
+    }
+    for (const friend of snapshot.friends) {
+      if (friend.user_a) profiles.set(friend.user_a.id, friend.user_a);
+      if (friend.user_b) profiles.set(friend.user_b.id, friend.user_b);
+    }
+    // Use current authorized identities even when a history request began before
+    // a profile edit. Hidden/departed profiles must not survive in cached rows.
+    return rows.map(row => groupMessageView({ ...row, profiles: row.sender_id ? profiles.get(row.sender_id) ?? null : null } as GroupMessage));
+  }
   function publishMessages(key: string) {
     const cache = conversations.get(key);
     if (!cache) return;
     const rows = [...cache.rows.values()].sort((a, b) => a.id - b.id);
     const id = key.slice(2);
     if (key.startsWith('g:') && state.snapshot.group?.id === id) {
-      publish({ snapshot: { ...state.snapshot, group: { ...state.snapshot.group, messages: (rows as GroupMessage[]).map(groupMessageView), nextCursor: cache.nextCursor } }, groupLoading: false });
+      publish({ snapshot: { ...state.snapshot, group: { ...state.snapshot.group, messages: groupMessageViews(rows, state.snapshot), nextCursor: cache.nextCursor } }, groupLoading: false });
     } else if (key.startsWith('d:') && accepted().has(id)) {
       const latest = rows.at(-1) as DirectMessage | undefined;
       const previous = state.snapshot.directPreviews[id];
@@ -100,7 +113,16 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     ];
     const groupId = state.snapshot.group?.id;
     if (groupId) filters.push({ table: 'group_memberships', column: 'group_id', id: groupId }, { table: 'group_messages', column: 'group_id', id: groupId });
+    // RLS-protected DELETE payloads expose only primary keys, not participant
+    // columns. Watch already authorized connections by id to retire them promptly.
+    for (const id of state.snapshot.friends.map(friend => friend.id).sort()) filters.push({ table: 'friend_connections', column: 'id', id, event: 'DELETE' });
     for (const id of [...accepted()].sort()) filters.push({ table: 'direct_messages', column: 'friend_connection_id', id });
+    const profiles = new Set([identity, ...(state.snapshot.group?.members.map(member => member.id) ?? [])]);
+    for (const friend of state.snapshot.friends) {
+      if (friend.user_a) profiles.add(friend.user_a.id);
+      if (friend.user_b) profiles.add(friend.user_b.id);
+    }
+    for (const id of [...profiles].sort()) filters.push({ table: 'profiles', column: 'id', id });
     const key = JSON.stringify(filters);
     if (key === watcherKey) return;
     stopWatcher(); watcherKey = key;
@@ -115,9 +137,12 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       scheduleSafety();
     }, (options.safetyMs ?? 120000) * (0.95 + random() * 0.05));
   }
-  function scheduleExpiry() {
+  function scheduleExpiry(members: ChatOverview['members']) {
     clearTimeout(expiry);
-    if (active && state.snapshot.expiresAt) expiry = setTimeout(() => { void refresh('expiry').catch(() => {}); }, Math.min(2147483647, Math.max(1000, Date.parse(state.snapshot.expiresAt) - Date.now() + 100)));
+    const deadlines = [state.snapshot.expiresAt, ...members.map(member => member.expires_at)].filter(Boolean).map(value => Date.parse(value!)).filter(Number.isFinite);
+    // Expired peers lose membership/profile visibility even if no database write
+    // occurs at their deadline. Reconcile at the earliest visible expiry.
+    if (active && deadlines.length) expiry = setTimeout(() => { void refresh('expiry').catch(() => {}); }, Math.min(2147483647, Math.max(1000, Math.min(...deadlines) - Date.now() + 100)));
   }
   async function checkAccess(ticket: number) {
     if (!current(ticket)) return null;
@@ -143,10 +168,10 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       for (const key of new Set([...conversations.keys(), ...pendingWrites.keys(), ...writtenIds.keys()])) if (key.startsWith('g:') ? key.slice(2) !== next.membership?.group_id : !allowed.has(key.slice(2))) forgetConversation(key);
       const snapshot = snapshotFromOverview(next);
       const cache = snapshot.group ? conversations.get(`g:${snapshot.group.id}`) : undefined;
-      if (snapshot.group && cache?.loaded) snapshot.group = { ...snapshot.group, messages: ([...cache.rows.values()].sort((a, b) => a.id - b.id) as GroupMessage[]).map(groupMessageView), nextCursor: cache.nextCursor };
+      if (snapshot.group && cache?.loaded) snapshot.group = { ...snapshot.group, messages: groupMessageViews([...cache.rows.values()].sort((a, b) => a.id - b.id), snapshot), nextCursor: cache.nextCursor };
       const directs = Object.fromEntries(Object.entries(state.directs).filter(([id]) => allowed.has(id)));
       publish({ snapshot, directs, ready: true, error: '', groupLoading: !!snapshot.group && viewingGroup(snapshot.group.id) && !cache?.loaded, hasObservedGroup: state.hasObservedGroup || !!snapshot.group });
-      updateWatcher(); scheduleExpiry();
+      updateWatcher(); scheduleExpiry(next.members);
       const tasks: Promise<void>[] = [];
       if (snapshot.group && viewingGroup(snapshot.group.id)) {
         const key = `g:${snapshot.group.id}`;

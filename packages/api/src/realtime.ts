@@ -5,11 +5,13 @@ import { userIdSchema } from "@qr-chat/validation";
 let channelSequence = 0;
 
 export type ConnectionState = "connecting" | "connected" | "reconnecting";
-export type ChangeFilter =
+export type ChangeFilter = (
+  | { table: "profiles"; column: "id"; id: string }
   | { table: "group_messages" | "group_memberships"; column: "group_id"; id: string }
   | { table: "group_memberships"; column: "user_id"; id: string }
-  | { table: "friend_connections"; column: "user_a_id" | "user_b_id"; id: string }
-  | { table: "direct_messages"; column: "friend_connection_id"; id: string };
+  | { table: "friend_connections"; column: "user_a_id" | "user_b_id" | "id"; id: string }
+  | { table: "direct_messages"; column: "friend_connection_id"; id: string }
+) & { event?: "*" | "DELETE" };
 export type ChangeEvent = { table: string; eventType: string; id: number | null; filterId?: string };
 
 /** Events invalidate queries; payloads are never treated as an authorized snapshot.
@@ -67,7 +69,7 @@ export function watchChanges(
     };
     for (const filter of filters) {
       current.on("postgres_changes", {
-        event: "*", schema: "public", table: filter.table,
+        event: filter.event ?? "*", schema: "public", table: filter.table,
         filter: `${filter.column}=eq.${filter.id}`,
       }, (payload) => {
         if (stopped || channel !== current) return;

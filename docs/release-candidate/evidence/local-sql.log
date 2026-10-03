@@ -1,0 +1,134 @@
+$ node tests/run-qr-group-names-sql.mjs && node tests/run-qr-group-names-sql.mjs ./sql/chat-traffic-regression.sql
+The files belonging to this database system will be owned by user "andy".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "C.UTF-8".
+The default database encoding has accordingly been set to "UTF8".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+creating directory /var/folders/yd/cvhsp95x4kz7v33ygkq6_x7r0000gn/T/qr-chat-pg-names-6qR9ON/data ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default "max_connections" ... 100
+selecting default "shared_buffers" ... 128MB
+selecting default time zone ... Europe/Sofia
+creating configuration files ... ok
+running bootstrap script ... ok
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+waiting for server to start.... done
+server started
+CREATE ROLE
+CREATE ROLE
+CREATE SCHEMA
+CREATE SCHEMA
+CREATE FUNCTION
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+                    result
+-----------------------------------------------
+ qr group naming SQL regression fixture passed
+(1 row)
+
+waiting for server to shut down.... done
+server stopped
+The files belonging to this database system will be owned by user "andy".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "C.UTF-8".
+The default database encoding has accordingly been set to "UTF8".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+creating directory /var/folders/yd/cvhsp95x4kz7v33ygkq6_x7r0000gn/T/qr-chat-pg-names-bwkLEe/data ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default "max_connections" ... 100
+selecting default "shared_buffers" ... 128MB
+selecting default time zone ... Europe/Sofia
+creating configuration files ... ok
+running bootstrap script ... ok
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+waiting for server to start.... done
+server started
+CREATE ROLE
+CREATE ROLE
+CREATE SCHEMA
+CREATE SCHEMA
+CREATE FUNCTION
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+GRANT
+GRANT
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+REVOKE
+GRANT
+GRANT
+CREATE FUNCTION
+DO
+                                    result
+-------------------------------------------------------------------------------
+ Chat RPC batching, RLS, expiry, revocation and head overlap assertions passed
+(1 row)
+
+DO
+psql:/Applications/Coding/qr-chat/packages/api/tests/sql/chat-traffic-regression.sql:148: NOTICE:  Authenticated group plan with 10,000 rows: 0.507 ms
+psql:/Applications/Coding/qr-chat/packages/api/tests/sql/chat-traffic-regression.sql:148: NOTICE:  Authenticated DM plan with 10,000 rows: 0.031 ms
+waiting for server to shut down.... done
+server stopped

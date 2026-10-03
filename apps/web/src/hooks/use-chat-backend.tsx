@@ -8,7 +8,11 @@ type Api = ReturnType<typeof createChatApi>;
 const Context = createContext<{ api: Api; store: ReturnType<typeof getChatStore> } | null>(null);
 export function errorMessage(error: unknown) {
   if (error instanceof z.ZodError) return "Check your input and try again.";
-  return error instanceof Error ? error.message : "Could not connect. Please try again.";
+  const message = error instanceof Error ? error.message : "";
+  if (/failed to fetch|fetch failed|load failed|network(?:error| request failed)|network connection was lost|internet connection.*offline/i.test(message)) {
+    return "Could not connect. Check your internet connection and try again.";
+  }
+  return message || "Could not connect. Please try again.";
 }
 
 /** Mounted in the protected layout so route navigation retains data and subscriptions. */

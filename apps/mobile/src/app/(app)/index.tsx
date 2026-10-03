@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import type { ChatSnapshot } from '@qr-chat/api';
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from '@qr-chat/domain';
@@ -79,7 +79,7 @@ function RequestRow({ friend, peer, userId, busy, onProfile, onNotice, refresh }
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={homeStyles.requestMarker}><Copy style={{ color: '#fff', fontSize: 14, lineHeight: 16 }}>+</Copy></View>
       </View>
       <View style={homeStyles.copy}>
-        <View style={homeStyles.titleRow}><Copy numberOfLines={1} style={[homeStyles.name, { flex: 1 }]}>{peer.name}</Copy><Copy style={homeStyles.meta}>{messageAge(Date.parse(friend.requested_at))}</Copy></View>
+        <View style={homeStyles.titleRow}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.name, { flex: 1 }]}>{peer.name}</Copy><Copy style={homeStyles.meta}>{messageAge(Date.parse(friend.requested_at))}</Copy></View>
         <Copy style={homeStyles.meta}>{incoming ? 'Incoming friend request' : 'Friend request sent'}</Copy>
       </View>
     </Pressable>
@@ -144,7 +144,7 @@ export default function ChatsScreen() {
     <View style={homeStyles.header}>
       <View style={[styles.row, { justifyContent: 'space-between', paddingTop: 28, paddingBottom: 20 }]}>
         <Copy accessibilityRole="header" style={homeStyles.title}>Chats</Copy>
-        <Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={() => router.push('/profile')} style={({ pressed }) => ({ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={() => { Keyboard.dismiss(); router.push('/profile'); }} style={({ pressed }) => ({ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
           <Avatar name={chat.session?.name ?? 'You'} url={chat.session?.avatarUrl} size={44} />
           <View style={[homeStyles.connectionDot, { backgroundColor: chat.connection === 'connected' ? colors.green : '#919aac' }]} />
         </Pressable>
@@ -156,6 +156,7 @@ export default function ChatsScreen() {
       </View>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={homeStyles.list} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} alwaysBounceVertical={false} keyboardShouldPersistTaps="handled">
+      {chat.connection === 'reconnecting' && !chat.error && <View style={styles.notice}><Copy accessibilityLiveRegion="polite" style={homeStyles.meta}>Reconnecting… Your chats will return when you’re online.</Copy></View>}
       {!!action.error && <View accessibilityRole="alert" style={styles.notice}><Copy style={homeStyles.requestError}>Couldn’t refresh your chats. Try again.</Copy><NativeAction label="Retry" variant="outlined" onPress={() => action.run(chat.refresh)} /></View>}
       {chat.error ? <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={homeStyles.loadError}>
         <Copy style={homeStyles.emptyTitle}>Couldn’t load your chats.</Copy>
@@ -170,12 +171,12 @@ export default function ChatsScreen() {
           <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
           <View style={homeStyles.copy}>
             <View style={homeStyles.titleRow}>
-              <Copy numberOfLines={1} style={[homeStyles.name, { flex: 1 }]}>{group.venue.name}</Copy>
+              <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.name, { flex: 1 }]}>{group.venue.name}</Copy>
               {latestGroupMessage && <Copy style={homeStyles.meta}>{messageAge(latestGroupMessage.time)}</Copy>}
             </View>
             <Copy style={homeStyles.meta}>Group · {group.members.length} {group.members.length === 1 ? 'member' : 'members'}</Copy>
             <Copy style={[homeStyles.meta, { fontWeight: '600' }]}>{accessIndicator.state === 'remaining' ? `Access ends in ${accessIndicator.label.replace(' left', '')}` : accessIndicator.label}</Copy>
-            <Copy numberOfLines={1} style={homeStyles.preview}>{latestGroupMessage ? `${latestGroupMessage.user === userId ? 'You' : latestGroupMessage.name}: ${latestGroupMessage.text}` : 'You’re in. Say hello.'}</Copy>
+            <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.preview}>{latestGroupMessage ? `${latestGroupMessage.user === userId ? 'You' : latestGroupMessage.name}: ${latestGroupMessage.text}` : 'You’re in. Say hello.'}</Copy>
           </View>
         </Pressable>}
         {visibleRequests.map((friend) => <RequestRow key={friend.id} friend={friend} peer={peerFor(friend)} userId={userId} busy={action.busy} onProfile={() => openProfile(friend)} onNotice={setNotice} refresh={chat.refresh} />)}
@@ -187,7 +188,7 @@ export default function ChatsScreen() {
           return <View key={friend.id}>
             <Pressable accessibilityRole="button" accessibilityLabel={`Open direct message with ${peer.name}`} onPress={() => openDirectMessage(friend)} style={({ pressed }) => [homeStyles.dmRow, { opacity: pressed ? 0.7 : 1 }]}>
               <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
-              <View style={homeStyles.copy}><Copy numberOfLines={1} style={homeStyles.name}>{peer.name}</Copy><Copy numberOfLines={1} style={homeStyles.preview}>{failed ? 'Preview unavailable' : directMessagePreview(message, userId)}</Copy></View>
+              <View style={homeStyles.copy}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.preview}>{failed ? 'Preview unavailable' : directMessagePreview(message, userId)}</Copy></View>
               {message && <Copy style={[homeStyles.meta, { alignSelf: 'flex-start', paddingTop: 2 }]}>{messageAge(Date.parse(message.created_at))}</Copy>}
             </Pressable>
             {failed && <View style={{ marginLeft: 80 }}><NativeAction label="Retry" accessibilityLabel={`Retry loading message preview for ${peer.name}`} variant="text" disabled={action.busy} onPress={() => action.run(chat.refresh)} align="flex-start" /></View>}

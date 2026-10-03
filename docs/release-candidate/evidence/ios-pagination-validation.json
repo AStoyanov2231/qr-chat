@@ -1,0 +1,20 @@
+{
+  "group": {
+    "pass": true,
+    "finalCount": 63,
+    "expectedFixtureCount": 58,
+    "uniqueIds": true,
+    "allFixtureBodiesMatch": true,
+    "nextCursor": null
+  },
+  "direct": {
+    "pass": true,
+    "finalCount": 57,
+    "expectedFixtureCount": 57,
+    "uniqueIds": true,
+    "allFixtureBodiesMatch": true,
+    "nextCursor": null,
+    "initialCount": 50
+  },
+  "timestamp": "2026-10-03T01:26:37.135372+00:00"
+}

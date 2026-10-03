@@ -16,7 +16,7 @@ const Avatar = ({ name, url, size = 44 }) => React.createElement('span', {
   style: { width: size, height: size },
 }, url ? React.createElement('img', { src: url, alt: '' }) : name.slice(0, 2).toUpperCase());
 const Icon = ({ name }) => React.createElement('span', { 'data-icon': name, 'aria-hidden': 'true' });
-const icons = Object.fromEntries(['CaretLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
+const icons = Object.fromEntries(['ArrowRight', 'ChatCircle', 'DeviceMobile', 'Globe', 'QrCode', 'Users', 'CaretLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
   name,
   (props) => React.createElement('svg', { ...props, 'data-icon': name, 'aria-hidden': 'true' }),
 ]));
@@ -368,5 +368,24 @@ test('the profile page provides a back link to Chats and keeps its actions', asy
   assert.match(html, /<a[^>]*aria-label="Back to chats"[^>]*href="\/"/);
   assert.match(html, /aria-label="Settings"/);
   assert.match(html, /Edit Profile/);
+  assert.match(html, /Privacy/);
+  assert.match(html, /Help &amp; Feedback/);
+  assert.doesNotMatch(html, /Saved Places|Notifications|profile-stats|>Messages<|>Places</);
   assert.doesNotMatch(html, /profile-sheet|sheet-grabber/);
+});
+
+
+test('landing offers browser entry and keeps unavailable native download slots empty', async () => {
+  const { LandingPage } = await loadTsxModule('../src/components/landing-page.tsx');
+  const html = renderToStaticMarkup(React.createElement(LandingPage));
+  assert.match(html, /A little/);
+  assert.match(html, /href="\/sign-in"/);
+  assert.match(html, /Open web app/);
+  assert.match(html, /Scan to open QR Chat in your phone/);
+  assert.match(html, /Sign in with Google/);
+  assert.match(html, /one active group at a time/);
+  assert.match(html, /up to 24 hours/);
+  assert.equal((html.match(/class="landing-native-slot"[^>]*><\/div>/g) ?? []).length, 2);
+  assert.equal((html.match(/Not available yet/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /apps\.apple\.com|play\.google\.com|Saved Places|Notifications/);
 });

@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "nativeInitiatedLeave": true,
+  "noNavigationOrReloadBeforeEndedAssertion": true,
+  "groupBodiesCleared": true,
+  "composerRemoved": true,
+  "scannerStayedClosed": true,
+  "retainedFriends": 2,
+  "observedAt": "2026-10-03T01:41:56.619Z"
+}

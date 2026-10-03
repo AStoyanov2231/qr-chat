@@ -1,0 +1,257 @@
+{
+  "pass": true,
+  "initialCount": 50,
+  "initialCursor": 333,
+  "finalCount": 61,
+  "finalCursor": null,
+  "expectedFixtureCount": 61,
+  "actualUiLoadOlder": true,
+  "uniqueIds": true,
+  "messages": [
+    {
+      "id": "143",
+      "text": "dm-web-android-rc-01"
+    },
+    {
+      "id": "204",
+      "text": "dm-android-web-rc-01"
+    },
+    {
+      "id": "205",
+      "text": "dm-web-android-rc-01"
+    },
+    {
+      "id": "206",
+      "text": "dm-web-android-rc-02"
+    },
+    {
+      "id": "209",
+      "text": "dm-android-web-rc-02"
+    },
+    {
+      "id": "272",
+      "text": "android-chrome-web-01"
+    },
+    {
+      "id": "328",
+      "text": "rc-pages-20261003 direct 51f10f66 01"
+    },
+    {
+      "id": "329",
+      "text": "rc-pages-20261003 direct 51f10f66 02"
+    },
+    {
+      "id": "330",
+      "text": "rc-pages-20261003 direct 51f10f66 03"
+    },
+    {
+      "id": "331",
+      "text": "rc-pages-20261003 direct 51f10f66 04"
+    },
+    {
+      "id": "332",
+      "text": "rc-pages-20261003 direct 51f10f66 05"
+    },
+    {
+      "id": "333",
+      "text": "rc-pages-20261003 direct 51f10f66 06"
+    },
+    {
+      "id": "334",
+      "text": "rc-pages-20261003 direct 51f10f66 07"
+    },
+    {
+      "id": "335",
+      "text": "rc-pages-20261003 direct 51f10f66 08"
+    },
+    {
+      "id": "336",
+      "text": "rc-pages-20261003 direct 51f10f66 09"
+    },
+    {
+      "id": "337",
+      "text": "rc-pages-20261003 direct 51f10f66 10"
+    },
+    {
+      "id": "338",
+      "text": "rc-pages-20261003 direct 51f10f66 11"
+    },
+    {
+      "id": "339",
+      "text": "rc-pages-20261003 direct 51f10f66 12"
+    },
+    {
+      "id": "340",
+      "text": "rc-pages-20261003 direct 51f10f66 13"
+    },
+    {
+      "id": "341",
+      "text": "rc-pages-20261003 direct 51f10f66 14"
+    },
+    {
+      "id": "342",
+      "text": "rc-pages-20261003 direct 51f10f66 15"
+    },
+    {
+      "id": "343",
+      "text": "rc-pages-20261003 direct 51f10f66 16"
+    },
+    {
+      "id": "344",
+      "text": "rc-pages-20261003 direct 51f10f66 17"
+    },
+    {
+      "id": "345",
+      "text": "rc-pages-20261003 direct 51f10f66 18"
+    },
+    {
+      "id": "346",
+      "text": "rc-pages-20261003 direct 51f10f66 19"
+    },
+    {
+      "id": "347",
+      "text": "rc-pages-20261003 direct 51f10f66 20"
+    },
+    {
+      "id": "348",
+      "text": "rc-pages-20261003 direct 51f10f66 21"
+    },
+    {
+      "id": "349",
+      "text": "rc-pages-20261003 direct 51f10f66 22"
+    },
+    {
+      "id": "350",
+      "text": "rc-pages-20261003 direct 51f10f66 23"
+    },
+    {
+      "id": "351",
+      "text": "rc-pages-20261003 direct 51f10f66 24"
+    },
+    {
+      "id": "352",
+      "text": "rc-pages-20261003 direct 51f10f66 25"
+    },
+    {
+      "id": "353",
+      "text": "rc-pages-20261003 direct 51f10f66 26"
+    },
+    {
+      "id": "354",
+      "text": "rc-pages-20261003 direct 51f10f66 27"
+    },
+    {
+      "id": "355",
+      "text": "rc-pages-20261003 direct 51f10f66 28"
+    },
+    {
+      "id": "356",
+      "text": "rc-pages-20261003 direct 51f10f66 29"
+    },
+    {
+      "id": "357",
+      "text": "rc-pages-20261003 direct 51f10f66 30"
+    },
+    {
+      "id": "358",
+      "text": "rc-pages-20261003 direct 51f10f66 31"
+    },
+    {
+      "id": "359",
+      "text": "rc-pages-20261003 direct 51f10f66 32"
+    },
+    {
+      "id": "360",
+      "text": "rc-pages-20261003 direct 51f10f66 33"
+    },
+    {
+      "id": "361",
+      "text": "rc-pages-20261003 direct 51f10f66 34"
+    },
+    {
+      "id": "362",
+      "text": "rc-pages-20261003 direct 51f10f66 35"
+    },
+    {
+      "id": "363",
+      "text": "rc-pages-20261003 direct 51f10f66 36"
+    },
+    {
+      "id": "364",
+      "text": "rc-pages-20261003 direct 51f10f66 37"
+    },
+    {
+      "id": "365",
+      "text": "rc-pages-20261003 direct 51f10f66 38"
+    },
+    {
+      "id": "366",
+      "text": "rc-pages-20261003 direct 51f10f66 39"
+    },
+    {
+      "id": "367",
+      "text": "rc-pages-20261003 direct 51f10f66 40"
+    },
+    {
+      "id": "368",
+      "text": "rc-pages-20261003 direct 51f10f66 41"
+    },
+    {
+      "id": "369",
+      "text": "rc-pages-20261003 direct 51f10f66 42"
+    },
+    {
+      "id": "370",
+      "text": "rc-pages-20261003 direct 51f10f66 43"
+    },
+    {
+      "id": "371",
+      "text": "rc-pages-20261003 direct 51f10f66 44"
+    },
+    {
+      "id": "372",
+      "text": "rc-pages-20261003 direct 51f10f66 45"
+    },
+    {
+      "id": "373",
+      "text": "rc-pages-20261003 direct 51f10f66 46"
+    },
+    {
+      "id": "374",
+      "text": "rc-pages-20261003 direct 51f10f66 47"
+    },
+    {
+      "id": "375",
+      "text": "rc-pages-20261003 direct 51f10f66 48"
+    },
+    {
+      "id": "376",
+      "text": "rc-pages-20261003 direct 51f10f66 49"
+    },
+    {
+      "id": "377",
+      "text": "rc-pages-20261003 direct 51f10f66 50"
+    },
+    {
+      "id": "378",
+      "text": "rc-pages-20261003 direct 51f10f66 51"
+    },
+    {
+      "id": "379",
+      "text": "rc-pages-20261003 direct 51f10f66 52"
+    },
+    {
+      "id": "380",
+      "text": "rc-pages-20261003 direct 51f10f66 53"
+    },
+    {
+      "id": "381",
+      "text": "rc-pages-20261003 direct 51f10f66 54"
+    },
+    {
+      "id": "382",
+      "text": "rc-pages-20261003 direct 51f10f66 55"
+    }
+  ],
+  "timestamp": "2026-10-03T01:16:44.792Z"
+}

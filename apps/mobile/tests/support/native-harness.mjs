@@ -19,6 +19,7 @@ const mocks = {
   'react-native': `
     import React from 'react';
     export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', Button='Button', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView', ActivityIndicator='ActivityIndicator';
+    export const Keyboard = { dismiss() {} };
     export const Animated={Value:class {setValue(){} interpolate(){return 0;}},View:'AnimatedView',timing:()=>({start:callback=>callback?.({finished:true})})};
     export const Modal=({visible,...props})=>visible?React.createElement('Modal',{visible,...props},props.children):null;
     export const StyleSheet={create: value => value};
@@ -54,6 +55,8 @@ const mocks = {
   'expo-network': "export const useNetworkState=()=>globalThis.__qrChatNativeTest.networkState ?? {isConnected:true,isInternetReachable:true};",
   'expo-glass-effect': "export const GlassView='GlassView';export const isGlassEffectAPIAvailable=()=>false;",
   'expo-image': "export const Image='Image';",
+  'expo-constants': "export default {appOwnership: 'standalone'};",
+  'expo-web-browser': 'export const openAuthSessionAsync=(...args)=>globalThis.__qrChatNativeTest.openAuthSession(...args);',
   'expo-crypto': "export const randomUUID=()=> '22222222-2222-4222-8222-222222222222';",
   'expo-image-picker': `export async function launchImageLibraryAsync(options) {
     const state=globalThis.__qrChatNativeTest; state.pickerOptions=options;
@@ -72,7 +75,8 @@ const mocks = {
   'expo-camera': `export const CameraView='CameraView'; const request=async()=>{globalThis.__qrChatNativeTest.permissionRequested=true;}; const get=async()=>{globalThis.__qrChatNativeTest.permissionChecked=true;}; export const useCameraPermissions=()=>[globalThis.__qrChatNativeTest.permission,request,get];`,
   '@/providers/auth-provider': 'export const useAuth=()=>globalThis.__qrChatNativeTest.auth;',
   '@/providers/chat-provider': 'export const useChat=()=>globalThis.__qrChatNativeTest.chat; export const ChatProvider=({children})=>children; export const errorMessage=error=>error.message || "Could not connect. Please try again.";',
-  '@/lib/supabase': 'export const webOrigin="https://chat.example"; export const getNativeApi=()=>globalThis.__qrChatNativeTest.nativeApi ?? null;',
+  '@/lib/supabase': 'export const webOrigin="https://chat.example"; export const authCallback="qrchat://auth/callback"; export const providers={google:true}; export const getNativeApi=()=>globalThis.__qrChatNativeTest.nativeApi ?? null;',
+  '@/lib/oauth': 'export const completeSignIn=(...args)=>globalThis.__qrChatNativeTest.completeSignIn(...args);',
   '@qr-chat/api': `
     export {getChatStore} from '${new URL('./chat-store.mjs', import.meta.url).href}';
     export const loadDirectSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadDirectSnapshot(...args);
@@ -103,9 +107,9 @@ registerHooks({
     if (url.startsWith('qr-chat-test:')) return { format: 'module', source: mocks[url.slice('qr-chat-test:'.length)], shortCircuit: true };
     if (url.startsWith(pathToFileURL(sourceRoot).href) && /\.tsx?$/.test(url)) {
       let source = readFileSync(new URL(url), 'utf8');
-      if (process.env.QR_CHAT_TEST_COMPILED_ROOM === '1' && url.endsWith('/app/(app)/room.tsx')) {
+      if ((process.env.QR_CHAT_TEST_COMPILED_ROOM === '1' && url.endsWith('/app/(app)/room.tsx')) || url.endsWith('/hooks/use-direct-messages.ts')) {
         // Exercise the installed Expo compiler too: its dependency extraction can
-        // expose nullable accesses that plain TypeScript transpilation leaves safe.
+        // expose nullable accesses and stale reads from mutable stores.
         const require = createRequire(import.meta.url);
         const expoRequire = createRequire(require.resolve('expo/package.json'));
         const presetRequire = createRequire(expoRequire.resolve('babel-preset-expo/package.json'));

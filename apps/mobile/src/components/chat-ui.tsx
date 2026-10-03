@@ -12,14 +12,14 @@ const symbols = {
   scan: ['qrcode.viewfinder', 'qr_code_scanner'], group: ['person.2', 'group'], user: ['person', 'person'],
   settings: ['gearshape', 'settings'], edit: ['pencil', 'edit'], search: ['magnifyingglass', 'search'],
   arrow: ['arrow.up', 'arrow_upward'], chevron: ['chevron.right', 'chevron_right'], light: ['lightbulb', 'lightbulb'],
-  bell: ['bell', 'notifications'], bookmark: ['bookmark', 'bookmark'], lock: ['lock', 'lock'],
+  lock: ['lock', 'lock'],
   help: ['questionmark.circle', 'help'], pin: ['mappin', 'location_on'], close: ['xmark', 'close'],
 } as const;
 export type IconName = keyof typeof symbols;
 export function Icon({ name, size = 25, color = colors.ink }: { name: IconName; size?: number; color?: string }) {
   const [ios, android] = symbols[name];
   if (process.env.EXPO_OS === 'ios') return <Image source={`sf:${ios}`} tintColor={color} style={{ width: size, height: size }} accessibilityElementsHidden />;
-  return <SymbolView name={{ android: android as AndroidSymbol }} tintColor={color} size={size} style={{ width: size, height: size }} accessibilityElementsHidden />;
+  return <View collapsable={false} accessible={false} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden><SymbolView name={{ android: android as AndroidSymbol }} tintColor={color} size={size} style={{ width: size, height: size }} /></View>;
 }
 export function Copy({ style, ...props }: TextProps) { return <Text selectable {...props} style={[styles.copy, style]} />; }
 export function Screen({ children, contentContainerStyle }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
@@ -27,6 +27,7 @@ export function Screen({ children, contentContainerStyle }: PropsWithChildren<{ 
   return <SafeAreaView edges={{ top: true, bottom: true, left: true, right: true }} collapsable={false} style={styles.screen}>
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, contentContainerStyle]}
       contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false}
+      automaticallyAdjustKeyboardInsets keyboardDismissMode={process.env.EXPO_OS === 'ios' ? 'interactive' : 'on-drag'}
       alwaysBounceVertical={false} overScrollMode="auto" keyboardShouldPersistTaps="handled">{children}</ScrollView>
   </SafeAreaView>;
 }
@@ -56,8 +57,7 @@ export function Skeleton({ profile = false, view = 'groups' }: { profile?: boole
   if (profile) return <View accessibilityLabel="Loading profile" accessibilityRole="progressbar" style={{ gap: 16, alignItems: 'center', paddingTop: 10 }}>
     <View style={[styles.skeleton, { height: 130, width: 130, borderRadius: 65 }]} />
     <View style={[styles.skeleton, { width: 164, height: 28 }]} /><View style={[styles.skeleton, { width: 105, height: 17 }]} />
-    <View style={[styles.row, { paddingVertical: 22 }]}>{[0, 1, 2].map((i) => <View key={i} style={[styles.skeleton, { flex: 1, height: 42 }]} />)}</View>
-    {[0, 1, 2, 3].map((i) => <View key={i} style={[styles.skeleton, { height: 57, width: '100%' }]} />)}
+    {[0, 1, 2].map((i) => <View key={i} style={[styles.skeleton, { height: 57, width: '100%' }]} />)}
   </View>;
   if (view === 'home') return <View accessibilityLabel="Loading chats" accessibilityRole="progressbar" style={{ flex: 1, gap: 8, paddingHorizontal: 10 }}>
     {[0, 1, 2].map((i) => <View key={i} style={[styles.skeleton, { width: 138, height: 38 }]} />)}

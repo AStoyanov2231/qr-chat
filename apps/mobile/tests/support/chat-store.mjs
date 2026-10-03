@@ -20,8 +20,8 @@ export function getChatStore(api) {
     } catch(error) {publish({snapshot:{session:null,group:null,friends:[],expiresAt:null,directPreviews:{}},ready:false,error:error.message});throw error;}
   }
   async function refreshDirect(id) {
-    try {const page=await host.loadDirectSnapshot(api,id,counts.get(id)||1);publish({directs:{...state.directs,[id]:{...page,loading:false,error:''}}});}
-    catch(error) {publish({directs:{...state.directs,[id]:{messages:[],nextCursor:null,loading:false,error:error.message}}});throw error;}
+    try {const page=await host.loadDirectSnapshot(api,id,counts.get(id)||1);publish({ready:host.chat.ready,directs:{...state.directs,[id]:{...page,loading:false,error:''}}});}
+    catch(error) {publish({ready:host.chat.ready,directs:{...state.directs,[id]:{messages:[],nextCursor:null,loading:false,error:error.message}}});throw error;}
   }
   const store={
     getState:()=>state, subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);},

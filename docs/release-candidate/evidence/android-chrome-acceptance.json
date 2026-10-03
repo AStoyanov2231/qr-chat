@@ -1,0 +1,22 @@
+{
+  "pass": true,
+  "runtime": {
+    "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36",
+    "coarse": true,
+    "width": 412,
+    "height": 786,
+    "devicePixelRatio": 2.625
+  },
+  "keyboard": {
+    "viewport": 426.28570556640625,
+    "viewportTop": 0,
+    "sendTop": 363.2857360839844,
+    "sendBottom": 407.2857360839844
+  },
+  "actualBrowser": true,
+  "nativeAccountReused": true,
+  "message": "android-chrome-web-01",
+  "profileName": "RC Android Synced",
+  "avatarStored": true,
+  "timestamp": "2026-10-03T01:11:37.530Z"
+}

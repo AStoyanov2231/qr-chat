@@ -4,7 +4,12 @@ import { z } from '@qr-chat/validation';
 import { useAuth } from './auth-provider';
 
 export function errorMessage(reason: unknown) {
-  return reason instanceof z.ZodError ? 'Check your input and try again.' : reason instanceof Error ? reason.message : 'Could not connect. Please try again.';
+  if (reason instanceof z.ZodError) return 'Check your input and try again.';
+  const message = reason instanceof Error ? reason.message : '';
+  if (/failed to fetch|fetch failed|load failed|network(?:error| request failed)|network connection was lost|internet connection.*offline/i.test(message)) {
+    return 'Could not connect. Check your internet connection and try again.';
+  }
+  return message || 'Could not connect. Please try again.';
 }
 const empty = { snapshot: emptySnapshot, ready: false, error: '', connection: 'connecting' as ConnectionState, hasObservedGroup: false, groupLoading: false, directs: {} };
 const idle = async () => {};
@@ -22,7 +27,7 @@ function useBackend() {
     void store.start();
     return () => store.pause();
   }, [store, userId, active]);
-  return { ...state.snapshot, ready: state.ready, error: state.error, groupAccessEnded: state.ready && state.hasObservedGroup && !state.snapshot.group,
+  return { ...state.snapshot, ready: state.ready, error: state.error ? errorMessage(new Error(state.error)) : '', groupAccessEnded: state.ready && state.hasObservedGroup && !state.snapshot.group,
     groupLoading: state.groupLoading, connection: active ? state.connection : 'reconnecting' as ConnectionState,
     refresh: store?.refresh ?? idle, refreshGroup: store?.refreshGroup ?? idle, openGroup: store?.openGroup ?? noGroup,
     loadOlder: store?.loadOlderGroup ?? idle, scannedCode, acceptScan, clearScan };

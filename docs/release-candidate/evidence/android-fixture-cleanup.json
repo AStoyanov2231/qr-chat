@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-10-03T01:49:21.320052+00:00",
+  "mediaStore": {
+    "deletedId": 64,
+    "verifiedPath": "/storage/emulated/0/Pictures/qr-chat-rc-avatar-disposable.png",
+    "postDeleteQuery": "No result found"
+  },
+  "cameraImages": {
+    "wall": "default restored OK",
+    "table": "default restored OK"
+  },
+  "screenrecord": "no process running",
+  "deviceCopiesRemoved": [
+    "/sdcard/qr-chat-rc-optical.mp4",
+    "/sdcard/qr-chat-rc-expiry.mp4",
+    "/sdcard/native-ui.xml",
+    "/sdcard/native-accessibility.xml"
+  ],
+  "finalApp": "installed release, signed out, cold-launch Google-only screen verified",
+  "existingPhotos": "untouched"
+}

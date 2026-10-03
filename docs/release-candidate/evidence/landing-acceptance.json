@@ -1,0 +1,11 @@
+{
+  "completed": [
+    "Landing 1440px: no overflow; minimum 44px targets; web entry and empty unavailable native slots",
+    "Landing 768px: no overflow; minimum 44px targets; web entry and empty unavailable native slots",
+    "Landing 390px: no overflow; minimum 44px targets; web entry and empty unavailable native slots",
+    "Landing 320px: no overflow; minimum 44px targets; web entry and empty unavailable native slots",
+    "Generated web QR independently decodes to the web sign-in route",
+    "Touch mobile sign-in offers Google only in portrait and landscape; mouse desktop stays on landing even at 390px"
+  ],
+  "timestamp": "2026-10-03T00:40:37.687Z"
+}

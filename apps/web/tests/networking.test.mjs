@@ -68,3 +68,19 @@ test('web session host pauses on hidden/offline, resumes once and removes lifecy
   navigator.onLine=true;events.get('online')();events.get('visibilitychange')();assert.equal(starts,2);
   cleanup();assert.equal(events.size,0);assert.ok(disposed&&authCleaned);
 });
+
+
+test('transport failures show connection guidance while actionable API and validation errors stay useful', async () => {
+  const { errorMessage } = await load('../src/hooks/use-chat-backend.tsx', {
+    react: { createContext: () => ({}) },
+    '@qr-chat/api': {},
+    '@/lib/supabase/client': {},
+  });
+  for (const message of ['TypeError: Failed to fetch', 'fetch failed', 'Load failed', 'NetworkError when attempting to fetch resource.', 'Network request failed', 'The Internet connection appears to be offline.']) {
+    assert.equal(errorMessage(new Error(message)), 'Could not connect. Check your internet connection and try again.');
+  }
+  assert.equal(errorMessage(new Error('Please sign in again.')), 'Please sign in again.');
+  const { z } = require('@qr-chat/validation');
+  const invalid = z.string().min(1).safeParse('');
+  assert.equal(errorMessage(invalid.error), 'Check your input and try again.');
+});

@@ -8,7 +8,6 @@ export const authCallback = 'qrchat://auth/callback';
 export const webOrigin = process.env.EXPO_PUBLIC_WEB_ORIGIN ?? '';
 export const providers = {
   google: process.env.EXPO_PUBLIC_ENABLE_GOOGLE_AUTH === 'true',
-  apple: process.env.EXPO_PUBLIC_ENABLE_APPLE_AUTH === 'true',
 };
 
 // Supabase uses WebCrypto for S256 PKCE. Supply only missing native primitives.
