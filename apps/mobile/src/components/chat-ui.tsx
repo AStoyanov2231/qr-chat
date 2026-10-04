@@ -13,6 +13,8 @@ const symbols = {
   settings: ['gearshape', 'settings'], edit: ['pencil', 'edit'], search: ['magnifyingglass', 'search'],
   arrow: ['arrow.up', 'arrow_upward'], chevron: ['chevron.right', 'chevron_right'], light: ['lightbulb', 'lightbulb'],
   lock: ['lock', 'lock'],
+  block: ['nosign', 'block'], userMinus: ['person.badge.minus.fill', 'person_remove'],
+  check: ['checkmark', 'check'], userPlus: ['person.badge.plus.fill', 'person_add'],
   help: ['questionmark.circle', 'help'], pin: ['mappin', 'location_on'], close: ['xmark', 'close'],
 } as const;
 export type IconName = keyof typeof symbols;
@@ -66,14 +68,14 @@ export function Skeleton({ profile = false, view = 'groups' }: { profile?: boole
     <View style={[styles.skeleton, { height: 92, marginTop: 'auto' }]} />
   </View>;
   if (view === 'chats') {
-    const row = (index: number) => <View key={index} style={[styles.row, { minHeight: 72, gap: 16, paddingVertical: 10, paddingHorizontal: index < 2 ? 0 : 12 }]}>
+    const row = (index: number) => <View key={index} style={[styles.row, { minHeight: index === 1 ? 52 : 72, gap: 16, paddingVertical: index < 2 ? 0 : 10, paddingHorizontal: index < 2 ? 0 : 12 }]}>
       <View style={[styles.skeleton, { width: 52, height: 52, borderRadius: 26 }]} />
       <View style={{ flex: 1, gap: 8 }}><View style={[styles.skeleton, { width: '70%', height: 18 }]} /><View style={[styles.skeleton, { width: '68%', height: 14 }]} /></View>
       <View style={[styles.skeleton, { width: 36, height: 14 }]} />
     </View>;
     return <View accessibilityLabel="Loading chats" accessibilityRole="progressbar" style={{ gap: 8 }}>
-      <View style={{ minHeight: 104, padding: 12, borderRadius: 14, backgroundColor: colors.blue }}>{row(0)}</View>
-      <View style={{ padding: 12, borderRadius: 14, backgroundColor: colors.soft }}>{row(1)}<View style={[styles.skeleton, { width: 144, height: 44, alignSelf: 'flex-end' }]} /></View>
+      <View style={{ minHeight: 98, padding: 12, borderWidth: 1, borderColor: '#e6e8ed', borderRadius: 20, backgroundColor: colors.paper }}>{row(0)}</View>
+      <View style={{ padding: 12, borderWidth: 1, borderColor: '#e6e8ed', borderRadius: 20, backgroundColor: colors.paper }}>{row(1)}</View>
       {[2, 3, 4].map(row)}
       <Copy style={[styles.muted, { textAlign: 'center', marginTop: 16 }]}>Loading chats…</Copy>
     </View>;

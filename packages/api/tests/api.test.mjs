@@ -156,3 +156,18 @@ test('previous-session metadata cannot be returned or cached after invalidation'
   finish(Response.json({ name: 'Old session', imageUrl: 'https://public.example/old.jpg' }));
   assert.equal(await request, null);
 });
+
+
+test('blocking validates the connection and uses the authoritative RPC', async () => {
+  const calls = [];
+  const client = { rpc: async (...args) => { calls.push(args); return { data: true, error: null }; } };
+  const api = createChatApi(client);
+  await assert.rejects(api.blockFriend('invalid-id'));
+  assert.equal(calls.length, 0);
+  await api.blockFriend(id);
+  assert.deepEqual(calls, [['block_friend_connection', { p_connection_id: id }]]);
+  client.rpc = async () => ({ data: false, error: null });
+  await assert.rejects(api.blockFriend(id), /no longer available/);
+  client.rpc = async () => ({ data: null, error: { message: 'Offline' } });
+  await assert.rejects(api.blockFriend(id), /Offline/);
+});

@@ -24,7 +24,9 @@ try {
   if (mode === 'prepare') {
     await page.goto(`http://127.0.0.1:3000/?code=${encodeURIComponent(fixture.code)}`);
     await page.getByLabel('Message', { exact: true }).waitFor({ timeout: 45000 });
-    await page.getByText('2 members', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Group settings', exact: true }).click();
+    await page.getByLabel('2 members', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close group settings', exact: true }).click();
     assert.equal(await page.locator('dialog.camera-dialog[open]').count(), 0);
     screen('android-chrome-before-expiry');
     console.log('READY actual Chrome has active two-member group; native can resume for coordinated expiry.');
@@ -48,7 +50,7 @@ try {
       await page.getByRole('button', { name: 'Send direct message', exact: true }).click();
       await page.waitForFunction(() => document.querySelector('#direct-message')?.value === '');
       await page.getByText('android-chrome-after-expiry-01', { exact: true }).waitFor({ timeout: 45000 });
-      await page.getByText('Friend', { exact: true }).waitFor();
+      assert.equal(await page.locator('.chat-header-title p').count(), 0);
       assert.equal(await page.getByText('android-chrome-after-expiry-01', { exact: true }).count(), 1);
       screen('android-chrome-expired-retained-dm');
       writeFileSync(`${output}/android-chrome-expiry.json`, JSON.stringify({ pass: true, noNavigationOrReloadBeforeEndedAssertion: true, resumedSameAccountBrowser: true, groupBodiesCleared: true, composerRemoved: true, retainedFriends: 2, sent: 'android-chrome-after-expiry-01', observedAt: new Date().toISOString() }, null, 2));

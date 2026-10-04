@@ -75,6 +75,7 @@ try {
     await actor.api.leaveGroup();
   }
   for (const [actor, name] of [[alice, 'Alice QA'], [bob, 'Bob QA']]) {
+    await actor.api.saveProfile({ display_name: name });
     await overview(actor);
     if (actor === alice) { await actor.context.clearPermissions(); await actor.context.grantPermissions([], { origin }); }
     await actor.page.getByRole('button', { name: 'Scan a QR code', exact: true }).first().click();
@@ -85,13 +86,14 @@ try {
       await actor.page.getByRole('button', { name: 'Try camera again', exact: true }).click();
       pass('Camera denial explains recovery and retry works after granting permission');
     }
-    await actor.page.getByLabel('Your name', { exact: true }).waitFor({ timeout });
-    await actor.page.getByLabel('Your name', { exact: true }).fill(name);
-    // A new arbitrary code has no remote venue metadata, so its first join names it.
-    await eventually(async () => (await actor.page.getByLabel('Chat name', { exact: true }).count()) || !(await actor.page.getByRole('button', { name: 'Join chat', exact: false }).isDisabled()), 'QR metadata must resolve');
-    if (await actor.page.getByLabel('Chat name', { exact: true }).count()) await actor.page.getByLabel('Chat name', { exact: true }).fill('Release Cafe');
-    await screenshot(actor.page, name === 'Alice QA' ? 'web-qr-join' : 'web-qr-existing-name');
-    await actor.page.getByRole('button', { name: 'Join chat', exact: false }).click();
+    // Unidentified QR codes need a chat name; named rooms join automatically.
+    await eventually(async () => (await actor.page.getByLabel('Chat name', { exact: true }).count()) || (await actor.page.getByLabel('Message', { exact: true }).count()), 'The scan must resolve to naming or the conversation');
+    assert.equal(await actor.page.getByLabel('Your name', { exact: true }).count(), 0);
+    if (await actor.page.getByLabel('Chat name', { exact: true }).count()) {
+      await actor.page.getByLabel('Chat name', { exact: true }).fill('Release Cafe');
+      await screenshot(actor.page, 'web-qr-chat-name');
+      await actor.page.getByRole('button', { name: 'Join chat', exact: false }).click();
+    }
     await actor.page.getByLabel('Message', { exact: true }).waitFor({ timeout });
   }
   const membership = await alice.api.currentMembership();
@@ -130,10 +132,11 @@ try {
     const title = document.querySelector('.chat-header-title h1');
     const subtitle = document.querySelector('.chat-header-title p');
     const surface = document.querySelector('.chat-conversation-surface');
-    return { titleHeight: title.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(title).lineHeight), subtitleBottom: subtitle.getBoundingClientRect().bottom, surfaceTop: surface.getBoundingClientRect().top };
+    return { titleHeight: title.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(title).lineHeight), hasSubtitle: !!subtitle, titleBottom: title.getBoundingClientRect().bottom, surfaceTop: surface.getBoundingClientRect().top };
   });
   assert.ok(headerLayout.titleHeight >= headerLayout.lineHeight, 'Short viewport must show the complete title line');
-  assert.ok(headerLayout.subtitleBottom <= headerLayout.surfaceTop, 'Header subtitle must stay above the chat surface');
+  assert.equal(headerLayout.hasSubtitle, false, 'Conversation headers omit member counts');
+  assert.ok(headerLayout.titleBottom <= headerLayout.surfaceTop, 'Header title must stay above the chat surface');
   await screenshot(alice.page, 'web-group-short-viewport');
   await alice.page.getByLabel('Message', { exact: true }).fill('');
   await alice.page.setViewportSize({ width: 390, height: 844 });
@@ -177,7 +180,8 @@ try {
   await openDirect(bob, 'Alice QA');
   await send(alice, 'A private hello', true);
   await visible(bob.page, 'A private hello');
-  await visible(bob.page, 'Friend');
+  await bob.page.getByLabel('Direct message', { exact: true }).waitFor({ timeout });
+  assert.equal(await bob.page.locator('.chat-header-title p').count(), 0);
   await screenshot(bob.page, 'web-dm-mobile');
   const friendship = (await alice.api.friends()).find((row) => row.accepted_at);
   assert.ok(friendship);
@@ -275,7 +279,8 @@ try {
   await overview(twin);
   await twin.page.locator('.group-card').waitFor();
   await bob.page.goto(`${origin}/?code=${encodeURIComponent(code)}`);
-  await visible(bob.page, '2 members');
+  await bob.page.getByRole('button', { name: 'Group settings', exact: true }).click();
+  await bob.page.getByLabel('2 members', { exact: true }).waitFor({ timeout });
   await alice.page.bringToFront();
   await alice.page.getByRole('button', { name: 'Settings', exact: true }).click();
   const leaveStarted = Date.now();
@@ -284,7 +289,8 @@ try {
   await twin.page.bringToFront();
   await twin.page.locator('.group-card').waitFor({ state: 'hidden', timeout });
   assert.equal(await twin.page.locator('.group-card').count(), 0);
-  await visible(bob.page, '1 member');
+  await bob.page.bringToFront();
+  await bob.page.getByLabel('1 member', { exact: true }).waitFor({ timeout });
   console.log(`Membership leave converged in ${Date.now() - leaveStarted}ms without navigation or reload`);
   pass('Leave removes same-account group card and updates peer member count without reload');
   await twin.page.getByRole('button', { name: 'Open direct message with Bob QA', exact: true }).waitFor();

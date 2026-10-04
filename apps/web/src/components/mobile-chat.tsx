@@ -23,7 +23,6 @@ import { cameraErrorMessage } from "@/lib/camera-error";
 import { observeChatViewport } from "@/lib/chat-viewport";
 import { ConversationHeader } from "@/components/conversation-header";
 import { GroupSidebar } from "@/components/group-sidebar";
-import { SettingsSidebar } from "@/components/settings-sidebar";
 import { ProfileView } from "@/components/profile-view";
 import { ChatsOverview } from "@/components/chats-overview";
 import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty } from "@/components/direct-message-parts";
@@ -54,7 +53,7 @@ function MessageSkeleton() {
   );
 }
 
-type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "signOut";
+type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "blockFriend" | "signOut";
 export type ChatViewApi = Pick<ChatApi, "joinNamedGroup" | "nameCurrentQrChatIfEmpty" | "resolveQrChatName" | "resolveQrChatImage"> & {
   [K in PreviewCommands]: (...args: Parameters<ChatApi[K]>) => Promise<unknown>;
 };
@@ -97,7 +96,6 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const [chatNameDraftState, setChatNameDraftState] = useState<{ code: string; value: string } | null>(null);
   const [nameLookup, setNameLookup] = useState<{ code: string; result: ChatNameResolution | null } | null>(null);
   const [entry, setEntry] = useState(false);
-  const [name, setName] = useState("");
   const [draft, setDraft] = useState("");
   const [directSendError, setDirectSendError] = useState("");
   const [groupSendError, setGroupSendError] = useState("");
@@ -180,14 +178,19 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     : null;
   const chosenChatName = pendingNameResult?.kind === "missing" ? chatNameDraft.trim() : suggestedChatName;
 
+  const hasSession = !!session;
+  const autoJoin = useEffectEvent((name: string) => join(name));
+
   useEffect(() => {
-    if (!pendingCode) return;
+    if (!pendingCode || !hasSession || !ready) return;
     const controller = new AbortController();
     void api.resolveQrChatName(pendingCode, controller.signal).then((result) => {
-      if (!controller.signal.aborted) setNameLookup({ code: pendingCode, result });
+      if (controller.signal.aborted) return;
+      setNameLookup({ code: pendingCode, result });
+      if (result.kind !== "missing") autoJoin(result.name);
     }, () => { if (!controller.signal.aborted) setNameLookup({ code: pendingCode, result: { kind: "missing" } }); });
     return () => controller.abort();
-  }, [api, pendingCode]);
+  }, [api, pendingCode, hasSession, ready]);
 
   async function perform(action: () => Promise<void>) {
     if (busyRef.current) return;
@@ -211,14 +214,12 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       if (current?.venue.codes[0] === venue.codes[0]) {
         if (current.venue.nameMissing) {
           setPending(current.venue);
-          setName(session?.name ?? "");
           setChatNameDraftState({ code: venue.codes[0], value: "" });
         } else {
           dismissEntry(() => openConversation(current.venue));
         }
       } else {
         setPending(venue);
-        setName(session?.name ?? "");
         setChatNameDraftState({ code: venue.codes[0], value: "" });
       }
     } catch {
@@ -446,20 +447,18 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     });
   }
 
-  function join(event: FormEvent) {
-    event.preventDefault();
-    if (!pending || !session || !name.trim() || !pendingNameResult || !chosenChatName) return;
+  function join(chatName = chosenChatName) {
+    if (!pending || !session || !ready || !chatName) return;
     void perform(async () => {
       setError("");
       try {
-        await api.saveProfile({ display_name: name });
         const current = backend.group?.venue.codes[0] === pending.codes[0] ? backend.group : null;
         let destination: Venue;
         if (current) {
-          const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chosenChatName);
+          const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chatName);
           destination = { ...current.venue, name: canonicalName, nameMissing: false };
         } else {
-          const membership = await api.joinNamedGroup(pending.codes[0], chosenChatName);
+          const membership = await api.joinNamedGroup(pending.codes[0], chatName);
           destination = { ...pending, id: membership.group_id, name: membership.display_name, nameMissing: false };
         }
         await backend.refresh();
@@ -604,15 +603,16 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             onScan={startEntry}
             onOpenGroup={() => { if (backend.group) openConversation(backend.group.venue); }}
             onOpenDirect={openDirectMessage}
-            onOpenProfile={openPerson}
             onAcceptRequest={async (friendId) => { await api.acceptFriend(friendId); await backend.refresh(); }}
             onRemoveRequest={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
+            onUnfriend={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
+            onBlock={async (friendId) => { await api.blockFriend(friendId); await backend.refresh(); }}
           />
         )}
 
         {view === "chats" && backend.error && (active || directId) && (
           <section className="conversation-view">
-            <ConversationHeader title={active?.name ?? peer?.display_name ?? "Direct message"} subtitle="Access could not be checked" onBack={backToChats} settingsLabel="Conversation settings" disabled onSettings={() => {}} />
+            <ConversationHeader title={active?.name ?? peer?.display_name ?? "Direct message"} subtitle="Access could not be checked" onBack={backToChats} disabled settingsLabel="Group settings" onSettings={active ? () => {} : undefined} />
             <div className="chat-conversation-surface conversation-load-error" role="alert">
               <h2>Couldn’t load this chat.</h2>
               <p>We couldn’t verify your access. Try again to reload the conversation.</p>
@@ -623,7 +623,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={active.name} subtitle={`${group?.members.length ?? 0} ${group?.members.length === 1 ? "member" : "members"}`} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
+            <ConversationHeader title={active.name} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
@@ -688,7 +688,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && directId && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? "Friend" : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={backToChats} settingsLabel="Conversation settings" disabled={!peer?.id} onSettings={() => setSidebar(true)} />
+            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? undefined : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={backToChats} />
             <div className="chat-conversation-surface">
               {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
                 <div className="message-stream" aria-live="polite">
@@ -716,11 +716,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 />
               </>}
             </div>
-            {sidebar && peer && <SettingsSidebar key={directId} label="Conversation settings" onClose={() => setSidebar(false)}>{() => <div className="group-sidebar-identity">
-              <Avatar name={peer.display_name ?? "Participant"} url={peer.avatar_url} size={130} />
-              <h2>{peer.display_name ?? "Participant"}</h2>
-              <p>Friend</p>
-            </div>}</SettingsSidebar>}
+
           </section>
         )}
 
@@ -766,25 +762,14 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
               <span className="entry-icon">
                 <Icon name="chat" size={28} />
               </span>
-              <h2>Join the room</h2>
+              <h2>{pendingNameResult?.kind === "missing" ? "Name this chat" : "Joining…"}</h2>
               {findingChatName
                 ? <p role="status">Finding the chat name…</p>
                 : suggestedChatName
                   ? <p>{suggestedChatName}</p>
                   : <p>Unnamed chat</p>}
               {backend.group && backend.group.venue.codes[0] !== pending.codes[0] && <p>Joining this room leaves your current group.</p>}
-              <form onSubmit={join}>
-                <label htmlFor="name">Your name</label>
-                <input
-                  id="name"
-                  disabled={busy}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Capybara"
-                  maxLength={50}
-                  required
-                  autoFocus
-                />
+              <form onSubmit={(event) => { event.preventDefault(); join(); }}>
                 {pendingNameResult?.kind === "missing" && <>
                   <label htmlFor="chat-name">Chat name</label>
                   <input
@@ -795,12 +780,13 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                     placeholder="Cafe name"
                     maxLength={100}
                     required
+                    autoFocus
                   />
                   <p>We couldn’t identify this place. Give this chat a name for everyone.</p>
                 </>}
-                <button type="submit" className="scan-primary" disabled={busy || !ready || findingChatName || !chosenChatName || !name.trim()}>
-                  {busy ? "Joining…" : "Join chat"} <Icon name="arrow" size={18} />
-                </button>
+                {(pendingNameResult?.kind === "missing" || error) && <button type="submit" className="scan-primary" disabled={busy || !ready || findingChatName || !chosenChatName}>
+                  {busy ? "Joining…" : error ? "Try again" : "Join chat"} <Icon name="arrow" size={18} />
+                </button>}
                 {error && <p className="form-error" role="alert">{error}</p>}
               </form>
               <button type="button" className="text-button" disabled={busy} onClick={() => { setPending(null); setError(""); }}>

@@ -170,8 +170,10 @@ try {
     assert.equal(await input.inputValue(), 'A draft that survives keyboard toggles');
     assert.ok(await page.evaluate(() => document.querySelector('.chat-header-controls') === window.chatControls && window.chatControlButtons.every(button => button.isConnected)), 'Keyboard toggles never replace the controls');
     await resize(430);
-    await page.getByRole('button', { name: chat === 'group' ? 'Group settings' : 'Conversation settings', exact: true }).click();
-    await page.getByRole('button', { name: chat === 'group' ? 'Close group settings' : 'Close profile', exact: true }).click();
+    if (chat === 'group') {
+      await page.getByRole('button', { name: 'Group settings', exact: true }).click();
+      await page.getByRole('button', { name: 'Close group settings', exact: true }).click();
+    } else assert.equal(await page.getByRole('button', { name: 'Conversation settings', exact: true }).count(), 0);
     await resize(844);
     console.log(`PASS: ${chat} keyboard expansion, smooth frames, anchored controls, compact composer, draft retention and settings`);
     await page.getByRole('button', { name: 'Back to chats', exact: true }).click();

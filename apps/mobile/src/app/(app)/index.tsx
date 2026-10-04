@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import type { ChatSnapshot } from '@qr-chat/api';
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from '@qr-chat/domain';
@@ -29,29 +30,28 @@ function useGroupAccessCountdown(expiresAt: string | null) {
 
 function GroupAccessRing({ name, indicator }: { name: string; indicator: ReturnType<typeof groupAccessIndicator> }) {
   const segmentCount = 120;
-  const center = 26;
-  const radius = 33 * 52 / 72;
-  const segmentSize = 3 * 52 / 72;
+  const center = 32;
+  const radius = 33 * 64 / 72;
+  const segmentSize = 3 * 64 / 72;
   return <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={homeStyles.groupIdentity}>
-    <View pointerEvents="none" style={{ position: 'absolute', width: 52, height: 52 }}>
-      <View style={{ position: 'absolute', left: 1.1, top: 1.1, width: 49.8, height: 49.8, borderRadius: 25, borderWidth: segmentSize, borderColor: '#dfe2e8' }} />
+    <View pointerEvents="none" style={{ position: 'absolute', width: 64, height: 64 }}>
+      <View style={{ position: 'absolute', left: 1.3, top: 1.3, width: 61.4, height: 61.4, borderRadius: 32, borderWidth: segmentSize, borderColor: '#dfe2e8' }} />
       {Array.from({ length: segmentCount }, (_, index) => {
         const angle = index / segmentCount * Math.PI * 2 - Math.PI / 2;
         const active = indicator.progress !== null && index / segmentCount < indicator.progress;
         return <View key={index} style={{ position: 'absolute', left: center + radius * Math.cos(angle) - segmentSize / 2, top: center + radius * Math.sin(angle) - segmentSize / 2, width: segmentSize, height: segmentSize, borderRadius: segmentSize / 2, backgroundColor: active ? colors.green : '#dfe2e8' }} />;
       })}
     </View>
-    <View style={homeStyles.groupInitials}><Copy style={homeStyles.name}>{groupInitials(name)}</Copy></View>
+    <View style={homeStyles.groupInitials}><Copy style={[homeStyles.name, { fontSize: 22 }]}>{groupInitials(name)}</Copy></View>
   </View>;
 }
 
 type Friend = ChatSnapshot['friends'][number];
-function RequestRow({ friend, peer, userId, busy, onProfile, onNotice, refresh }: {
+function RequestRow({ friend, peer, userId, busy, onNotice, refresh }: {
   friend: Friend;
   peer: { id: string; name: string; avatarUrl: string | null };
   userId: string | null;
   busy: boolean;
-  onProfile: () => void;
   onNotice: (message: string) => void;
   refresh: () => Promise<void>;
 }) {
@@ -60,6 +60,7 @@ function RequestRow({ friend, peer, userId, busy, onProfile, onNotice, refresh }
   const lock = useRef(false);
   const [pending, setPending] = useState<'accept' | 'remove' | null>(null);
   const incoming = friend.requested_by_id !== userId;
+  const { width } = useWindowDimensions();
   async function respond(kind: 'accept' | 'remove') {
     if (!api || busy || lock.current) return;
     lock.current = true;
@@ -73,21 +74,95 @@ function RequestRow({ friend, peer, userId, busy, onProfile, onNotice, refresh }
     lock.current = false;
   }
   return <View style={homeStyles.requestCard}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`View ${peer.name}'s profile`} onPress={onProfile} style={({ pressed }) => [homeStyles.requestPerson, { opacity: pressed ? 0.7 : 1 }]}>
-      <View style={{ width: 52, height: 52 }}>
-        <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={homeStyles.requestMarker}><Copy style={{ color: '#fff', fontSize: 14, lineHeight: 16 }}>+</Copy></View>
+    <View style={homeStyles.requestMain}>
+      <View style={homeStyles.requestPerson}>
+        <View style={homeStyles.requestIdentity}>
+          <Avatar name={peer.name} url={peer.avatarUrl} size={44} />
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={homeStyles.requestMarker}><Icon name="userPlus" size={13} color="#fff" /></View>
+        </View>
+        <View style={homeStyles.copy}>
+          <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy>
+          <Copy style={[homeStyles.meta, { lineHeight: 18 }]}>{incoming ? 'Sent you a friend request' : 'Friend request sent'}</Copy>
+        </View>
       </View>
-      <View style={homeStyles.copy}>
-        <View style={homeStyles.titleRow}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.name, { flex: 1 }]}>{peer.name}</Copy><Copy style={homeStyles.meta}>{messageAge(Date.parse(friend.requested_at))}</Copy></View>
-        <Copy style={homeStyles.meta}>{incoming ? 'Incoming friend request' : 'Friend request sent'}</Copy>
+      <View style={homeStyles.requestActions}>
+        {incoming && <Pressable accessibilityRole="button" accessibilityLabel={`Accept ${peer.name}'s friend request`} accessibilityState={{ disabled: busy || action.busy, busy: pending === 'accept' }} disabled={busy || action.busy} onPress={() => { void respond('accept'); }} style={({ pressed }) => [homeStyles.requestAction, { backgroundColor: '#3488ff', opacity: busy || action.busy ? 0.5 : pressed ? 0.7 : 1 }]}>
+          {pending === 'accept' ? <ActivityIndicator size="small" color="#fff" accessibilityLabel="Accepting…" /> : <Icon name="check" size={18} color="#fff" />}
+          {width >= 600 && <Copy style={[homeStyles.requestActionText, { color: '#fff' }]}>{pending === 'accept' ? 'Accepting…' : 'Accept'}</Copy>}
+        </Pressable>}
+        <Pressable accessibilityRole="button" accessibilityLabel={incoming ? `Decline ${peer.name}'s friend request` : `Cancel friend request to ${peer.name}`} accessibilityState={{ disabled: busy || action.busy, busy: pending === 'remove' }} disabled={busy || action.busy} onPress={() => { void respond('remove'); }} style={({ pressed }) => [homeStyles.requestAction, { backgroundColor: colors.soft, opacity: busy || action.busy ? 0.5 : pressed ? 0.7 : 1 }]}>
+          {pending === 'remove' ? <ActivityIndicator size="small" color={colors.muted} accessibilityLabel={incoming ? 'Declining…' : 'Cancelling…'} /> : <Icon name="close" size={18} color={colors.muted} />}
+          {width >= 600 && <Copy style={homeStyles.requestActionText}>{pending === 'remove' ? incoming ? 'Declining…' : 'Cancelling…' : incoming ? 'Decline' : 'Cancel'}</Copy>}
+        </Pressable>
       </View>
-    </Pressable>
-    <View style={homeStyles.requestActions}>
-      {incoming && <NativeAction label={pending === 'accept' ? 'Accepting…' : 'Accept'} accessibilityLabel={`Accept ${peer.name}'s friend request`} variant="outlined" disabled={busy || action.busy} onPress={() => respond('accept')} />}
-      <NativeAction label={pending === 'remove' ? incoming ? 'Declining…' : 'Cancelling…' : incoming ? 'Decline' : 'Cancel'} accessibilityLabel={incoming ? `Decline ${peer.name}'s friend request` : `Cancel friend request to ${peer.name}`} variant="text" disabled={busy || action.busy} onPress={() => respond('remove')} />
     </View>
     {!!action.error && <Copy accessibilityRole="alert" accessibilityLiveRegion="polite" style={homeStyles.requestError}>Couldn’t update this request. Try again.</Copy>}
+  </View>;
+
+}
+
+function DirectRow({ friend, peer, open, onReveal, onOpen, children, onNotice, refresh }: {
+  friend: Friend; peer: { name: string }; open: boolean; onReveal: (open: boolean) => void; onOpen: () => void;
+  children: React.ReactNode; onNotice: (message: string) => void; refresh: () => Promise<void>;
+}) {
+  const { api } = useAuth();
+  const action = useAction();
+  const reducedMotion = useReducedMotion();
+  const [offset] = useState(() => new Animated.Value(0));
+  const currentOffset = useRef(0);
+  const dragged = useRef(false);
+  function settle(reveal: boolean) {
+    currentOffset.current = reveal ? 144 : 0;
+    Animated.timing(offset, { toValue: currentOffset.current, duration: reducedMotion ? 0 : 240, easing: Easing.bezier(0.22, 1, 0.36, 1), useNativeDriver: true }).start();
+  }
+  useEffect(() => {
+    currentOffset.current = open ? 144 : 0;
+    Animated.timing(offset, { toValue: currentOffset.current, duration: reducedMotion ? 0 : 240, easing: Easing.bezier(0.22, 1, 0.36, 1), useNativeDriver: true }).start();
+  }, [open, offset, reducedMotion]);
+  // PanResponder registers callbacks; it does not read their refs during render.
+  // eslint-disable-next-line react-hooks/refs
+  const responder = PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) => !action.busy && Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.3 && (open || gesture.dx < 0),
+    onPanResponderGrant: () => { dragged.current = true; offset.stopAnimation(); },
+    onPanResponderMove: (_, gesture) => {
+      currentOffset.current = Math.max(0, Math.min(144, (open ? 144 : 0) - gesture.dx));
+      offset.setValue(currentOffset.current);
+    },
+    onPanResponderRelease: () => { const reveal = currentOffset.current >= 72; settle(reveal); onReveal(reveal); },
+    onPanResponderTerminate: () => settle(open),
+  });
+  function confirm(kind: 'unfriend' | 'block') {
+    if (action.busy || !api) return;
+    Alert.alert(`${kind === 'block' ? 'Block' : 'Unfriend'} ${peer.name}?`, kind === 'block'
+      ? 'This ends your friendship and prevents new friend requests between you.'
+      : 'This ends your friendship and removes this conversation.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: kind === 'block' ? 'Block' : 'Unfriend', style: 'destructive', onPress: () => { void action.run(async () => {
+        await (kind === 'block' ? api.blockFriend : api.removeFriend)(friend.id);
+        await refresh();
+        onNotice(kind === 'block' ? `Blocked ${peer.name}.` : `You and ${peer.name} are no longer friends.`);
+        onReveal(false);
+      }); } },
+    ]);
+  }
+  return <View style={{ overflow: 'hidden', borderRadius: 14 }} {...responder.panHandlers}>
+    <Animated.View style={{ backgroundColor: colors.paper, transform: [{ translateX: Animated.multiply(offset, -1) }] }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Open direct message with ${peer.name}`} accessibilityActions={[{ name: 'showActions', label: 'Show Unfriend and Block actions' }, { name: 'dismiss', label: 'Close actions' }]}
+        onAccessibilityAction={({ nativeEvent }) => onReveal(nativeEvent.actionName === 'showActions')}
+        onPressIn={() => { dragged.current = false; }} onPress={() => {
+          if (dragged.current) return;
+          if (open) onReveal(false); else onOpen();
+        }} style={({ pressed }) => [homeStyles.dmRow, { opacity: pressed ? 0.7 : 1 }]}>{children}</Pressable>
+    </Animated.View>
+    <View accessibilityElementsHidden={!open} importantForAccessibility={open ? 'auto' : 'no-hide-descendants'} pointerEvents={open ? 'auto' : 'none'} style={homeStyles.dmActions}>
+      {(['unfriend', 'block'] as const).map((kind, index) => <Animated.View key={kind} style={{ transform: [{ scale: offset.interpolate({ inputRange: [index === 0 ? 48 : 0, index === 0 ? 144 : 96], outputRange: [0, 1], extrapolate: 'clamp' }) }] }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${kind === 'block' ? 'Block' : 'Unfriend'} ${peer.name}`} accessibilityState={{ disabled: action.busy, busy: action.busy }} disabled={action.busy} onPress={() => confirm(kind)} style={({ pressed }) => [homeStyles.dmAction, { opacity: action.busy ? 0.5 : pressed ? 0.7 : 1 }]}>
+          <View style={[homeStyles.dmActionCircle, { backgroundColor: kind === 'block' ? '#e92848' : '#64717b' }]}>{action.busy ? <ActivityIndicator size="small" color="#fff" /> : <Icon name={kind === 'block' ? 'block' : 'userMinus'} size={24} color="#fff" />}</View>
+          <Copy selectable={false} style={homeStyles.dmActionLabel}>{kind === 'block' ? 'Block' : 'Unfriend'}</Copy>
+        </Pressable>
+      </Animated.View>)}
+    </View>
+    {!!action.error && <Copy accessibilityRole="alert" accessibilityLiveRegion="polite" style={homeStyles.requestError}>Couldn’t update this friendship. Try again.</Copy>}
   </View>;
 }
 
@@ -96,6 +171,8 @@ export default function ChatsScreen() {
   const { userId } = useAuth();
   const action = useAction();
   const [search, setSearch] = useState('');
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [notice, setNotice] = useState('');
   const groupId = chat.group?.id;
   const [expiryNotice, setExpiryNotice] = useState({ groupId, dismissed: false });
@@ -109,6 +186,7 @@ export default function ChatsScreen() {
   const query = search.trim().toLocaleLowerCase();
   const group = chat.group;
   const latestGroupMessage = group?.messages.at(-1);
+  const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
   const acceptedFriends = useMemo(() => chat.friends.filter((friend) => friend.accepted_at !== null), [chat.friends]);
   const pendingRequests = useMemo(() => chat.friends.filter((friend) => friend.accepted_at === null), [chat.friends]);
   const peerFor = (friend: Friend) => {
@@ -131,11 +209,6 @@ export default function ChatsScreen() {
     .sort((left, right) => Date.parse(right.requested_at) - Date.parse(left.requested_at));
   const hasMatches = groupMatches || visibleRequests.length > 0 || visibleFriends.length > 0;
 
-  function openProfile(friend: typeof chat.friends[number]) {
-    const peerId = friend.user_a_id === userId ? friend.user_b_id : friend.user_a_id;
-    router.push({ pathname: '/person/[id]', params: { id: peerId } });
-  }
-
   function openDirectMessage(friend: typeof chat.friends[number]) {
     router.push({ pathname: '/direct/[id]', params: { id: friend.id } });
   }
@@ -149,10 +222,10 @@ export default function ChatsScreen() {
           <View style={[homeStyles.connectionDot, { backgroundColor: chat.connection === 'connected' ? colors.green : '#919aac' }]} />
         </Pressable>
       </View>
-      <View style={homeStyles.search}>
+      <View style={[homeStyles.search, searchFocused && { borderColor: '#668ac0' }]}>
         <Icon name="search" size={20} color={colors.muted} />
-        <TextInput accessibilityLabel="Search chats and people by name" placeholder="Search chats and people..." placeholderTextColor={colors.muted} value={search} onChangeText={setSearch} editable={chat.ready && !chat.error} returnKeyType="search" style={homeStyles.searchInput} />
-        {!!search && <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} style={homeStyles.clearSearch}><Icon name="close" size={18} color={colors.muted} /></Pressable>}
+        <TextInput accessibilityLabel="Search chats and people by name" placeholder="Search chats and people..." placeholderTextColor={colors.muted} value={search} onChangeText={(value) => { setSearch(value); setRevealedId(null); }} editable={chat.ready && !chat.error} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} autoCapitalize="none" autoCorrect={false} returnKeyType="search" style={homeStyles.searchInput} />
+        <View style={homeStyles.clearSearch}>{!!search && <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} style={homeStyles.clearSearch}><Icon name="close" size={18} color={colors.muted} /></Pressable>}</View>
       </View>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={homeStyles.list} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} alwaysBounceVertical={false} keyboardShouldPersistTaps="handled">
@@ -168,29 +241,34 @@ export default function ChatsScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Dismiss group access notice" onPress={() => setExpiryNotice({ groupId, dismissed: true })} style={homeStyles.clearSearch}><Icon name="close" size={18} color={colors.muted} /></Pressable>
         </View>}
         {group && groupMatches && <Pressable accessibilityRole="button" accessibilityLabel={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}. ${accessIndicator.accessibilityLabel}`} onPress={() => router.push(roomRoute(group))} style={({ pressed }) => [homeStyles.groupCard, { opacity: pressed ? 0.7 : 1 }]}>
-          <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
-          <View style={homeStyles.copy}>
-            <View style={homeStyles.titleRow}>
+          <View style={homeStyles.groupAvatar}>
+            <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
+            <Copy style={[homeStyles.expiry, accessIndicator.state === 'remaining' && { color: '#07883d' }]}>{accessIndicator.label}</Copy>
+          </View>
+          <View style={[homeStyles.copy, { alignSelf: 'flex-start' }]}>
+            <View style={[homeStyles.titleRow, { alignItems: 'center' }]}>
               <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.name, { flex: 1 }]}>{group.venue.name}</Copy>
-              {latestGroupMessage && <Copy style={homeStyles.meta}>{messageAge(latestGroupMessage.time)}</Copy>}
+              <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={homeStyles.memberCount}><Copy style={homeStyles.memberNumber}>{group.members.length}</Copy><Icon name="group" size={18} color={colors.muted} /></View>
             </View>
-            <Copy style={homeStyles.meta}>Group · {group.members.length} {group.members.length === 1 ? 'member' : 'members'}</Copy>
-            <Copy style={[homeStyles.meta, { fontWeight: '600' }]}>{accessIndicator.state === 'remaining' ? `Access ends in ${accessIndicator.label.replace(' left', '')}` : accessIndicator.label}</Copy>
-            <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.preview}>{latestGroupMessage ? `${latestGroupMessage.user === userId ? 'You' : latestGroupMessage.name}: ${latestGroupMessage.text}` : 'You’re in. Say hello.'}</Copy>
+            <View style={homeStyles.groupMeta}>
+              <Copy numberOfLines={1} style={[homeStyles.meta, { flexShrink: 1, lineHeight: 18 }]}>{latestGroupMessage ? latestGroupMessage.user === userId ? 'You' : latestGroupMessage.name : chat.session?.name || 'You'}</Copy>
+              {latestGroupMessage && <><Copy style={[homeStyles.meta, { lineHeight: 18 }]}>·</Copy><Copy style={[homeStyles.meta, { lineHeight: 18 }]}>{groupMessageAge === 'Now' ? 'Now' : `${groupMessageAge} ago`}</Copy></>}
+            </View>
+            <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.preview, { lineHeight: 18 }]}>{latestGroupMessage ? latestGroupMessage.text : 'You’re in. Say hello.'}</Copy>
           </View>
         </Pressable>}
-        {visibleRequests.map((friend) => <RequestRow key={friend.id} friend={friend} peer={peerFor(friend)} userId={userId} busy={action.busy} onProfile={() => openProfile(friend)} onNotice={setNotice} refresh={chat.refresh} />)}
+        {visibleRequests.map((friend) => <RequestRow key={friend.id} friend={friend} peer={peerFor(friend)} userId={userId} busy={action.busy} onNotice={setNotice} refresh={chat.refresh} />)}
         {visibleFriends.map((friend) => {
           const peer = peerFor(friend);
           const preview = chat.directPreviews[friend.id];
           const failed = !preview || preview.status === 'error';
           const message = preview?.status === 'ready' ? preview.message : null;
           return <View key={friend.id}>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Open direct message with ${peer.name}`} onPress={() => openDirectMessage(friend)} style={({ pressed }) => [homeStyles.dmRow, { opacity: pressed ? 0.7 : 1 }]}>
+            <DirectRow friend={friend} peer={peer} open={revealedId === friend.id} onReveal={(open) => setRevealedId(open ? friend.id : null)} onOpen={() => openDirectMessage(friend)} refresh={chat.refresh} onNotice={setNotice}>
               <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
               <View style={homeStyles.copy}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.preview}>{failed ? 'Preview unavailable' : directMessagePreview(message, userId)}</Copy></View>
               {message && <Copy style={[homeStyles.meta, { alignSelf: 'flex-start', paddingTop: 2 }]}>{messageAge(Date.parse(message.created_at))}</Copy>}
-            </Pressable>
+            </DirectRow>
             {failed && <View style={{ marginLeft: 80 }}><NativeAction label="Retry" accessibilityLabel={`Retry loading message preview for ${peer.name}`} variant="text" disabled={action.busy} onPress={() => action.run(chat.refresh)} align="flex-start" /></View>}
           </View>;
         })}
@@ -215,8 +293,8 @@ const homeStyles = StyleSheet.create({
   header: { paddingHorizontal: 22 },
   title: { fontSize: 38, lineHeight: 46, fontWeight: '700', letterSpacing: -1.2 },
   connectionDot: { position: 'absolute', right: 2, bottom: 1, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: colors.paper },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44, paddingLeft: 16, paddingRight: 6, borderRadius: 17, backgroundColor: colors.soft, marginBottom: 16 },
-  searchInput: { flex: 1, minWidth: 0, minHeight: 44, paddingVertical: 0, color: colors.ink, fontSize: 14 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingLeft: 16, paddingRight: 2, borderWidth: 1, borderColor: colors.line, borderRadius: 24, backgroundColor: colors.soft, marginBottom: 16 },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 46, padding: 0, color: colors.ink, fontSize: 16 },
   clearSearch: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: 22, paddingBottom: 100, gap: 8 },
   copy: { flex: 1, minWidth: 0, gap: 2 },
@@ -224,14 +302,27 @@ const homeStyles = StyleSheet.create({
   name: { minWidth: 0, fontSize: 18, lineHeight: 24, fontWeight: '600' },
   meta: { fontSize: 13, lineHeight: 20, color: colors.muted },
   preview: { fontSize: 15, lineHeight: 21, color: colors.muted },
-  groupCard: { flexDirection: 'row', alignItems: 'center', minHeight: 104, padding: 12, gap: 16, borderRadius: 14, backgroundColor: colors.blue },
-  groupIdentity: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  groupInitials: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' },
-  requestCard: { padding: 12, gap: 8, borderRadius: 14, backgroundColor: colors.soft },
-  requestPerson: { flexDirection: 'row', alignItems: 'center', minHeight: 52, gap: 16 },
-  requestMarker: { position: 'absolute', right: -2, bottom: -2, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.soft, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  requestActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  groupCard: { flexDirection: 'row', alignItems: 'center', minHeight: 98, padding: 12, gap: 14, borderWidth: 1, borderColor: '#e6e8ed', borderRadius: 20, backgroundColor: colors.paper },
+  groupAvatar: { position: 'relative', width: 74, height: 72, alignItems: 'center' },
+  expiry: { position: 'absolute', bottom: 0, maxWidth: 74, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 9, backgroundColor: '#e6e8ed', fontSize: 11, lineHeight: 14, fontWeight: '600', color: colors.muted, textAlign: 'center' },
+  groupMeta: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  memberCount: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 24, paddingHorizontal: 10, borderRadius: 16, backgroundColor: colors.soft },
+  memberNumber: { fontSize: 14, lineHeight: 18, fontWeight: '500', color: colors.muted },
+  groupIdentity: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  groupInitials: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.soft, alignItems: 'center', justifyContent: 'center' },
+  requestCard: { padding: 12, gap: 8, borderWidth: 1, borderColor: '#e6e8ed', borderRadius: 20, backgroundColor: colors.paper },
+  requestMain: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  requestIdentity: { width: 44, height: 44, borderRadius: 22, boxShadow: '0 0 0 3px #edf4ff' },
+  requestPerson: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', minHeight: 52, gap: 8 },
+  requestMarker: { position: 'absolute', right: -2, bottom: -2, width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.paper, backgroundColor: '#3488ff', alignItems: 'center', justifyContent: 'center' },
+  requestActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  requestAction: { minWidth: 44, minHeight: 44, paddingHorizontal: 12, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  requestActionText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.muted },
   requestError: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  dmActions: { position: 'absolute', top: 0, right: 0, width: 144, height: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12, paddingRight: 6 },
+  dmAction: { width: 60, minHeight: 64, alignItems: 'center', gap: 3 },
+  dmActionCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  dmActionLabel: { fontSize: 11, lineHeight: 16, color: colors.muted },
   dmRow: { flexDirection: 'row', alignItems: 'center', minHeight: 72, paddingVertical: 10, paddingHorizontal: 12, gap: 16, borderRadius: 14 },
   accessNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12 },
   empty: { paddingVertical: 24, paddingHorizontal: 12, alignItems: 'center', gap: 8 },

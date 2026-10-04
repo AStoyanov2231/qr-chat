@@ -36,7 +36,7 @@ export default function RoomScreen() {
 
   return <View style={{ flex: 1 }}>
     <Stack.Screen options={{ title, headerShown: false, statusBarStyle: 'light' }} />
-    <ConversationHeader title={title} subtitle={`${group?.members.length ?? 0} ${group?.members.length === 1 ? 'member' : 'members'}`} imageUrl={group && photo?.code === code ? photo?.url : null} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)} />
+    <ConversationHeader title={title} imageUrl={group && photo?.code === code ? photo?.url : null} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)} />
     <Conversation
       composerLabel={`Message ${title}`}
       avatars key={groupId ?? 'ended'} messages={group?.messages ?? []} userId={userId!}

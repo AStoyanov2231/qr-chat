@@ -12,4 +12,7 @@ node_modules/
 !/supabase/migrations/20261002170940_chat_traffic_optimization.sql
 !/supabase/migrations/20261002174918_chat_overview_preview.sql
 !/supabase/migrations/20261003004032_profile_change_sync.sql
+!/supabase/migrations/20261004234413_block_friend_connection.sql
 /supabase/.temp/
+
+commands.md

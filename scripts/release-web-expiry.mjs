@@ -41,7 +41,7 @@ try {
  await page.getByRole('button',{name:'Send direct message',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('#direct-message')?.value==='');
  await page.getByText('web-after-expiry-dm-01',{exact:true}).waitFor();
- await page.getByText('Friend',{exact:true}).waitFor({timeout:45000});
+ assert.equal(await page.locator('.chat-header-title p').count(),0);
  await page.screenshot({path:'/private/tmp/qr-chat-release-evidence/web-expired-retained-dm.png'});
  writeFileSync('/private/tmp/qr-chat-release-evidence/web-expiry.json',JSON.stringify({pass:true,userId:user.id,observedAt,groupBodiesCleared:true,composerRemoved:true,serverReadCount:0,serverWriteRejected:true,acceptedFriendsRetained:2,directMessageSent:'web-after-expiry-dm-01'},null,2));
  console.log('PASS own expiry clears private group UI without reload, server denies group access, accepted DMs remain usable.');

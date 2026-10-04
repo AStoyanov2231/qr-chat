@@ -2,7 +2,7 @@
 
 import type { ChatSnapshot } from "@qr-chat/api";
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from "@qr-chat/domain";
-import { MagnifyingGlass, X } from "@phosphor-icons/react";
+import { Check, MagnifyingGlass, Prohibit, UserMinus, UserPlus, Users, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Avatar } from "./avatar";
 
@@ -31,9 +31,10 @@ type ReadyProps = HeaderProps & {
   onScan: (event: MouseEvent<HTMLButtonElement>) => void;
   onOpenGroup: (groupId: string) => void;
   onOpenDirect: (friendId: string) => void;
-  onOpenProfile: (userId: string) => void;
   onAcceptRequest: (friendId: string) => Promise<void>;
   onRemoveRequest: (friendId: string) => Promise<void>;
+  onUnfriend: (friendId: string) => Promise<void>;
+  onBlock: (friendId: string) => Promise<void>;
 };
 
 function LoadingRow() {
@@ -66,7 +67,7 @@ function ChatsLoading(props: HeaderProps) {
       <div className="chat-search-field skeleton-block" aria-hidden="true" />
       <div className="chat-list-scroll">
         <div className="group-card-skeleton" aria-hidden="true"><LoadingRow /></div>
-        <div className="request-card-skeleton" aria-hidden="true"><LoadingRow /><i className="skeleton-block request-loading-actions" /></div>
+        <div className="request-card-skeleton" aria-hidden="true"><LoadingRow /></div>
         {[0, 1, 2].map((item) => <LoadingRow key={item} />)}
         <p className="loading-chats-label" role="status">Loading chats…</p>
       </div>
@@ -110,12 +111,11 @@ export function chatNameMatches(name: string, query: string): boolean {
   return !normalizedQuery || name.toLocaleLowerCase().includes(normalizedQuery);
 }
 
-function RequestRow({ friend, peer, incoming, busy, onOpenProfile, onAccept, onRemove, onNotice }: {
+function RequestRow({ friend, peer, incoming, busy, onAccept, onRemove, onNotice }: {
   friend: FriendConnection;
   peer: Peer;
   incoming: boolean;
   busy: boolean;
-  onOpenProfile: (userId: string) => void;
   onAccept: (friendId: string) => Promise<void>;
   onRemove: (friendId: string) => Promise<void>;
   onNotice: (message: string) => void;
@@ -139,25 +139,101 @@ function RequestRow({ friend, peer, incoming, busy, onOpenProfile, onAccept, onR
     }
   }
   return <li className="friend-request-row" aria-busy={pending !== null}>
-    <button type="button" className="request-person" onClick={() => onOpenProfile(peer.id)} aria-label={`View ${peer.name}'s profile`}>
-      <span className="request-identity"><Avatar name={peer.name} url={peer.avatarUrl} size={52} /><span className="request-marker" aria-hidden="true">+</span></span>
+    <div className="request-person">
+      <span className="request-identity"><Avatar name={peer.name} url={peer.avatarUrl} size={44} /><span className="request-marker" aria-hidden="true"><UserPlus size={13} weight="fill" /></span></span>
       <span className="request-copy">
-        <span className="request-title-row"><strong>{peer.name}</strong><time dateTime={friend.requested_at}>{messageAge(Date.parse(friend.requested_at))}</time></span>
-        <small>{incoming ? "Incoming friend request" : "Friend request sent"}</small>
+        <strong>{peer.name}</strong>
+        <small>{incoming ? "Sent you a friend request" : "Friend request sent"}</small>
       </span>
-    </button>
-    <div className="request-actions">
-      {incoming && <button type="button" className="request-action" disabled={busy || !!pending} onClick={() => void respond("accept")} aria-label={`Accept ${peer.name}'s friend request`}>{pending === "accept" ? "Accepting…" : "Accept"}</button>}
+    </div>
+    <div className="request-actions" role="group" aria-label={pending ? pending === "accept" ? "Accepting…" : incoming ? "Declining…" : "Cancelling…" : "Friend request actions"}>
+      {incoming && <button type="button" className="request-action" disabled={busy || !!pending} onClick={() => void respond("accept")} aria-label={pending === "accept" ? `Accepting ${peer.name}'s friend request` : `Accept ${peer.name}'s friend request`}><Check size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending === "accept" ? "Accepting…" : "Accept"}</span></button>}
       <button type="button" className="request-action quiet" disabled={busy || !!pending} onClick={() => void respond("remove")} aria-label={incoming ? `Decline ${peer.name}'s friend request` : `Cancel friend request to ${peer.name}`}>
-        {pending === "remove" ? incoming ? "Declining…" : "Cancelling…" : incoming ? "Decline" : "Cancel"}
+        <X size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending === "remove" ? incoming ? "Declining…" : "Cancelling…" : incoming ? "Decline" : "Cancel"}</span>
       </button>
     </div>
     {error && <p className="request-error" role="alert">{error}</p>}
   </li>;
 }
 
+function DirectRow({ peer, id, children, open, onReveal, onOpen, busy, onUnfriend, onBlock, onNotice }: {
+  peer: Peer; id: string; children: React.ReactNode; open: boolean; onReveal: (open: boolean) => void;
+  onOpen: () => void; busy: boolean; onUnfriend: (id: string) => Promise<void>; onBlock: (id: string) => Promise<void>; onNotice: (message: string) => void;
+}) {
+  const gesture = useRef<{ x: number; y: number; start: number; moved: boolean } | null>(null);
+  const lock = useRef(false);
+  const suppressClick = useRef(false);
+  const [drag, setDrag] = useState<number | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const offset = drag ?? (open ? 144 : 0);
+  async function respond(kind: 'unfriend' | 'block') {
+    if (lock.current || busy) return;
+    if (!window.confirm(kind === 'block' ? `Block ${peer.name}? This ends your friendship and prevents new friend requests between you.` : `Unfriend ${peer.name}? This ends your friendship and removes this conversation.`)) return;
+    lock.current = true;
+    setPending(true);
+    setError('');
+    try {
+      await (kind === 'block' ? onBlock : onUnfriend)(id);
+      onNotice(kind === 'block' ? `Blocked ${peer.name}.` : `You and ${peer.name} are no longer friends.`);
+      onReveal(false);
+    } catch {
+      setError('Couldn’t update this friendship. Try again.');
+    } finally { lock.current = false; setPending(false); }
+  }
+  function finish(cancelled = false) {
+    const current = gesture.current;
+    gesture.current = null;
+    if (!current?.moved) return;
+    suppressClick.current = true;
+    onReveal(cancelled ? open : offset >= 72);
+    setDrag(null);
+  }
+  return <div className={`dm-swipe-row ${drag !== null ? 'dragging' : ''}`} aria-busy={pending}
+    onPointerDown={(event) => {
+      if (event.button !== 0 || pending || (event.target as Element).closest('.dm-swipe-actions')) return;
+      suppressClick.current = false;
+      gesture.current = { x: event.clientX, y: event.clientY, start: open ? 144 : 0, moved: false };
+    }}
+    onPointerMove={(event) => {
+      const current = gesture.current;
+      if (!current) return;
+      const dx = event.clientX - current.x;
+      const dy = event.clientY - current.y;
+      if (!current.moved) {
+        if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) { gesture.current = null; return; }
+        if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) || (!open && dx > 0)) return;
+        current.moved = true;
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+      setDrag(Math.max(0, Math.min(144, current.start - dx)));
+    }}
+    onPointerUp={() => finish()} onPointerCancel={() => finish(true)}
+    onKeyDown={(event) => {
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Escape') {
+        event.preventDefault(); onReveal(event.key === 'ArrowLeft');
+      }
+    }}>
+    <button type="button" className="dm-row-open" style={{ transform: `translateX(${-offset}px)` }} onClick={() => {
+      if (suppressClick.current) { suppressClick.current = false; return; }
+      if (open) onReveal(false); else onOpen();
+    }} aria-label={`Open direct message with ${peer.name}`} aria-expanded={open}>
+      {children}
+    </button>
+    <div className="dm-swipe-actions" aria-hidden={!open} inert={!open}>
+      {(['unfriend', 'block'] as const).map((kind, index) => <button key={kind} type="button" className={`dm-swipe-action ${kind}`} disabled={busy || pending} aria-label={`${kind === 'block' ? 'Block' : 'Unfriend'} ${peer.name}`} onClick={() => void respond(kind)}
+        style={{ transform: `scale(${Math.max(0, Math.min(1, (offset - (index === 0 ? 48 : 0)) / 96))})` }}>
+        <span className="dm-action-circle">{kind === 'block' ? <Prohibit size={24} weight="bold" /> : <UserMinus size={24} weight="fill" />}</span>
+        <span>{kind === 'block' ? 'Block' : 'Unfriend'}</span>
+      </button>)}
+    </div>
+    {error && <p className="request-error" role="alert">{error}</p>}
+  </div>;
+}
+
 export function ChatsOverview(props: LoadingProps | ReadyProps) {
   const [search, setSearch] = useState("");
+  const [revealedId, setRevealedId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const groupId = !props.loading ? props.group?.id : undefined;
   const [expiryNotice, setExpiryNotice] = useState({ groupId, dismissed: false });
@@ -188,9 +264,10 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     onScan,
     onOpenGroup,
     onOpenDirect,
-    onOpenProfile,
     onAcceptRequest,
     onRemoveRequest,
+    onUnfriend,
+    onBlock,
   } = props;
   const query = normalizedSearch;
   const accepted = friends.filter((friend): friend is AcceptedFriend => friend.accepted_at !== null);
@@ -214,6 +291,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     .sort((left, right) => Date.parse(right.friend.requested_at) - Date.parse(left.friend.requested_at));
   const hasSearchMatches = groupMatches || requestPeers.length > 0 || visibleFriends.length > 0;
   const latestGroupMessage = group?.messages.at(-1);
+  const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
 
   return (
     <section className="chats-view">
@@ -221,7 +299,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
       <div className="chat-search-field">
         <MagnifyingGlass size={20} aria-hidden="true" />
         <label className="sr-only" htmlFor="chat-search">Search chats and people by name</label>
-        <input id="chat-search" type="search" placeholder="Search chats and people..." value={search} onChange={(event) => setSearch(event.target.value)} disabled={!!error} />
+        <input id="chat-search" type="search" autoCapitalize="none" autoCorrect="off" placeholder="Search chats and people..." value={search} onChange={(event) => { setSearch(event.target.value); setRevealedId(null); }} disabled={!!error} />
         {search && <button type="button" className="clear-chat-search" aria-label="Clear chat search" onClick={() => setSearch("")}><X size={18} /></button>}
       </div>
 
@@ -254,22 +332,21 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                       </svg>
                       <span className="group-initials">{groupInitials(group.venue.name)}</span>
                     </span>
+                    <span className={`group-expiry ${accessIndicator.state}`}>{accessIndicator.label}</span>
                   </span>
                   <span className="group-copy">
                     <span className="group-title-row">
                       <strong>{group.venue.name}</strong>
-                      {latestGroupMessage && <time dateTime={new Date(latestGroupMessage.time).toISOString()}>{messageAge(latestGroupMessage.time)}</time>}
+                      <span className="group-member-count" aria-hidden="true">{group.members.length}<Users size={18} weight="fill" /></span>
                     </span>
                     <span className="group-meta">
-                      <span>Group · {group.members.length} {group.members.length === 1 ? "member" : "members"}</span>
-                    </span>
-                    <span className="group-meta">
-                      <span className={`group-expiry ${accessIndicator.state}`}>{accessIndicator.state === "remaining" ? `Access ends in ${accessIndicator.label.replace(" left", "")}` : accessIndicator.label}</span>
+                      <span className="group-author">{latestGroupMessage ? latestGroupMessage.user === sessionId ? "You" : latestGroupMessage.name : props.profileName || "You"}</span>
+                      {latestGroupMessage && <><span aria-hidden="true">·</span><time dateTime={new Date(latestGroupMessage.time).toISOString()}>{groupMessageAge === "Now" ? "Now" : `${groupMessageAge} ago`}</time></>}
                     </span>
                     <span className="group-preview-row">
                       <span className="group-preview">
                       {latestGroupMessage
-                        ? `${latestGroupMessage.user === sessionId ? "You" : latestGroupMessage.name}: ${latestGroupMessage.text}`
+                        ? latestGroupMessage.text
                         : "You’re in. Say hello."}
                       </span>
                     </span>
@@ -277,7 +354,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                 </span>
               </button>
             </li>}
-            {requestPeers.map(({ friend, peer, incoming }) => <RequestRow key={friend.id} friend={friend} peer={peer} incoming={incoming} busy={busy} onOpenProfile={onOpenProfile} onAccept={onAcceptRequest} onRemove={onRemoveRequest} onNotice={setNotice} />)}
+            {requestPeers.map(({ friend, peer, incoming }) => <RequestRow key={friend.id} friend={friend} peer={peer} incoming={incoming} busy={busy} onAccept={onAcceptRequest} onRemove={onRemoveRequest} onNotice={setNotice} />)}
               {visibleFriends.map(({ id, peer }) => {
                 const preview = directPreviews[id];
                 const failed = !preview || preview.status === "error";
@@ -285,7 +362,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                 const age = message ? messageAge(Date.parse(message.created_at)) : null;
                 return (
                   <li className="dm-list-item" key={id}>
-                    <button type="button" className="dm-row-open" onClick={() => onOpenDirect(id)} aria-label={`Open direct message with ${peer.name}`}>
+                    <DirectRow peer={peer} id={id} open={revealedId === id} onReveal={(open) => setRevealedId(open ? id : null)} onOpen={() => onOpenDirect(id)} busy={busy} onUnfriend={onUnfriend} onBlock={onBlock} onNotice={setNotice}>
                       <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
                       <span className="dm-copy">
                         <strong>{peer.name}</strong>
@@ -294,7 +371,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                         </span>
                       </span>
                       {age && <time dateTime={message?.created_at}>{age}</time>}
-                    </button>
+                    </DirectRow>
                     {failed && <button type="button" className="preview-retry" disabled={busy} onClick={onRetry} aria-label={`Retry loading message preview for ${peer.name}`}>Retry</button>}
                   </li>
                 );
