@@ -22,6 +22,8 @@ const client = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.
 const auth = await client.auth.signInWithPassword({ email: user.email, password: user.password });
 assert.equal(auth.error, null, auth.error?.message);
 const api = createChatApi(client);
+const longName = 'Release participant with a maximum length name'.padEnd(50, 'x');
+await api.saveProfile({ display_name: longName });
 const previous = await api.joinNamedGroup(`qrchat-release-lifecycle-old-${user.id}`, 'Previous Release Room');
 const browser = await chromium.launch({ channel: 'chromium', headless: true, args: ['--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${output}/camera-lifecycle.y4m`] });
 try {
@@ -54,20 +56,20 @@ try {
   const tracks = await page.locator('video').evaluate((element) => element.srcObject?.getVideoTracks().map((track) => track.readyState));
   assert.deepEqual(tracks, ['live'], 'New scanner must retain its own live media stream after old cleanup');
   await page.screenshot({ path: `${output}/web-camera-reopened.png` });
-  await page.getByLabel('Your name', { exact: true }).waitFor({ timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('#chat-name') || document.querySelector('#message'), undefined, { timeout: 15000 });
+  assert.equal(await page.getByLabel('Your name', { exact: true }).count(), 0);
   await page.screenshot({ path: `${output}/web-camera-reopened-decoded.png` });
-  await page.getByText('Joining this room leaves your current group.', { exact: true }).waitFor();
-  const longName = 'Release participant with a maximum length name'.padEnd(50, 'x');
   const longTitle = 'Release switching room with a long conversation title '.repeat(2).slice(0, 100);
-  await page.getByLabel('Your name', { exact: true }).fill(longName);
-  await page.waitForFunction(() => document.querySelector('#chat-name') || [...document.querySelectorAll('button')].some((button) => button.textContent.includes('Join chat') && !button.disabled));
-  if (await page.getByLabel('Chat name', { exact: true }).count()) await page.getByLabel('Chat name', { exact: true }).fill(longTitle);
-  await page.getByRole('button', { name: 'Join chat', exact: false }).click();
+  if (await page.getByLabel('Chat name', { exact: true }).count()) {
+    await page.getByText('Joining this room leaves your current group.', { exact: true }).waitFor();
+    await page.getByLabel('Chat name', { exact: true }).fill(longTitle);
+    await page.getByRole('button', { name: 'Join chat', exact: false }).click();
+  }
   await page.getByLabel('Message', { exact: true }).waitFor({ timeout: 45000 });
   const current = await api.currentMembership();
   assert.notEqual(current.group_id, previous.group_id);
   await twin.bringToFront();
-  await twin.getByText(longTitle, { exact: true }).waitFor({ timeout: 45000 });
+  await twin.getByText(current.qr_groups.qr_codes.display_name, { exact: true }).waitFor({ timeout: 45000 });
   assert.equal(await twin.getByText('Previous Release Room', { exact: true }).count(), 0);
   await page.bringToFront();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -78,7 +80,8 @@ try {
   await page.getByLabel('Message', { exact: true }).waitFor({ timeout: 45000 });
   assert.equal((await api.currentMembership()).group_id, current.group_id);
   assert.equal((await api.members(current.group_id)).length, 1);
-  const result = { pass: true, closeToReopenMs: reopenedAt - closedAt, observedAfterMs: 650, tracks, realQrDecoded: true, groupSwitchConverged: true, sameCodeScanReopensWithoutDuplicate: true, maxTitleLength: longTitle.length, maxNameLength: longName.length, timestamp: new Date().toISOString() };
+  assert.equal((await api.profile()).display_name, longName);
+  const result = { pass: true, closeToReopenMs: reopenedAt - closedAt, observedAfterMs: 650, tracks, realQrDecoded: true, groupSwitchConverged: true, sameCodeScanReopensWithoutDuplicate: true, maxTitleLength: current.qr_groups.qr_codes.display_name.length, maxNameLength: longName.length, profileNameUnchanged: true, timestamp: new Date().toISOString() };
   writeFileSync(`${output}/camera-lifecycle.json`, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } finally {

@@ -54,6 +54,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
   const [directRows, setDirectRows] = useState(() => sampleDirectMessages(initialTime));
   const [directId, setDirectId] = useState<string | null>(null);
   const photoUrls = useRef<string[]>([]);
+  const blockedPeers = useRef(new Set<string>());
   useEffect(() => () => { photoUrls.current.forEach((url) => URL.revokeObjectURL(url)); }, []);
 
   useEffect(() => {
@@ -91,7 +92,13 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
     async leaveGroup() { setSnapshot((current) => ({ ...current, group: null, expiresAt: null })); },
     async acceptFriend(id) { setSnapshot((current) => ({ ...current, friends: current.friends.map((friend) => friend.id === id ? { ...friend, accepted_at: new Date().toISOString() } : friend) })); },
     async removeFriend(id) { setSnapshot((current) => ({ ...current, friends: current.friends.filter((friend) => friend.id !== id) })); },
+    async blockFriend(id) {
+      const friend = snapshot.friends.find((friend) => friend.id === id);
+      if (friend) blockedPeers.current.add(friend.user_b_id);
+      setSnapshot((current) => ({ ...current, friends: current.friends.filter((friend) => friend.id !== id) }));
+    },
     async requestFriend(id) {
+      if (blockedPeers.current.has(id)) throw new Error("This friendship is unavailable.");
       const member = snapshot.group?.members.find((member) => member.id === id);
       if (!member || snapshot.friends.some((friend) => friend.user_b_id === id)) return;
       setSnapshot((current) => ({ ...current, friends: [...current.friends, {

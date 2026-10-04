@@ -16,7 +16,7 @@ const Avatar = ({ name, url, size = 44 }) => React.createElement('span', {
   style: { width: size, height: size },
 }, url ? React.createElement('img', { src: url, alt: '' }) : name.slice(0, 2).toUpperCase());
 const Icon = ({ name }) => React.createElement('span', { 'data-icon': name, 'aria-hidden': 'true' });
-const icons = Object.fromEntries(['ArrowRight', 'ChatCircle', 'DeviceMobile', 'Globe', 'QrCode', 'Users', 'CaretLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
+const icons = Object.fromEntries(['Prohibit', 'UserMinus', 'Check', 'UserPlus', 'ArrowRight', 'ChatCircle', 'DeviceMobile', 'Globe', 'QrCode', 'Users', 'CaretLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
   name,
   (props) => React.createElement('svg', { ...props, 'data-icon': name, 'aria-hidden': 'true' }),
 ]));
@@ -86,9 +86,10 @@ function props(overrides = {}) {
     onScan: noOp,
     onOpenGroup: noOp,
     onOpenDirect: noOp,
-    onOpenProfile: noOp,
     onAcceptRequest: noOp,
     onRemoveRequest: noOp,
+    onUnfriend: noOp,
+    onBlock: noOp,
     ...overrides,
   };
 }
@@ -162,13 +163,16 @@ test('Chats orders the active group before individual requests and ordered DMs',
   assert.match(groupTitleRow, /Brew &amp; Chat/);
   assert.doesNotMatch(groupTitleRow, /2 members/);
   assert.match(html, /class="group-meta"/);
-  assert.match(html, /Maya Chen: Anyone here for the workshop\?/);
-  assert.match(html, /Access ends in 18h/);
+  assert.match(html, /class="group-author">Maya Chen/);
+  assert.match(html, /class="group-preview">Anyone here for the workshop\?/);
+  assert.match(html, /class="group-member-count"[^>]*>2<svg/);
+  assert.doesNotMatch(html, /Group ·|Maya Chen: Anyone|Access ends in/);
+  assert.match(html, /18h left/);
   assert.match(html, /Your group access ends in 18 hours\./);
   assert.match(html, /group-title-row/);
   assert.match(html, /group-preview-row/);
   assert.match(html, /data-icon="MagnifyingGlass"/);
-  assert.match(html, /Incoming friend request/);
+  assert.match(html, /Sent you a friend request/);
   assert.match(html, /Friend request sent/);
   assert.match(html, /placeholder="Search chats and people..."/);
   assert.doesNotMatch(html, /search-toggle/);
@@ -190,7 +194,7 @@ test('Chats orders the active group before individual requests and ordered DMs',
   const mayaRow = dmList.indexOf('Open direct message with Maya Chen');
   const jordanRow = dmList.indexOf('Open direct message with Jordan Lee');
   assert.ok(mayaRow >= 0 && jordanRow >= 0 && mayaRow < jordanRow, 'the newest conversation appears before other DM rows');
-  assert.ok(dmList.indexOf('Open Brew') < dmList.indexOf("View Bea"));
+  assert.ok(dmList.indexOf('Open Brew') < dmList.indexOf("Accept Bea"));
   assert.ok(dmList.indexOf('Cancel friend request to Kai') < mayaRow);
   assert.equal((html.match(/class="chat-list-scroll"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /Recent|Nearby|My Groups|Alexandra Petrov|Niko/);
@@ -241,7 +245,7 @@ test('requests are newest first, and requests alone prevent the onboarding empty
   const older = { ...incomingRequest, requested_at: '2026-09-29T10:00:00Z' };
   const newer = { ...outgoingRequest, requested_at: '2026-10-01T10:00:00Z' };
   const html = renderOverview(props({ friends: [older, newer] }));
-  assert.ok(html.indexOf('View Kai') < html.indexOf('View Bea'));
+  assert.ok(html.indexOf('Cancel friend request to Kai') < html.indexOf('Accept Bea'));
   assert.doesNotMatch(html, /Your chats start with a scan|No pending requests|Direct messages/);
   const empty = renderOverview();
   assert.match(empty, /Your chats start with a scan/);
@@ -388,4 +392,23 @@ test('landing offers browser entry and keeps unavailable native download slots e
   assert.equal((html.match(/class="landing-native-slot"[^>]*><\/div>/g) ?? []).length, 2);
   assert.equal((html.match(/Not available yet/g) ?? []).length, 2);
   assert.doesNotMatch(html, /apps\.apple\.com|play\.google\.com|Saved Places|Notifications/);
+});
+
+
+test('DM cards include hidden circular actions without a hover menu', () => {
+  const html = renderOverview(props({ friends: [acceptedMaya], directPreviews: { [acceptedMaya.id]: { status: 'ready', message: null } } }));
+  assert.match(html, /dm-swipe-row/);
+  assert.match(html, /class="dm-swipe-actions" aria-hidden="true" inert=""/);
+  assert.match(html, /aria-label="Unfriend Maya Chen"/);
+  assert.match(html, /aria-label="Block Maya Chen"/);
+  assert.doesNotMatch(html, /dm-actions-toggle|Show actions for/);
+});
+
+
+test('request cards show inline actions without a profile popup trigger', () => {
+  const html = renderOverview(props({ friends: [incomingRequest, outgoingRequest] }));
+  assert.match(html, /class="request-person"/);
+  assert.doesNotMatch(html, /View .*profile/);
+  assert.match(html, /Accept Bea Kim/);
+  assert.match(html, /Cancel friend request to Kai Tan/);
 });

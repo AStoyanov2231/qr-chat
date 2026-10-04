@@ -6,20 +6,6 @@ const { default: Groups } = await import('../src/app/(app)/index.tsx');
 const group = { id: 'room-one', venue: { id: 'room-one', name: 'Cafe', codes: ['Cafe-A'], label: 'A conversation for this QR code.' }, members: [{ id: 'me', name: 'Andy' }, { id: 'peer', name: 'Sam' }], messages: [], nextCursor: null };
 const friendId = '11111111-1111-4111-8111-111111111111';
 
-function assertNativeButtonsHosted(screen) {
-  const buttons = screen.root.findAllByType('Button');
-  assert.ok(buttons.length, 'Expected a native action button');
-  for (const button of buttons) {
-    let host = button.parent;
-    while (host && host.type !== 'Host') host = host.parent;
-    assert.ok(host, 'Platform buttons must render inside an Expo UI Host');
-    assert.equal(host.props.matchContents, true);
-    assert.equal(host.props.colorScheme, 'light');
-    assert.ok(host.props.seedColor, 'The native host uses the app color palette');
-    assert.equal(button.props.style.height, 44, 'The platform button keeps a 44 point touch height');
-  }
-}
-
 for (const platform of ['ios', 'android']) {
   test(`${platform}: Chats shows one ordered list with the current group, individual requests and real DM previews`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
@@ -38,9 +24,10 @@ for (const platform of ['ios', 'android']) {
     assert.doesNotMatch(screen.text(), /Active group|Direct messages|Toggle friend requests/);
     assert.match(screen.text(), /Brew & Chat/);
     assert.match(screen.text(), /BC/);
-    assert.match(screen.text(), /Sam: Workshop starts soon/);
+    assert.match(screen.text(), /Workshop starts soon/);
+    assert.doesNotMatch(screen.text(), /Sam: Workshop starts soon|Group ·|Access ends in/);
     assert.match(screen.text(), /Your group access ends in 2 hours\./);
-    assert.match(screen.text(), /Incoming friend request/);
+    assert.match(screen.text(), /Sent you a friend request/);
     assert.match(screen.text(), /Friend request sent/);
     assert.match(screen.text(), /See you at the cafe\./);
     assert.doesNotMatch(screen.text(), /Recent|Nearby|My Groups/);
@@ -51,8 +38,7 @@ for (const platform of ['ios', 'android']) {
     assert.equal(list.findAllByType('Pressable').some(row => row.props.accessibilityLabel === 'Open your profile'), false);
     const labels = list.findAllByType('Pressable').map(row => row.props.accessibilityLabel);
     assert.ok(labels[0].startsWith('Open Brew'));
-    assert.ok(labels.indexOf("View Mira's profile") < labels.indexOf('Open direct message with Jordan'));
-    assertNativeButtonsHosted(screen);
+    assert.ok(labels.indexOf("Cancel friend request to Mira") < labels.indexOf('Open direct message with Jordan'));
     assert.equal(searchField.props.placeholder, 'Search chats and people...');
     await screen.press('Open your profile');
     assert.deepEqual(state.navigation.at(-1), ['push', '/profile']);
@@ -61,18 +47,21 @@ for (const platform of ['ios', 'android']) {
     const groupCard = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel.startsWith('Open Brew & Chat'));
     assert.ok(groupCard);
     assert.match(groupCard.props.accessibilityLabel, /Your group access ends in 2 hours/);
-    assert.equal(groupCard.findAllByType('SymbolView').length, 0, 'the group card has no disclosure arrow');
+    const icons = groupCard.findAllByType(platform === 'ios' ? 'Image' : 'SymbolView');
+    assert.equal(icons.length, 1, 'the group card shows only the member icon');
     await screen.press(groupCard.props.accessibilityLabel);
     assert.equal(state.navigation.at(-1)[1].pathname, '/room');
 
-    const requestActions = screen.root.findAllByType('Button').filter(button => ['Accept', 'Decline', 'Cancel'].includes(button.props.title));
-    assert.ok(requestActions.some(button => button.props.title === 'Accept' && button.props.variant !== 'text'));
-    assert.ok(requestActions.filter(button => ['Decline', 'Cancel'].includes(button.props.title)).every(button => button.props.variant === 'text'));
-    await screen.press('View Sam\'s profile');
-    assert.deepEqual(state.navigation.at(-1), ['push', { pathname: '/person/[id]', params: { id: 'peer' } }]);
-    await screen.press('Accept');
-    await screen.press('Decline', 1);
-    await screen.press('Cancel');
+    const acceptAction = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === "Accept Sam's friend request");
+    const declineAction = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === "Decline Sam's friend request");
+    assert.ok(acceptAction && declineAction);
+    assert.equal(acceptAction.props.style({ pressed: false })[0].minHeight, 44);
+    assert.equal(acceptAction.props.style({ pressed: false })[1].backgroundColor, '#3488ff');
+    assert.equal(declineAction.props.style({ pressed: false })[0].minWidth, 44);
+    assert.equal(screen.root.findAllByType('Pressable').some(node => node.props.accessibilityLabel === "View Sam's profile"), false, 'Request cards do not open profile popups');
+    await screen.press("Accept Sam's friend request");
+    await screen.press("Decline Niko's friend request");
+    await screen.press('Cancel friend request to Mira');
     assert.deepEqual(calls, [['accept', incoming.id], ['remove', decline.id], ['remove', outgoing.id]]);
 
     await screen.type('Search chats and people by name', 'unknown room');
@@ -80,7 +69,7 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Clear search');
     await screen.type('Search chats and people by name', 'mira');
     assert.match(screen.text(), /Friend request sent/);
-    assert.doesNotMatch(screen.text(), /No chats or requests match|Open direct message with Jordan|Incoming friend request|Open Brew/);
+    assert.doesNotMatch(screen.text(), /No chats or requests match|Open direct message with Jordan|Sent you a friend request|Open Brew/);
     await screen.type('Search chats and people by name', 'jordan');
     assert.match(screen.text(), /Open direct message with Jordan/);
     assert.doesNotMatch(screen.text(), /Open Brew & Chat, 2 members/);
@@ -94,6 +83,78 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Open direct message with Jordan');
     assert.equal(state.navigation.at(-1)[1].params.id, accepted.id);
     assert.equal(calls.length, 3, 'Opening a direct message does not create a friendship');
+  });
+
+  test(`${platform}: DM swipes reveal circular actions, preserve vertical scrolling and close the previous row`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    const connection = (id, name) => ({ id, user_a_id: 'me', user_b_id: id, accepted_at: '2026-10-01', requested_at: '2026-10-01', user_b: { id, display_name: name } });
+    state.chat.friends = [connection(friendId, 'Sam'), connection('second', 'Mira')];
+    for (const friend of state.chat.friends) state.chat.directPreviews[friend.id] = { status: 'ready', message: null };
+    const screen = await render(t, Groups);
+    const row = name => screen.root.findAllByType('View').find(node => node.props.onPanResponderMove && node.findAllByType('Pressable').some(button => button.props.accessibilityLabel === `Open direct message with ${name}`));
+    const actions = name => row(name).findAllByType('View').find(node => 'accessibilityElementsHidden' in node.props && node.findAllByType('Pressable').some(button => button.props.accessibilityLabel === `Block ${name}`));
+    assert.equal(actions('Sam').props.pointerEvents, 'none');
+    assert.equal(row('Sam').props.onMoveShouldSetPanResponder(null, { dx: -10, dy: 40 }), false);
+    assert.equal(row('Sam').props.onMoveShouldSetPanResponder(null, { dx: 30, dy: 0 }), false);
+    assert.equal(row('Sam').props.onMoveShouldSetPanResponder(null, { dx: -100, dy: 2 }), true);
+    async function swipe(name, dx) {
+      await act(async () => {
+        row(name).props.onPanResponderGrant();
+        row(name).props.onPanResponderMove(null, { dx, dy: 0 });
+        row(name).props.onPanResponderRelease();
+      });
+    }
+    await swipe('Sam', -100);
+    assert.equal(actions('Sam').props.pointerEvents, 'auto');
+    assert.equal(state.navigation.length, 0);
+    await swipe('Mira', -100);
+    assert.equal(actions('Sam').props.pointerEvents, 'none');
+    assert.equal(actions('Mira').props.pointerEvents, 'auto');
+    await swipe('Mira', 110);
+    assert.equal(actions('Mira').props.pointerEvents, 'none');
+    await swipe('Sam', -20);
+    assert.equal(actions('Sam').props.pointerEvents, 'none');
+    await act(async () => {
+      const control = row('Sam').findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Open direct message with Sam');
+      control.props.onAccessibilityAction({ nativeEvent: { actionName: 'showActions' } });
+    });
+    assert.equal(actions('Sam').props.pointerEvents, 'auto');
+    await screen.type('Search chats and people by name', 'Sam');
+    assert.equal(actions('Sam').props.pointerEvents, 'none');
+  });
+
+  test(`${platform}: DM actions confirm, prevent duplicate writes, and recover from a block failure`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    state.chat.friends = [{ id: friendId, user_a_id: 'me', user_b_id: 'peer', accepted_at: '2026-10-01', requested_at: '2026-10-01', user_b: { id: 'peer', display_name: 'Sam' } }];
+    state.chat.directPreviews[friendId] = { status: 'ready', message: null };
+    const calls = [];
+    let finish;
+    let fail = true;
+    state.auth.api.removeFriend = async id => { calls.push(['unfriend', id]); };
+    state.auth.api.blockFriend = async id => {
+      calls.push(['block', id]);
+      if (fail) throw new Error('Offline');
+      await new Promise(resolve => { finish = resolve; });
+    };
+    const screen = await render(t, Groups);
+    await screen.press('Unfriend Sam');
+    assert.equal(calls.length, 0, 'Tapping a circle waits for confirmation');
+    assert.equal(state.alerts.at(-1)[2][0].style, 'cancel');
+    await act(async () => { state.alerts.at(-1)[2][1].onPress(); });
+    assert.deepEqual(calls, [['unfriend', friendId]]);
+    await screen.press('Block Sam');
+    await act(async () => { state.alerts.at(-1)[2][1].onPress(); });
+    assert.match(screen.text(), /Couldn’t update this friendship/);
+    fail = false;
+    await screen.press('Block Sam');
+    const confirm = state.alerts.at(-1)[2][1].onPress;
+    await act(async () => { confirm(); confirm(); });
+    assert.equal(calls.length, 3);
+    const block = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Block Sam');
+    assert.equal(block.props.disabled, true);
+    await act(async () => { finish(); });
+    assert.match(screen.text(), /Blocked Sam/);
+    assert.equal(block.props.disabled, false);
   });
 
   test(`${platform}: Chats distinguishes a first group from observed expiry and retries a failed load`, async (t) => {
@@ -130,13 +191,13 @@ for (const platform of ['ios', 'android']) {
       state.chat.directPreviews[friendId] = { status: 'ready', message: null };
     };
     const screen = await render(t, Groups);
-    await screen.press('Accept');
+    await screen.press("Accept Sam's friend request");
     assert.match(screen.text(), /Couldn’t update this request. Try again./);
-    assert.match(screen.text(), /Incoming friend request/);
+    assert.match(screen.text(), /Sent you a friend request/);
     fail = false;
-    await screen.press('Accept');
+    await screen.press("Accept Sam's friend request");
     assert.match(screen.text(), /You and Sam are now friends/);
-    assert.doesNotMatch(screen.text(), /Incoming friend request/);
+    assert.doesNotMatch(screen.text(), /Sent you a friend request/);
     await screen.press('Open direct message with Sam');
     assert.equal(state.navigation.at(-1)[1].params.id, friendId);
   });
@@ -148,11 +209,11 @@ for (const platform of ['ios', 'android']) {
     let calls = 0;
     state.auth.api.acceptFriend = async () => { calls++; await new Promise(resolve => { finish = resolve; }); };
     const screen = await render(t, Groups);
-    const accept = () => screen.root.findAllByType('View').find(node => node.props.accessibilityLabel === "Accept Sam's friend request");
-    await act(async () => { accept().props.onAccessibilityTap(); });
+    const accept = () => screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === "Accept Sam's friend request");
+    await act(async () => { accept().props.onPress(); });
     assert.equal(accept().props.accessibilityState.disabled, true);
     assert.match(screen.text(), /Accepting…/);
-    await act(async () => { accept().props.onAccessibilityTap(); });
+    await act(async () => { accept().props.onPress(); });
     assert.equal(calls, 1);
     await act(async () => { finish(); });
     assert.equal(accept().props.accessibilityState.disabled, false);
@@ -178,13 +239,13 @@ for (const platform of ['ios', 'android']) {
       globalThis.clearInterval = timer => { timer.cleared = true; };
       state.chat.expiresAt = new Date(start + 2.5 * 60 * 60_000).toISOString();
       screen = await render(t, Groups);
-      assert.match(screen.text(), /Access ends in 2h/);
+      assert.match(screen.text(), /2h left/);
       assert.equal(intervals.length, 1);
       assert.equal(intervals[0].delay, 60_000);
 
       now += 60 * 60_000;
       await act(async () => { intervals[0].callback(); });
-      assert.match(screen.text(), /Access ends in 1h/);
+      assert.match(screen.text(), /1h left/);
 
       state.chat.expiresAt = null;
       await screen.update();
@@ -193,7 +254,7 @@ for (const platform of ['ios', 'android']) {
 
       state.chat.expiresAt = new Date(now + 5 * 60 * 60_000).toISOString();
       await screen.update();
-      assert.match(screen.text(), /Access ends in 5h/, 'a replacement expiry is calculated against the current time immediately');
+      assert.match(screen.text(), /5h left/, 'a replacement expiry is calculated against the current time immediately');
       assert.equal(intervals.length, 2);
       await screen.unmount();
       assert.equal(intervals[1].cleared, true, 'unmount clears the active timer');

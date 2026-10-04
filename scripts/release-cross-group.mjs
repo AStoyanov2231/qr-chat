@@ -20,7 +20,8 @@ try {
     await page.getByText(token, { exact: true }).waitFor({ timeout: 45000 });
     assert.equal(await page.getByText(token, { exact: true }).count(), 1);
   }
-  await page.getByText('3 members', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Group settings', exact: true }).click();
+  await page.getByLabel('3 members', { exact: true }).waitFor();
   await page.screenshot({ path: `${output}/web-cross-group-all.png` });
   writeFileSync(`${output}/cross-group-web.json`, JSON.stringify({ pass: true, tokens, counts: tokens.map(() => 1), memberCount: 3, timestamp: new Date().toISOString() }, null, 2));
   console.log('PASS web UI displays all three actual UI-authored platform messages exactly once and three members.');

@@ -33,7 +33,7 @@ try {
   console.log(`SENT ${outgoing}; awaiting native UI response ${incoming}`);
   await page.getByText(incoming, { exact: true }).waitFor({ timeout: 180000 });
   await page.locator('.message-skeleton').waitFor({ state: 'hidden' });
-  await page.getByText('Friend', { exact: true }).waitFor({ timeout: 45000 });
+  assert.equal(await page.locator('.chat-header-title p').count(), 0);
   assert.equal(await page.getByText(outgoing, { exact: true }).count(), 1);
   assert.equal(await page.getByText(incoming, { exact: true }).count(), 1);
   await page.screenshot({ path: `${output}/${evidenceName}.png` });

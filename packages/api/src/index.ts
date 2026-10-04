@@ -277,6 +277,10 @@ export function createChatApi(
       const removed = await result(client.rpc("remove_friend_connection", { p_connection_id: userIdSchema.parse(connectionId) }));
       if (!removed) throw new ChatApiError("This connection is no longer available.", "NOT_AVAILABLE");
     },
+    async blockFriend(connectionId: string) {
+      const blocked = await result(client.rpc("block_friend_connection", { p_connection_id: userIdSchema.parse(connectionId) }));
+      if (!blocked) throw new ChatApiError("This connection is no longer available.", "NOT_AVAILABLE");
+    },
     async directMessages(connectionId: string, options: { before?: number; limit?: number } = {}, signal?: AbortSignal) {
       const { before, limit } = pageSchema.parse(options);
       let query = client.from("direct_messages").select("*")

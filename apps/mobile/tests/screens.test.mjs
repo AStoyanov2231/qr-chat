@@ -52,11 +52,51 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, Join);
     state.chat.ready = true; state.chat.session = { id: 'me', name: 'Andy' };
     await screen.update();
-    assert.equal(screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Your name').props.value, 'Andy');
+    assert.equal(screen.root.findAllByType('TextInput').some(input => input.props.accessibilityLabel === 'Your name'), false);
     await screen.type('Chat name', 'Cafe');
     await screen.press('Join chat');
-    assert.deepEqual(calls, [{ display_name: 'Andy' }, ['New-Room', 'Cafe']]);
+    assert.deepEqual(calls, [['New-Room', 'Cafe']]);
+    assert.equal(state.chat.session.name, 'Andy');
     assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'Cafe' } }]]);
+  });
+
+  test(`${platform}: saved and suggested rooms join automatically with the existing profile`, async (t) => {
+    for (const kind of ['saved', 'suggested']) {
+      reset(); process.env.EXPO_OS = platform;
+      state.params = { code: 'New-Room' }; state.chat.scannedCode = 'New-Room';
+      const calls = [];
+      state.auth.api = {
+        saveProfile: async () => assert.fail('Joining must not overwrite the profile'),
+        resolveQrChatName: async () => ({ kind, name: 'Cafe' }),
+        joinNamedGroup: async (code, name) => { calls.push([code, name]); return { group_id: 'room-two', display_name: name }; },
+      };
+      const screen = await render(t, Join);
+      assert.equal(screen.root.findAllByType('TextInput').length, 0);
+      assert.deepEqual(calls, [['New-Room', 'Cafe']]);
+      assert.equal(state.chat.session.name, 'Andy');
+      assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'Cafe' } }]]);
+      await screen.update();
+      assert.equal(calls.length, 1);
+    }
+  });
+
+  test(`${platform}: an automatic join failure can be retried without editing the profile`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    state.params = { code: 'New-Room' }; state.chat.scannedCode = 'New-Room';
+    let attempts = 0;
+    state.auth.api = {
+      saveProfile: async () => assert.fail('Joining must not overwrite the profile'),
+      resolveQrChatName: async () => ({ kind: 'saved', name: 'Cafe' }),
+      joinNamedGroup: async () => { if (++attempts === 1) throw new Error('Offline'); return { group_id: 'room-two', display_name: 'Cafe' }; },
+    };
+    const screen = await render(t, Join);
+    assert.match(screen.text(), /Offline/);
+    assert.equal(state.navigation.length, 0);
+    await screen.update();
+    assert.equal(attempts, 1, 'Failures do not trigger an automatic retry loop');
+    await screen.press('Try again');
+    assert.equal(attempts, 2);
+    assert.equal(state.navigation.at(-1)[1].pathname, '/room');
   });
 
   test(`${platform}: an unnamed active room is named in place and failed refresh preserves the draft`, async (t) => {
@@ -73,7 +113,7 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, Join);
     await screen.type('Chat name', 'Cafe');
     await screen.press('Join chat');
-    assert.deepEqual(calls, ['profile', ['name-current', 'Old-Room', 'Cafe']]);
+    assert.deepEqual(calls, [['name-current', 'Old-Room', 'Cafe']]);
     assert.match(screen.text(), /Offline/);
     assert.equal(screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Chat name').props.value, 'Cafe');
     assert.equal(state.navigation.length, 0);
@@ -225,6 +265,7 @@ for (const platform of ['ios', 'android']) {
     state.loadDirectSnapshot = async () => ({ messages: [{id: 1, sender_id: 'peer', body: 'private-direct-text', created_at: '2026-09-19'}], nextCursor: null });
     const screen = await render(t, Direct);
     assert.match(screen.text(), /private-direct-text/);
+    assert.doesNotMatch(screen.text(), /Conversation settings/);
     state.chat.friends = []; await screen.update();
     assert.doesNotMatch(screen.text(), /private-direct-text/);
     assert.equal(screen.root.findAllByType('TextInput').length, 0);

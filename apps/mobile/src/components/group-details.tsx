@@ -31,8 +31,7 @@ export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?:
   return <View style={{ flex: 1, gap: 14 }}>
     <View style={{ alignItems: 'center', gap: 8, paddingVertical: 18 }}>
       <GroupQr code={group.venue.codes[0]} />
-      <Copy accessibilityRole="header" style={{ fontSize: 23, fontWeight: '600', textAlign: 'center' }}>{group.venue.name}</Copy>
-      <Copy style={styles.muted}>{group.members.length} {group.members.length === 1 ? 'member' : 'members'}</Copy>
+      <View accessible accessibilityLabel={`${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, paddingHorizontal: 10, borderRadius: 16, backgroundColor: colors.soft }}><Copy style={{ color: colors.muted, fontSize: 14, fontWeight: '500' }}>{group.members.length}</Copy><Icon name="group" size={18} color={colors.muted} /></View>
     </View>
     <ErrorNotice message={action.error || chat.error} />
     {group.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => { onNavigate?.(); router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } }); }} style={[styles.row, { minHeight: 60, paddingVertical: 8 }]}>

@@ -14,6 +14,16 @@ export type Database = {
   }
   public: {
     Tables: {
+      user_blocks: {
+        Row: { blocker_id: string; blocked_id: string; created_at: string }
+        Insert: { blocker_id: string; blocked_id: string; created_at?: string }
+        Update: { blocker_id?: string; blocked_id?: string; created_at?: string }
+        Relationships: [
+          { foreignKeyName: "user_blocks_blocker_id_fkey"; columns: ["blocker_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "user_blocks_blocked_id_fkey"; columns: ["blocked_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ]
+      }
+
       direct_messages: {
         Row: {
           body: string
@@ -250,6 +260,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      block_friend_connection: {
+        Args: { p_connection_id: string }
+        Returns: boolean
+      }
       get_chat_overview: { Args: never; Returns: Json }
       get_chat_access: { Args: never; Returns: Json }
       accept_friend_request: {

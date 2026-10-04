@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Copy, Icon } from './chat-ui';
 
-export function ConversationHeader({ title, subtitle, imageUrl, settings, settingsLabel, disabled }: { title: string; subtitle: string; imageUrl?: string | null; settings: () => void; settingsLabel: string; disabled?: boolean }) {
+export function ConversationHeader({ title, subtitle, imageUrl, settings, settingsLabel, disabled }: { title: string; subtitle?: string; imageUrl?: string | null; settings?: () => void; settingsLabel?: string; disabled?: boolean }) {
   const insets = useSafeAreaInsets();
   return <View style={{ minHeight: 170 + insets.top, backgroundColor: '#64717b' }}>
     {imageUrl && <Image source={{ uri: imageUrl }} contentFit="cover" style={{ position: 'absolute', inset: 0 }} accessibilityElementsHidden />}
@@ -15,11 +15,11 @@ export function ConversationHeader({ title, subtitle, imageUrl, settings, settin
     </View>}
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: insets.top + 12 }}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back to chats" onPress={() => router.dismissTo('/')} style={circle}><Icon name="back" size={22} /></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={settingsLabel} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={settings} style={[circle, { opacity: disabled ? 0.5 : 1 }]}><Icon name="settings" size={23} /></Pressable>
+      {settings && <Pressable accessibilityRole="button" accessibilityLabel={settingsLabel} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={settings} style={[circle, { opacity: disabled ? 0.5 : 1 }]}><Icon name="settings" size={23} /></Pressable>}
     </View>
     <View style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 34, gap: 6 }}>
       <Copy selectable={false} accessibilityRole="header" numberOfLines={2} ellipsizeMode="tail" style={{ color: '#fff', fontSize: 30, lineHeight: 36, fontWeight: '600', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.4)', textShadowRadius: 8 }}>{title}</Copy>
-      <Copy style={{ color: '#fff', fontSize: 14 }}>{subtitle}</Copy>
+      {subtitle && <Copy style={{ color: '#fff', fontSize: 14 }}>{subtitle}</Copy>}
     </View>
   </View>;
 }

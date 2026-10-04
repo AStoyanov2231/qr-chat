@@ -20,7 +20,9 @@ const mocks = {
     import React from 'react';
     export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', Button='Button', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView', ActivityIndicator='ActivityIndicator';
     export const Keyboard = { dismiss() {} };
-    export const Animated={Value:class {setValue(){} interpolate(){return 0;}},View:'AnimatedView',timing:()=>({start:callback=>callback?.({finished:true})})};
+    export const Animated={Value:class {setValue(){} stopAnimation(){} interpolate(){return 0;}},multiply:()=>0,View:'AnimatedView',timing:()=>({start:callback=>callback?.({finished:true})})};
+    export const Easing={bezier:()=>value=>value};
+    export const PanResponder={create:handlers=>({panHandlers:handlers})};
     export const Modal=({visible,...props})=>visible?React.createElement('Modal',{visible,...props},props.children):null;
     export const StyleSheet={create: value => value};
     export const useWindowDimensions=()=>({width:390,height:844});
