@@ -98,17 +98,17 @@ try {
   }
   const membership = await alice.api.currentMembership();
   assert.equal((await bob.api.currentMembership()).group_id, membership.group_id);
-  assert.equal(membership.qr_groups.qr_codes.code_key, code);
+  assert.equal(membership.groups.code_key, code);
   assert.equal((await alice.api.members(membership.group_id)).length, 2);
   pass('Actual browser camera QR decoding, named joins, and shared membership');
 
   const failGroupSend = (route) => route.request().method() === 'POST' ? route.abort('connectionfailed') : route.continue();
-  await alice.context.route('**/rest/v1/group_messages*', failGroupSend);
+  await alice.context.route('**/rest/v1/messages*', failGroupSend);
   await send(alice, 'Hello from Alice');
   await visible(alice.page, 'Could not send your message. Your draft is still here; try again.');
   assert.equal(await alice.page.getByLabel('Message', { exact: true }).inputValue(), 'Hello from Alice');
   await screenshot(alice.page, 'web-group-failed-send');
-  await alice.context.unroute('**/rest/v1/group_messages*', failGroupSend);
+  await alice.context.unroute('**/rest/v1/messages*', failGroupSend);
   await alice.context.setOffline(true);
   await visible(alice.page, 'You’re offline. Reconnect to load chats and send messages.');
   await alice.context.setOffline(false);
@@ -147,7 +147,7 @@ try {
   await alice.page.getByRole('button', { name: 'Close group settings', exact: true }).click();
   pass('Bidirectional live group messages appear once; member settings display the group QR');
 
-  const seededGroup = await bob.api.client.from('group_messages').insert(Array.from({ length: 55 }, (_, i) => ({ group_id: membership.group_id, sender_id: bob.user.id, body: `Group page ${i}` })));
+  const seededGroup = await bob.api.client.from('messages').insert(Array.from({ length: 55 }, (_, i) => ({ group_id: membership.group_id, sender_id: bob.user.id, body: `Group page ${i}` })));
   assert.equal(seededGroup.error, null);
   await alice.page.reload();
   await alice.page.getByRole('button', { name: 'Load older messages' }).click({ timeout });
@@ -187,7 +187,7 @@ try {
   assert.ok(friendship);
   pass('Friend request, acceptance, and live direct message delivery');
 
-  const seededDirect = await bob.api.client.from('direct_messages').insert(Array.from({ length: 55 }, (_, i) => ({ friend_connection_id: friendship.id, sender_id: bob.user.id, body: `Direct page ${i}` })));
+  const seededDirect = await bob.api.client.from('messages').insert(Array.from({ length: 55 }, (_, i) => ({ group_id: friendship.id, sender_id: bob.user.id, body: `Direct page ${i}` })));
   assert.equal(seededDirect.error, null);
   await openDirect(alice, 'Bob QA');
   await alice.page.getByRole('button', { name: 'Load older messages' }).click({ timeout });
@@ -197,13 +197,13 @@ try {
 
   // Fail the transport, without supplying mock data or success responses.
   const failMessage = (route) => route.request().method() === 'POST' ? route.abort('connectionfailed') : route.continue();
-  await alice.context.route('**/rest/v1/direct_messages*', failMessage);
+  await alice.context.route('**/rest/v1/messages*', failMessage);
   await send(alice, 'Retained failed draft', true);
   await visible(alice.page, 'Could not send your message. Your draft is still here; try again.');
   assert.equal(await alice.page.getByLabel('Direct message', { exact: true }).inputValue(), 'Retained failed draft');
   assert.ok(!(await alice.page.locator('.toast').innerText()).includes('TypeError'), 'Transport errors must not expose implementation details');
   await screenshot(alice.page, 'web-dm-failed-send');
-  await alice.context.unroute('**/rest/v1/direct_messages*', failMessage);
+  await alice.context.unroute('**/rest/v1/messages*', failMessage);
   await alice.page.getByRole('button', { name: 'Send direct message', exact: true }).click();
   await visible(bob.page, 'Retained failed draft');
   assert.equal((await bob.api.directMessages(friendship.id)).items.filter((row) => row.body === 'Retained failed draft').length, 1);

@@ -14,7 +14,7 @@ export function createObservedFetch(fetcher: typeof fetch, observer?: RequestObs
     const path = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "https://diagnostics.invalid").pathname;
     const category: RequestObservation["category"] = path.startsWith("/auth/") ? "auth"
       : path.endsWith("/get_chat_overview") ? "overview" : path.endsWith("/get_chat_access") ? "access"
-      : /\/(?:group_messages|direct_messages)$/.test(path) ? "messages"
+      : path.endsWith("/messages") ? "messages"
       : path.endsWith("/api/qr-name") ? "metadata" : path.startsWith("/storage/") ? "storage" : "other";
     const reason = trigger();
     const start = Date.now();

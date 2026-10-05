@@ -47,7 +47,7 @@ test('accepted DM previews subscribe to message changes and stop after friendshi
   function Probe() { chat = useChat(); return null; }
   function Root() { return React.createElement(ChatProvider, null, React.createElement(Probe)); }
   const screen = await render(t, Root);
-  const directWatcher = state.watchers.find((watcher) => watcher.filters.some((filter) => filter.table === 'direct_messages' && filter.id === friendship.id));
+  const directWatcher = state.watchers.find((watcher) => watcher.filters.some((filter) => filter.table === 'messages' && filter.id === friendship.id));
   assert.ok(directWatcher, 'Accepted friends need a Realtime invalidation filter for their previews');
   assert.equal(chat.connection, 'connected');
   await act(async () => { directWatcher.onState('reconnecting'); });

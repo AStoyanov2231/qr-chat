@@ -17,7 +17,7 @@ test('hostile inputs are rejected before any network request', async () => {
   await assert.rejects(api.groupMessages(id, { before: Number.MAX_SAFE_INTEGER + 1 }));
   await assert.rejects(api.groupMessages(id, { limit: 101 }));
   await assert.rejects(api.saveProfile({ display_name: 'A', id }));
-  await assert.rejects(api.saveProfile({ display_name: 'A', avatar_url: 'javascript:alert(1)' }));
+  await assert.rejects(api.saveProfile({ display_name: 'A', avatar_path: `../${id}/x.jpg` }));
   assert.equal(messageBodySchema.parse('<script>alert(1)</script>'), '<script>alert(1)</script>');
   assert.equal(displayNameSchema.parse('  Alex  '), 'Alex');
 });
@@ -99,12 +99,12 @@ test('writes derive the sender from auth and exclude arbitrary write fields', as
 
 test('pagination uses a strict cursor and a lookahead, including equal timestamps', async () => {
   const calls = [];
-  const query = new Proxy({ then(resolve) { resolve({ data: [{ id: 9 }, { id: 8 }, { id: 7 }], error: null }); } }, {
+  const query = new Proxy({ then(resolve) { resolve({ data: [{ id: 9, profiles: null }, { id: 8, profiles: null }, { id: 7, profiles: null }], error: null }); } }, {
     get(target, key) { return key === 'then' ? target.then : (...args) => { calls.push([key, ...args]); return query; }; },
   });
   const api = createChatApi({ from: () => query });
   const page = await api.groupMessages(id, { before: 10, limit: 2 });
-  assert.deepEqual(page, { items: [{ id: 9 }, { id: 8 }], nextCursor: 8 });
+  assert.deepEqual(page, { items: [{ id: 9, profiles: null }, { id: 8, profiles: null }], nextCursor: 8 });
   assert.ok(calls.some(([op, field, value]) => op === 'lt' && field === 'id' && value === 10));
   assert.ok(calls.some(([op, value]) => op === 'limit' && value === 3));
 });

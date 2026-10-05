@@ -69,7 +69,7 @@ try {
   const current = await api.currentMembership();
   assert.notEqual(current.group_id, previous.group_id);
   await twin.bringToFront();
-  await twin.getByText(current.qr_groups.qr_codes.display_name, { exact: true }).waitFor({ timeout: 45000 });
+  await twin.getByText(current.groups.name, { exact: true }).waitFor({ timeout: 45000 });
   assert.equal(await twin.getByText('Previous Release Room', { exact: true }).count(), 0);
   await page.bringToFront();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -81,7 +81,7 @@ try {
   assert.equal((await api.currentMembership()).group_id, current.group_id);
   assert.equal((await api.members(current.group_id)).length, 1);
   assert.equal((await api.profile()).display_name, longName);
-  const result = { pass: true, closeToReopenMs: reopenedAt - closedAt, observedAfterMs: 650, tracks, realQrDecoded: true, groupSwitchConverged: true, sameCodeScanReopensWithoutDuplicate: true, maxTitleLength: current.qr_groups.qr_codes.display_name.length, maxNameLength: longName.length, profileNameUnchanged: true, timestamp: new Date().toISOString() };
+  const result = { pass: true, closeToReopenMs: reopenedAt - closedAt, observedAfterMs: 650, tracks, realQrDecoded: true, groupSwitchConverged: true, sameCodeScanReopensWithoutDuplicate: true, maxTitleLength: current.groups.name.length, maxNameLength: longName.length, profileNameUnchanged: true, timestamp: new Date().toISOString() };
   writeFileSync(`${output}/camera-lifecycle.json`, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } finally {

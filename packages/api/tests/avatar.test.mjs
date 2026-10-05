@@ -8,9 +8,9 @@ const oldId = '33333333-3333-4333-8333-333333333333';
 const base = 'https://project.supabase.co/storage/v1/object/public/avatars/';
 const photo = { uploadId, data: new Uint8Array([255,216,255,1]).buffer };
 
-function fixture(avatar_url = `${base}${id}/${oldId}.jpg`) {
+function fixture(avatar_path = `${id}/${oldId}.jpg`) {
   const calls=[];
-  let profile={id,display_name:'Andy',avatar_url};
+  let profile={id,display_name:'Andy',avatar_path};
   const failures={};
   const client={
     auth:{getSession:async()=>({data:{session:{user:{id}}},error:null})},
@@ -36,17 +36,15 @@ test('avatar uploads use the authenticated folder and save before cleaning up th
   assert.deepEqual(f.calls.map(([op])=>op),['upload','save','remove']);
   assert.equal(f.calls[0][2],`${id}/${uploadId}.jpg`);
   assert.deepEqual(f.calls[0][4],{contentType:'image/jpeg',cacheControl:'3600',upsert:false});
-  assert.deepEqual(f.calls[1][1],{display_name:'New name',avatar_url:`${base}${id}/${uploadId}.jpg`});
+  assert.deepEqual(f.calls[1][1],{display_name:'New name',avatar_path:`${id}/${uploadId}.jpg`});
   assert.deepEqual(f.calls[2][1],[`${id}/${oldId}.jpg`]);
 });
 
-test('editing the name retains a photo; removal clears it and does not delete provider images',async()=>{
-  const f=fixture('https://provider.example/photo.jpg');
-  await f.api.saveProfileWithAvatar('Alex');
-  assert.equal(f.profile.avatar_url,'https://provider.example/photo.jpg');
-  await f.api.saveProfileWithAvatar('Alex',null);
-  assert.equal(f.profile.avatar_url,null);
-  assert.deepEqual(f.calls.map(([op])=>op),['save','save']);
+test('editing the name retains a photo; removal clears it and deletes the stored object',async()=>{
+  const f=fixture();
+  assert.equal((await f.api.saveProfileWithAvatar('Alex')).avatar_url,`${base}${id}/${oldId}.jpg`);
+  assert.equal((await f.api.saveProfileWithAvatar('Alex',null)).avatar_url,null);
+  assert.deepEqual(f.calls.map(([op])=>op),['save','save','remove']);
 });
 
 test('failed uploads do not change profiles, and ambiguous saves retain both images',async()=>{
@@ -71,9 +69,7 @@ test('invalid avatar bytes, paths, and oversized images are rejected before netw
   }
 });
 
-test('cleanup never targets another account or an unexpected object path',async()=>{
-  for(const url of [`${base}${oldId}/${uploadId}.jpg`,`${base}${id}/../other.jpg`,`${base}${id}/arbitrary.jpg`]) {
-    const f=fixture(url);await f.api.saveProfileWithAvatar('Andy',null);
-    assert.deepEqual(f.calls.map(([op])=>op),['save']);
-  }
+test('profiles without a photo skip cleanup',async()=>{
+  const f=fixture(null);await f.api.saveProfileWithAvatar('Andy',null);
+  assert.deepEqual(f.calls.map(([op])=>op),['save']);
 });

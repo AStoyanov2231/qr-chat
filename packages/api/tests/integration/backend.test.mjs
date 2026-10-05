@@ -55,12 +55,12 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
   await t.test('RLS rejects outsider reads and sender spoofing', async () => {
     await assert.rejects(eve.api.sendGroupMessage(group, 'outsider'));
     assert.equal((await eve.api.groupMessages(group)).items.length, 0);
-    const forged = await alice.client.from('group_messages').insert({ group_id: group, sender_id: bob.id, body: 'forged' });
+    const forged = await alice.client.from('messages').insert({ group_id: group, sender_id: bob.id, body: 'forged' });
     assert.ok(forged.error);
     assert.equal((await eve.client.from('profiles').select('id').eq('id', alice.id)).data.length, 0);
   });
   await t.test('shared messages paginate without overlap while new messages arrive', async () => {
-    const inserted = await alice.client.from('group_messages').insert(Array.from({ length: 55 }, (_, i) => ({ group_id: group, sender_id: alice.id, body: `page message ${i}` })));
+    const inserted = await alice.client.from('messages').insert(Array.from({ length: 55 }, (_, i) => ({ group_id: group, sender_id: alice.id, body: `page message ${i}` })));
     assert.equal(inserted.error, null);
     const first = await bob.api.groupMessages(group);
     assert.equal(first.items.length, 50);
@@ -113,7 +113,7 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
   await t.test('filtered Realtime delivers changes and refetches missed messages after reconnect', async () => {
     let bodies = []; let connected = false;
     // Long polling interval ensures live delivery actually comes from Realtime.
-    const watcher = watchChanges(bob.client, [{ table: 'group_messages', column: 'group_id', id: group }], async () => {
+    const watcher = watchChanges(bob.client, [{ table: 'messages', column: 'group_id', id: group }], async () => {
       bodies = (await bob.api.groupMessages(group)).items.map((row) => row.body);
     }, (state) => { connected = state === 'connected'; }, { pollMs: 60000, retryMs: 200 });
     try {

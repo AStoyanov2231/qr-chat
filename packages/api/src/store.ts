@@ -2,10 +2,8 @@ import type { ChatApi } from './index.ts';
 import { createRefreshCoordinator } from './coordinator.ts';
 import { watchChanges, type ChangeEvent, type ChangeFilter, type ConnectionState } from './realtime.ts';
 import { emptySnapshot, snapshotFromOverview, groupMessageView, type ChatSnapshot } from './snapshot.ts';
-import type { ChatAccess, ChatOverview, GroupMessage, ChatMutation } from './overview.ts';
-import type { Tables } from '@qr-chat/types';
+import type { ChatAccess, ChatOverview, GroupMessage, ChatMutation, DirectMessage } from './overview.ts';
 
-type DirectMessage = Tables<'direct_messages'>;
 type Row = GroupMessage | DirectMessage;
 type Conversation = { rows: Map<number, Row>; nextCursor: number | null; loaded: boolean; headIds: number[] };
 export type DirectState = { messages: DirectMessage[]; nextCursor: number | null; loading: boolean; error: string };
@@ -107,16 +105,16 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   function updateWatcher() {
     if (!active || !identity || !state.ready) return;
     const filters: ChangeFilter[] = [
-      { table: 'group_memberships', column: 'user_id', id: identity },
-      { table: 'friend_connections', column: 'user_a_id', id: identity },
-      { table: 'friend_connections', column: 'user_b_id', id: identity },
+      { table: 'group_members', column: 'user_id', id: identity },
+      { table: 'friendships', column: 'user_a_id', id: identity },
+      { table: 'friendships', column: 'user_b_id', id: identity },
     ];
     const groupId = state.snapshot.group?.id;
-    if (groupId) filters.push({ table: 'group_memberships', column: 'group_id', id: groupId }, { table: 'group_messages', column: 'group_id', id: groupId });
+    if (groupId) filters.push({ table: 'group_members', column: 'group_id', id: groupId }, { table: 'messages', column: 'group_id', id: groupId });
     // RLS-protected DELETE payloads expose only primary keys, not participant
     // columns. Watch already authorized connections by id to retire them promptly.
-    for (const id of state.snapshot.friends.map(friend => friend.id).sort()) filters.push({ table: 'friend_connections', column: 'id', id, event: 'DELETE' });
-    for (const id of [...accepted()].sort()) filters.push({ table: 'direct_messages', column: 'friend_connection_id', id });
+    for (const id of state.snapshot.friends.map(friend => friend.id).sort()) filters.push({ table: 'friendships', column: 'group_id', id, event: 'DELETE' });
+    for (const id of [...accepted()].sort()) filters.push({ table: 'messages', column: 'group_id', id });
     const profiles = new Set([identity, ...(state.snapshot.group?.members.map(member => member.id) ?? [])]);
     for (const friend of state.snapshot.friends) {
       if (friend.user_a) profiles.add(friend.user_a.id);
@@ -271,17 +269,13 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   }
   function event(change: ChangeEvent) {
     if (!active) return;
-    if (change.table !== 'group_messages' && change.table !== 'direct_messages') { void refresh('event').catch(() => {}); return; }
+    if (change.table !== 'messages') { void refresh('event').catch(() => {}); return; }
     // The row ID is only a hint. The subsequent SELECT applies authorization.
     if (!change.id || change.eventType !== 'INSERT') { void refresh('reconnect').catch(() => {}); return; }
-    if (change.table === 'group_messages') {
-      const id = state.snapshot.group?.id;
-      if (id) enqueue(`g:${id}`, change.id);
-    } else {
-      // A callback includes its filter so we can route without trusting the payload.
-      const connectionId = change.filterId;
-      if (connectionId && accepted().has(connectionId)) enqueue(`d:${connectionId}`, change.id);
-    }
+    // A callback includes its filter so we can route without trusting the payload.
+    const groupId = change.filterId;
+    if (groupId && groupId === state.snapshot.group?.id) enqueue(`g:${groupId}`, change.id);
+    else if (groupId && accepted().has(groupId)) enqueue(`d:${groupId}`, change.id);
   }
   function enqueue(key: string, id: number) {
     if (conversations.get(key)?.rows.has(id) || writtenIds.get(key)?.has(id)) return;
@@ -292,7 +286,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!active) return;
     if (change.kind === 'overview') { void refresh('mutation').catch(() => {}); return; }
     if (change.userId !== identity) return;
-    const key = change.kind === 'group' ? `g:${change.message.group_id}` : `d:${change.message.friend_connection_id}`;
+    const key = `${change.kind === 'group' ? 'g' : 'd'}:${change.message.group_id}`;
     const ids = writtenIds.get(key) ?? new Set<number>();
     ids.add(change.message.id);
     if (ids.size > 100) ids.delete(ids.values().next().value!);

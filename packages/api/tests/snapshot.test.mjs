@@ -4,7 +4,7 @@ import { loadChatSnapshot, loadDirectSnapshot, emptySnapshot } from '../src/snap
 const row = id => ({ id, sender_id: 'self', profiles: { display_name: 'Andy', avatar_url: '/photo' }, body: `message ${id}`, created_at: '2026-01-01T12:00:00Z' });
 function fixture(count = 1) {
   const calls = [];
-  const overview = { userId: 'self', profile: { display_name: 'Andy' }, membership: { group_id: 'room', expires_at: '2027-01-01', qr_groups: { id: 'room', qr_codes: { code_key: 'Cafe', display_name: null } } }, members: [], friends: Array.from({ length: count }, (_, i) => ({ id: `friend-${i}`, accepted_at: 'yes' })), directPreviews: {}, groupHeadIds: [3, 2] };
+  const overview = { userId: 'self', profile: { display_name: 'Andy' }, membership: { group_id: 'room', expires_at: '2027-01-01', groups: { id: 'room', code_key: 'Cafe', name: null } }, members: [], friends: Array.from({ length: count }, (_, i) => ({ id: `friend-${i}`, accepted_at: 'yes' })), directPreviews: {}, groupHeadIds: [3, 2] };
   const access = { userId: 'self', membership: overview.membership, acceptedConnectionIds: overview.friends.map(friend => friend.id) };
   const api = { userId: async () => 'self', overview: async () => { calls.push('overview'); return overview; }, access: async () => { calls.push('access'); return access; }, groupMessages: async (_id, { before }) => { calls.push(before); return before ? { items: [row(1)], nextCursor: null } : { items: [row(3), row(2)], nextCursor: 2 }; }, directMessages: async (_id, options) => api.groupMessages(_id, options) };
   return { api, overview, access, calls };

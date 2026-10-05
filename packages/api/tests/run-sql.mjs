@@ -11,12 +11,12 @@ function run(command, args, options = {}) {
   if (result.status !== 0) throw new Error(`${command} exited with status ${result.status}`);
 }
 
-const work = mkdtempSync(`${tmpdir()}/qr-chat-pg-names-`);
+const work = mkdtempSync(`${tmpdir()}/qr-chat-pg-`);
 const data = `${work}/data`;
 const socket = `${work}/socket`;
 mkdirSync(socket);
 const port = 20_000 + (process.pid % 40_000);
-const fixture = fileURLToPath(new URL(process.argv[2] ?? './sql/qr-group-names-regression.sql', import.meta.url));
+const fixture = fileURLToPath(new URL('./sql/schema-regression.sql', import.meta.url));
 let started = false;
 let stopped = false;
 let testFailure;
