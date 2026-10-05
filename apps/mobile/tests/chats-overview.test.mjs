@@ -16,7 +16,7 @@ for (const platform of ['ios', 'android']) {
     const outgoing = { ...incoming, id: '33333333-3333-4333-8333-333333333333', user_b_id: 'peer-three', requested_by_id: 'me', user_b: { id: 'peer-three', display_name: 'Mira', avatar_url: null } };
     const accepted = { ...incoming, id: '44444444-4444-4444-8444-444444444444', user_b_id: 'jordan', accepted_at: '2026-09-30T10:00:00Z', user_b: { id: 'jordan', display_name: 'Jordan', avatar_url: null } };
     state.chat.friends = [incoming, decline, outgoing, accepted];
-    state.chat.directPreviews[accepted.id] = { status: 'ready', message: { id: 9, friend_connection_id: accepted.id, sender_id: 'jordan', body: 'See you at the cafe.', created_at: new Date(Date.now() - 12 * 60_000).toISOString() } };
+    state.chat.directPreviews[accepted.id] = { status: 'ready', message: { id: 9, group_id: accepted.id, sender_id: 'jordan', body: 'See you at the cafe.', created_at: new Date(Date.now() - 12 * 60_000).toISOString() } };
     const calls = [];
     state.auth.api = { acceptFriend: async id => calls.push(['accept', id]), removeFriend: async id => calls.push(['remove', id]) };
     const screen = await render(t, Groups);

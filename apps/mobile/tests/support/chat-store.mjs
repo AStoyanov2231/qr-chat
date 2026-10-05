@@ -16,7 +16,7 @@ export function getChatStore(api) {
       publish({snapshot,ready:true,error:'',hasObservedGroup:state.hasObservedGroup||!!snapshot.group});
       const ids=snapshot.friends.filter(friend=>friend.accepted_at).map(friend=>friend.id);
       if(previewWatcher && !ids.length) {previewWatcher.stop();previewWatcher=null;}
-      if(ids.length && !previewWatcher) previewWatcher=watcher(ids.map(id=>({table:'direct_messages',id})));
+      if(ids.length && !previewWatcher) previewWatcher=watcher(ids.map(id=>({table:'messages',id})));
     } catch(error) {publish({snapshot:{session:null,group:null,friends:[],expiresAt:null,directPreviews:{}},ready:false,error:error.message});throw error;}
   }
   async function refreshDirect(id) {
@@ -28,7 +28,7 @@ export function getChatStore(api) {
     getDirect:id=>state.directs[id]??{messages:[],nextCursor:null,loading:true,error:''},
     start:()=>refresh().catch(()=>{}), pause(){host.watchers.forEach(value=>value.stop());},
     refresh,refreshGroup:refresh,openGroup:()=>()=>{},loadOlderGroup:async()=>{},
-    openDirect(id){const value=watcher([{table:'direct_messages',id}]);void refreshDirect(id).catch(()=>{});return()=>value.stop();},
+    openDirect(id){const value=watcher([{table:'messages',id}]);void refreshDirect(id).catch(()=>{});return()=>value.stop();},
     refreshDirect,async loadOlderDirect(id){counts.set(id,(counts.get(id)||1)+1);await refreshDirect(id);},
   };
   stores.set(api,store);return store;

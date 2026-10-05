@@ -17,7 +17,7 @@ export const qrNameLookupResponseSchema = z.strictObject({ name: qrNameSchema.nu
 export const messageBodySchema = text(4000);
 export const profileSchema = z.strictObject({
   display_name: displayNameSchema,
-  avatar_url: z.url().max(2048).refine((url) => url.startsWith("https://")).nullable().optional(),
+  avatar_path: z.string().regex(/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/).nullable().optional(),
 });
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const avatarUploadSchema = z.strictObject({

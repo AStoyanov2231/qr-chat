@@ -139,7 +139,7 @@ test('Chats loading uses one scrolling list below the persistent header and sear
 test('Chats orders the active group before individual requests and ordered DMs', () => {
   const mayaMessage = {
     id: 'direct-message-1',
-    friend_connection_id: acceptedMaya.id,
+    group_id: acceptedMaya.id,
     sender_id: sessionId,
     body: 'Thanks for the welcome!',
     created_at: new Date(Date.now() - 12 * 60_000 - 1_000).toISOString(),

@@ -16,7 +16,7 @@ function fakeClient() {
 }
 test('filtered reconnect refetches missed data, retries, and cleans up', async () => {
   const client = fakeClient(); let server = ['one']; let cache = []; const states = [];
-  const watcher = watchChanges(client, [{ table: 'group_messages', column: 'group_id', id }], async () => { cache = [...server]; }, (state) => states.push(state), { retryMs: 1, pollMs: 100000 });
+  const watcher = watchChanges(client, [{ table: 'messages', column: 'group_id', id }], async () => { cache = [...server]; }, (state) => states.push(state), { retryMs: 1, pollMs: 100000 });
   const first = client.channels[0];
   assert.equal(first.filters[0].filter, `group_id=eq.${id}`);
   first.status('SUBSCRIBED'); first.system({ extension: 'postgres_changes', status: 'ok' }); await tick(); assert.deepEqual(cache, ['one']);
@@ -30,7 +30,7 @@ test('filtered reconnect refetches missed data, retries, and cleans up', async (
 
 test('events arriving during a refetch trigger one more reconciliation', async () => {
   const client = fakeClient(); let resolve; let reads = 0;
-  const watcher = watchChanges(client, [{ table: 'group_memberships', column: 'user_id', id }], async () => { reads++; if (reads === 1) await new Promise((done) => { resolve = done; }); }, () => {}, { pollMs: 100000 });
+  const watcher = watchChanges(client, [{ table: 'group_members', column: 'user_id', id }], async () => { reads++; if (reads === 1) await new Promise((done) => { resolve = done; }); }, () => {}, { pollMs: 100000 });
   client.channels[0].status('SUBSCRIBED');
   client.channels[0].event(); client.channels[0].event(); resolve(); await tick();
   assert.equal(reads, 2); watcher.stop();
@@ -38,14 +38,14 @@ test('events arriving during a refetch trigger one more reconciliation', async (
 
 test('periodic recovery handles filtered deletes and expiration without events', async () => {
   const client = fakeClient(); let reads = 0;
-  const watcher = watchChanges(client, [{ table: 'friend_connections', column: 'user_a_id', id }], async () => { reads++; if (reads === 1) throw new Error('offline'); }, () => {}, { pollMs: 5 });
+  const watcher = watchChanges(client, [{ table: 'friendships', column: 'user_a_id', id }], async () => { reads++; if (reads === 1) throw new Error('offline'); }, () => {}, { pollMs: 5 });
   client.channels[0].status('SUBSCRIBED'); await new Promise((resolve) => setTimeout(resolve, 30));
   assert.ok(reads > 1); watcher.stop();
 });
 
 test('Postgres readiness closes the channel-join snapshot gap', async () => {
   const client = fakeClient(); let server = ['one']; let cache = []; const states = [];
-  const watcher = watchChanges(client, [{ table: 'group_messages', column: 'group_id', id }], async () => { cache = [...server]; }, (s) => states.push(s), { pollMs: 100000 });
+  const watcher = watchChanges(client, [{ table: 'messages', column: 'group_id', id }], async () => { cache = [...server]; }, (s) => states.push(s), { pollMs: 100000 });
   client.channels[0].status('SUBSCRIBED'); await tick();
   assert.equal(states.includes('connected'), false);
   server.push('between join and replication');

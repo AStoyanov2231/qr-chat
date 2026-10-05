@@ -14,59 +14,10 @@ export type Database = {
   }
   public: {
     Tables: {
-      user_blocks: {
-        Row: { blocker_id: string; blocked_id: string; created_at: string }
-        Insert: { blocker_id: string; blocked_id: string; created_at?: string }
-        Update: { blocker_id?: string; blocked_id?: string; created_at?: string }
-        Relationships: [
-          { foreignKeyName: "user_blocks_blocker_id_fkey"; columns: ["blocker_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
-          { foreignKeyName: "user_blocks_blocked_id_fkey"; columns: ["blocked_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
-        ]
-      }
-
-      direct_messages: {
-        Row: {
-          body: string
-          created_at: string
-          friend_connection_id: string
-          id: number
-          sender_id: string | null
-        }
-        Insert: {
-          body: string
-          created_at?: string
-          friend_connection_id: string
-          id?: never
-          sender_id?: string | null
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          friend_connection_id?: string
-          id?: never
-          sender_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "direct_messages_friend_connection_id_fkey"
-            columns: ["friend_connection_id"]
-            isOneToOne: false
-            referencedRelation: "friend_connections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "direct_messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      friend_connections: {
+      friendships: {
         Row: {
           accepted_at: string | null
-          id: string
+          group_id: string
           requested_at: string
           requested_by_id: string
           user_a_id: string
@@ -74,7 +25,7 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
-          id?: string
+          group_id: string
           requested_at?: string
           requested_by_id: string
           user_a_id: string
@@ -82,7 +33,7 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
-          id?: string
+          group_id?: string
           requested_at?: string
           requested_by_id?: string
           user_a_id?: string
@@ -90,21 +41,28 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "friend_connections_requested_by_id_fkey"
+            foreignKeyName: "friendships_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: true
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_requested_by_id_fkey"
             columns: ["requested_by_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "friend_connections_user_a_id_fkey"
+            foreignKeyName: "friendships_user_a_id_fkey"
             columns: ["user_a_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "friend_connections_user_b_id_fkey"
+            foreignKeyName: "friendships_user_b_id_fkey"
             columns: ["user_b_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -112,35 +70,33 @@ export type Database = {
           },
         ]
       }
-      group_memberships: {
+      group_members: {
         Row: {
-          expires_at: string
           group_id: string
           joined_at: string
           user_id: string
+          expires_at: string | null
         }
         Insert: {
-          expires_at?: string
           group_id: string
           joined_at?: string
           user_id: string
         }
         Update: {
-          expires_at?: string
           group_id?: string
           joined_at?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "group_memberships_group_id_fkey"
+            foreignKeyName: "group_members_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: "qr_groups"
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "group_memberships_user_id_fkey"
+            foreignKeyName: "group_members_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
@@ -148,7 +104,28 @@ export type Database = {
           },
         ]
       }
-      group_messages: {
+      groups: {
+        Row: {
+          code_key: string | null
+          created_at: string
+          id: string
+          name: string | null
+        }
+        Insert: {
+          code_key?: string | null
+          created_at?: string
+          id?: string
+          name?: string | null
+        }
+        Update: {
+          code_key?: string | null
+          created_at?: string
+          id?: string
+          name?: string | null
+        }
+        Relationships: []
+      }
+      messages: {
         Row: {
           body: string
           created_at: string
@@ -172,14 +149,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "group_messages_group_id_fkey"
+            foreignKeyName: "messages_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: "qr_groups"
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "group_messages_sender_id_fkey"
+            foreignKeyName: "messages_sender_id_fkey"
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -187,70 +164,178 @@ export type Database = {
           },
         ]
       }
+      permissions: {
+        Row: {
+          description: string
+          id: number
+          key: string
+        }
+        Insert: {
+          description?: string
+          id?: never
+          key: string
+        }
+        Update: {
+          description?: string
+          id?: never
+          key?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
-          avatar_url: string | null
+          avatar_path: string | null
           created_at: string
           display_name: string | null
           id: string
         }
         Insert: {
-          avatar_url?: string | null
+          avatar_path?: string | null
           created_at?: string
           display_name?: string | null
           id: string
         }
         Update: {
-          avatar_url?: string | null
+          avatar_path?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
         }
         Relationships: []
       }
-      qr_codes: {
+      role_permissions: {
         Row: {
-          code_key: string
-          created_at: string
-          display_name: string | null
-          id: string
+          permission_id: number
+          role_id: number
         }
         Insert: {
-          code_key: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
+          permission_id: number
+          role_id: number
         }
         Update: {
-          code_key?: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
-        }
-        Relationships: []
-      }
-      qr_groups: {
-        Row: {
-          created_at: string
-          id: string
-          qr_code_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          qr_code_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          qr_code_id?: string
+          permission_id?: number
+          role_id?: number
         }
         Relationships: [
           {
-            foreignKeyName: "qr_groups_qr_code_id_fkey"
-            columns: ["qr_code_id"]
-            isOneToOne: true
-            referencedRelation: "qr_codes"
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          assign_permission_id: number | null
+          description: string
+          id: number
+          key: string
+        }
+        Insert: {
+          assign_permission_id?: number | null
+          description?: string
+          id?: never
+          key: string
+        }
+        Update: {
+          assign_permission_id?: number | null
+          description?: string
+          id?: never
+          key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roles_assign_permission_id_fkey"
+            columns: ["assign_permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          expires_at: string | null
+          granted_at: string
+          granted_by: string | null
+          group_id: string | null
+          id: number
+          role_id: number
+          user_id: string
+        }
+        Insert: {
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          group_id?: string | null
+          id?: never
+          role_id: number
+          user_id: string
+        }
+        Update: {
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          group_id?: string | null
+          id?: never
+          role_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
             referencedColumns: ["id"]
           },
         ]
@@ -260,16 +345,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      block_friend_connection: {
-        Args: { p_connection_id: string }
-        Returns: boolean
-      }
-      get_chat_overview: { Args: never; Returns: Json }
-      get_chat_access: { Args: never; Returns: Json }
       accept_friend_request: {
         Args: { p_connection_id: string }
         Returns: boolean
       }
+      block_friend_connection: {
+        Args: { p_connection_id: string }
+        Returns: boolean
+      }
+      expires_at: {
+        Args: { "": Database["public"]["Tables"]["group_members"]["Row"] }
+        Returns: {
+          error: true
+        } & "the function public.expires_at with parameter or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache"
+      }
+      get_chat_access: { Args: never; Returns: Json }
+      get_chat_overview: { Args: never; Returns: Json }
       get_qr_chat_name: { Args: { p_code_key: string }; Returns: string }
       join_named_qr_group: {
         Args: { p_code_key: string; p_display_name: string }
@@ -277,7 +368,6 @@ export type Database = {
           display_name: string
           expires_at: string
           group_id: string
-          qr_code_id: string
         }[]
       }
       join_qr_group: {
@@ -285,10 +375,10 @@ export type Database = {
         Returns: {
           expires_at: string
           group_id: string
-          qr_code_id: string
         }[]
       }
       leave_qr_group: { Args: never; Returns: string }
+      my_permissions: { Args: { p_group_id?: string }; Returns: string[] }
       name_current_qr_chat_if_empty: {
         Args: { p_code_key: string; p_display_name: string }
         Returns: string

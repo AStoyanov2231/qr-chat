@@ -7,7 +7,7 @@ test('request diagnostics are opt-in and contain only bounded request metadata',
   const fetcher = async () => new Response('private message', { headers: { 'content-length': '15' } });
   assert.equal(createObservedFetch(fetcher), fetcher);
   const observed = createObservedFetch(fetcher, event => observations.push(event), () => 'resume');
-  const response = await observed('https://project.example/rest/v1/group_messages?sender_id=secret-id', { headers: { authorization: 'Bearer secret-token' } });
+  const response = await observed('https://project.example/rest/v1/messages?sender_id=secret-id', { headers: { authorization: 'Bearer secret-token' } });
   assert.equal(await response.text(), 'private message');
   assert.deepEqual(observations[0], { category: 'messages', trigger: 'resume', durationMs: observations[0].durationMs, status: 200, responseBytes: 15 });
   assert.doesNotMatch(JSON.stringify(observations), /secret|private message|project/);

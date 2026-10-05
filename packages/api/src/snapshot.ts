@@ -1,20 +1,18 @@
 import type { Message, Group, Session } from '@qr-chat/domain';
 import type { ChatApi } from './index.ts';
-import type { ChatOverview, GroupMessage, Friend } from './overview.ts';
-import type { Tables } from '@qr-chat/types';
+import type { ChatOverview, GroupMessage, Friend, DirectMessage } from './overview.ts';
 
-export type DirectPreview = { status: 'ready'; message: Tables<'direct_messages'> | null } | { status: 'error' };
+export type DirectPreview = { status: 'ready'; message: DirectMessage | null } | { status: 'error' };
 export type ChatSnapshot = { session: Session | null; group: Group | null; friends: Friend[]; expiresAt: string | null; directPreviews: Record<string, DirectPreview> };
 export const emptySnapshot: ChatSnapshot = { session: null, group: null, friends: [], expiresAt: null, directPreviews: {} };
 export function groupMessageView(message: GroupMessage): Message {
   return { id: String(message.id), user: message.sender_id ?? 'deleted', name: message.profiles?.display_name ?? 'Former participant', avatarUrl: message.profiles?.avatar_url ?? null, text: message.body, time: Date.parse(message.created_at) };
 }
 export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
-  const room = overview.membership?.qr_groups;
-  const code = room?.qr_codes;
+  const room = overview.membership?.groups;
   return {
     session: { id: overview.userId, name: overview.profile?.display_name ?? '', avatarUrl: overview.profile?.avatar_url ?? null, hidden: [] },
-    group: room && code ? { id: room.id, venue: { id: room.id, name: code.display_name ?? 'Unnamed chat', nameMissing: code.display_name === null, codes: [code.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: overview.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: overview.groupPreview ? [groupMessageView(overview.groupPreview)] : [], nextCursor: null } : null,
+    group: room?.code_key ? { id: room.id, venue: { id: room.id, name: room.name ?? 'Unnamed chat', nameMissing: room.name === null, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: overview.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: overview.groupPreview ? [groupMessageView(overview.groupPreview)] : [], nextCursor: null } : null,
     friends: overview.friends,
     expiresAt: overview.membership?.expires_at ?? null,
     directPreviews: Object.fromEntries(overview.friends.filter((friend) => friend.accepted_at).map((friend) => [friend.id, { status: 'ready' as const, message: overview.directPreviews[friend.id] ?? null }])),
@@ -53,7 +51,7 @@ export async function loadDirectSnapshot(api: ChatApi, connectionId: string, cou
     if (access.userId !== id || !access.acceptedConnectionIds.includes(connectionId)) throw new Error('This friendship is no longer available.');
   };
   await check();
-  const messages: Tables<'direct_messages'>[] = [];
+  const messages: DirectMessage[] = [];
   let before: number | undefined;
   let nextCursor: number | null = null;
   for (let page = 0; page < count; page++) {
