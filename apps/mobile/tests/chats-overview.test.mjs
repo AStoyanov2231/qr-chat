@@ -31,10 +31,10 @@ for (const platform of ['ios', 'android']) {
     assert.match(screen.text(), /Friend request sent/);
     assert.match(screen.text(), /See you at the cafe\./);
     assert.doesNotMatch(screen.text(), /Recent|Nearby|My Groups/);
-    const searchField = screen.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === 'Search chats and people by name');
+    const searchField = screen.root.findAllByType('NativeTextInput').find(node => node.props.accessibilityLabel === 'Search chats and people by name');
     assert.ok(searchField, 'Search is always visible');
     const list = screen.root.findByType('ScrollView');
-    assert.equal(list.findAllByType('TextInput').length, 0, 'Search stays outside the scrolling list');
+    assert.equal(list.findAllByType('NativeTextInput').length, 0, 'Search stays outside the scrolling list');
     assert.equal(list.findAllByType('Pressable').some(row => row.props.accessibilityLabel === 'Open your profile'), false);
     const labels = list.findAllByType('Pressable').map(row => row.props.accessibilityLabel);
     assert.ok(labels[0].startsWith('Open Brew'));

@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Copy, Icon } from './chat-ui';
+import { Copy } from './chat-ui';
+import { NativeAction } from './native-action';
 
 export function ConversationHeader({ title, subtitle, imageUrl, settings, settingsLabel, disabled }: { title: string; subtitle?: string; imageUrl?: string | null; settings?: () => void; settingsLabel?: string; disabled?: boolean }) {
   const insets = useSafeAreaInsets();
@@ -14,8 +15,8 @@ export function ConversationHeader({ title, subtitle, imageUrl, settings, settin
       <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(10,20,30,0.24)' }} />
     </View>}
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: insets.top + 12 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back to chats" onPress={() => router.dismissTo('/')} style={circle}><Icon name="back" size={22} /></Pressable>
-      {settings && <Pressable accessibilityRole="button" accessibilityLabel={settingsLabel} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={settings} style={[circle, { opacity: disabled ? 0.5 : 1 }]}><Icon name="settings" size={23} /></Pressable>}
+      <NativeAction icon="back" accessibilityLabel="Back to chats" onPress={() => router.dismissTo('/')} />
+      {settings && <NativeAction icon="settings" accessibilityLabel={settingsLabel ?? 'Settings'} disabled={disabled} onPress={settings} />}
     </View>
     <View style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 34, gap: 6 }}>
       <Copy selectable={false} accessibilityRole="header" numberOfLines={2} ellipsizeMode="tail" style={{ color: '#fff', fontSize: 30, lineHeight: 36, fontWeight: '600', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.4)', textShadowRadius: 8 }}>{title}</Copy>
@@ -23,4 +24,3 @@ export function ConversationHeader({ title, subtitle, imageUrl, settings, settin
     </View>
   </View>;
 }
-const circle = { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.94)', alignItems: 'center' as const, justifyContent: 'center' as const };

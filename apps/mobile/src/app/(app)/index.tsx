@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, Alert, Animated, Easing, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import type { ChatSnapshot } from '@qr-chat/api';
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from '@qr-chat/domain';
 import { Avatar } from '@/components/avatar';
-import { Copy, Icon, Skeleton, colors, styles, useAction } from '@/components/chat-ui';
+import { Copy, Icon, NativeInput, Skeleton, colors, styles, useAction } from '@/components/chat-ui';
 import { NativeAction } from '@/components/native-action';
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
@@ -224,7 +224,7 @@ export default function ChatsScreen() {
       </View>
       <View style={[homeStyles.search, searchFocused && { borderColor: '#668ac0' }]}>
         <Icon name="search" size={20} color={colors.muted} />
-        <TextInput accessibilityLabel="Search chats and people by name" placeholder="Search chats and people..." placeholderTextColor={colors.muted} value={search} onChangeText={(value) => { setSearch(value); setRevealedId(null); }} editable={chat.ready && !chat.error} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} autoCapitalize="none" autoCorrect={false} returnKeyType="search" style={homeStyles.searchInput} />
+        <NativeInput accessibilityLabel="Search chats and people by name" placeholder="Search chats and people..." value={search} onChangeText={(value) => { setSearch(value); setRevealedId(null); }} editable={chat.ready && !chat.error} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} autoCapitalize="none" autoCorrect={false} returnKeyType="search" containerStyle={homeStyles.searchInput} />
         <View style={homeStyles.clearSearch}>{!!search && <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} style={homeStyles.clearSearch}><Icon name="close" size={18} color={colors.muted} /></Pressable>}</View>
       </View>
     </View>

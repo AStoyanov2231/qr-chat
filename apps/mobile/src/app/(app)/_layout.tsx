@@ -16,7 +16,7 @@ export default function AppLayout() {
   return <ChatProvider key={userId}><Stack screenOptions={{ statusBarStyle: 'dark', headerShadowVisible: false, headerTintColor: colors.ink, contentStyle: { backgroundColor: colors.paper }, headerBackButtonDisplayMode: 'minimal' }}>
     <Stack.Screen name="index" options={{ headerShown: false }} />
     <Stack.Screen name="chats" options={{ headerShown: false }} />
-    <Stack.Screen name="profile" options={{ title: 'Your profile', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true, sheetCornerRadius: 28, headerRight: modal.headerRight }} />
+    <Stack.Screen name="profile" options={{ title: 'Your profile', presentation: 'card' }} />
     <Stack.Screen name="scan" options={{ ...modal, title: 'Scan a code' }} />
     <Stack.Screen name="join" options={{ ...modal, title: 'Join the room' }} />
     <Stack.Screen name="room" options={{ title: 'Group', headerShown: false, statusBarStyle: 'light' }} />

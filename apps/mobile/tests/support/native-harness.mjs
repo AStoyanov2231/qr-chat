@@ -38,8 +38,36 @@ const mocks = {
     }`,
   '@expo/ui': `
     import React from 'react';
-    export const Host=({children,...props})=>React.createElement('Host',props,children);
+    const InputLabel=React.createContext(undefined);
+    export const Host=({children,...props})=>React.createElement('Host',props,React.createElement(InputLabel.Provider,{value:props.accessibilityLabel},children));
+    export function useNativeState(initialValue) {
+      const [value,setValue]=React.useState(initialValue);
+      const current=React.useRef(value);current.current=value;
+      return React.useMemo(()=>({get value(){return current.current;},set value(next){current.current=next;setValue(next);},get(){return current.current;},set(next){globalThis.__qrChatNativeTest.nativeInputWrites=(globalThis.__qrChatNativeTest.nativeInputWrites??0)+1;current.current=next;setValue(next);}}),[]);
+    }
+    export function TextInput({value,onChangeText,...props}) {
+      const label=React.useContext(InputLabel);
+      return React.createElement('NativeTextInput',{...props,accessibilityLabel:label,value:value.value,
+        onChangeText:next=>{value.value=next;onChangeText?.(next);}});
+    }
+    export const RNHostView=({children,...props})=>React.createElement('RNHostView',props,children);
     export const Button=({label,...props})=>React.createElement('Button',{...props,title:label});`,
+  '@expo/ui/swift-ui': `
+    import React from 'react';
+    export {useNativeState} from '@expo/ui';
+    export const Image=props=>React.createElement('SwiftUIImage',props);
+    export const Button=props=>React.createElement('SwiftUIButton',props);`,
+  '@expo/ui/swift-ui/modifiers': `
+    export const buttonBorderShape=shape=>({$type:'buttonBorderShape',shape});
+    export const buttonStyle=style=>({$type:'buttonStyle',style});
+    export const controlSize=size=>({$type:'controlSize',size});
+    export const frame=params=>({$type:'frame',...params});
+    export const accessibilityLabel=label=>({$type:'accessibilityLabel',label});
+    export const disabled=value=>({$type:'disabled',value});
+    export const tint=color=>({$type:'tint',color});`,
+  '@expo/ui/jetpack-compose': `
+    import React from 'react';
+    export const FilledIconButton=props=>React.createElement('FilledIconButton',props);`,
   'expo-router': `
     import React, {useEffect} from 'react';
     export const router=Object.fromEntries(['push','replace','dismissTo','back'].map(method => [method,(...args) => globalThis.__qrChatNativeTest.navigation.push([method,...args])]));
@@ -158,7 +186,7 @@ export async function render(t, Component, props = {}) {
       await act(async () => { await control.props.onPress(); });
     },
     async type(label, value) {
-      const control = tree.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === label);
+      const control = tree.root.findAllByType('NativeTextInput').find(node => node.props.accessibilityLabel === label);
       if (!control) throw new Error(`Missing input: ${label}`);
       await act(async () => { control.props.onChangeText(value); });
     },
