@@ -52,7 +52,7 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, Join);
     state.chat.ready = true; state.chat.session = { id: 'me', name: 'Andy' };
     await screen.update();
-    assert.equal(screen.root.findAllByType('TextInput').some(input => input.props.accessibilityLabel === 'Your name'), false);
+    assert.equal(screen.root.findAllByType('NativeTextInput').some(input => input.props.accessibilityLabel === 'Your name'), false);
     await screen.type('Chat name', 'Cafe');
     await screen.press('Join chat');
     assert.deepEqual(calls, [['New-Room', 'Cafe']]);
@@ -71,7 +71,7 @@ for (const platform of ['ios', 'android']) {
         joinNamedGroup: async (code, name) => { calls.push([code, name]); return { group_id: 'room-two', display_name: name }; },
       };
       const screen = await render(t, Join);
-      assert.equal(screen.root.findAllByType('TextInput').length, 0);
+      assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
       assert.deepEqual(calls, [['New-Room', 'Cafe']]);
       assert.equal(state.chat.session.name, 'Andy');
       assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'Cafe' } }]]);
@@ -115,7 +115,7 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Join chat');
     assert.deepEqual(calls, [['name-current', 'Old-Room', 'Cafe']]);
     assert.match(screen.text(), /Offline/);
-    assert.equal(screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Chat name').props.value, 'Cafe');
+    assert.equal(screen.root.findAllByType('NativeTextInput').find(input => input.props.accessibilityLabel === 'Chat name').props.value, 'Cafe');
     assert.equal(state.navigation.length, 0);
   });
 
@@ -145,7 +145,7 @@ for (const platform of ['ios', 'android']) {
     assert.doesNotMatch(screen.text(), /Stale Venue/);
     deferred.get('Second-Room')({ kind: 'missing' });
     await screen.update();
-    assert.equal(screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Chat name').props.value, '');
+    assert.equal(screen.root.findAllByType('NativeTextInput').find(input => input.props.accessibilityLabel === 'Chat name').props.value, '');
   });
 
   test(`${platform}: a room that expires or is replaced cannot show the new group's messages`, async (t) => {
@@ -156,7 +156,7 @@ for (const platform of ['ios', 'android']) {
     state.chat.group = { ...group, id: 'different', messages: [{ id: '1', user: 'peer', name: 'Sam', text: 'different-room-private-text', time: 0 }] };
     await screen.update();
     assert.doesNotMatch(screen.text(), /different-room-private-text/);
-    assert.equal(screen.root.findAllByType('TextInput').length, 0);
+    assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
     await screen.press('Scan to rejoin');
     assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
   });
@@ -173,7 +173,7 @@ for (const platform of ['ios', 'android']) {
     assert.equal(screen.root.findAllByType('CameraView').length, 1);
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({data:'x'.repeat(513)}); });
     assert.match(screen.text(), /QR code is invalid/);
-    assert.equal(screen.root.findAllByType('TextInput').length, 0);
+    assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
     assert.doesNotMatch(screen.text(), /Enter a code/);
     state.auth.active = false;
     await screen.update();
@@ -207,7 +207,7 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, EditProfile);
     await screen.type('Display name', 'New name'); await screen.press('Save profile');
     assert.match(screen.text(), /Offline/); assert.equal(state.navigation.length, 0);
-    assert.equal(screen.root.findByType('TextInput').props.value, 'New name');
+    assert.equal(screen.root.findByType('NativeTextInput').props.value, 'New name');
     fail = false; await screen.press('Save profile');
     assert.deepEqual(names, ['New name']); assert.deepEqual(state.navigation, [['back']]);
   });
@@ -256,7 +256,7 @@ for (const platform of ['ios', 'android']) {
     state.auth.api.joinGroup=()=>assert.fail('A link cannot start a new join');
     const screen=await render(t,Join);
     assert.deepEqual(state.navigation,[['replace','/scan']]);
-    assert.equal(screen.root.findAllByType('TextInput').length,0);
+    assert.equal(screen.root.findAllByType('NativeTextInput').length,0);
   });
 
   test(`${platform}: removing a friendship clears its direct conversation and composer`, async (t) => {
@@ -268,7 +268,7 @@ for (const platform of ['ios', 'android']) {
     assert.doesNotMatch(screen.text(), /Conversation settings/);
     state.chat.friends = []; await screen.update();
     assert.doesNotMatch(screen.text(), /private-direct-text/);
-    assert.equal(screen.root.findAllByType('TextInput').length, 0);
+    assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
     assert.equal(state.watchers[0].stopped, true);
   });
 
@@ -307,7 +307,7 @@ for (const platform of ['ios', 'android']) {
     await act(async () => { finishRead({ messages: [], nextCursor: null }); });
     assert.match(screen.text(), /Say hello to Sam/);
     assert.match(screen.text(), /Send your first message/);
-    const composer = screen.root.findAllByType('TextInput').find(input => input.props.accessibilityLabel === 'Message Sam');
+    const composer = screen.root.findAllByType('NativeTextInput').find(input => input.props.accessibilityLabel === 'Message Sam');
     assert.ok(composer);
     assert.equal(composer.props.placeholder, 'Message…');
     assert.equal(composer.props.accessibilityLabel, 'Message Sam');
@@ -351,11 +351,11 @@ test('message composer retains a failed draft and clears it before a failed refr
   await screen.type('Message', 'Hello');
   assert.equal(sendButton().props.accessibilityState.disabled, false);
   await screen.press('Send message');
-  assert.equal(screen.root.findByType('TextInput').props.value, 'Hello');
+  assert.equal(screen.root.findByType('NativeTextInput').props.value, 'Hello');
   failSend = false;
   await screen.press('Send message');
   assert.deepEqual(sent, ['Hello']);
-  assert.equal(screen.root.findByType('TextInput').props.value, '');
+  assert.equal(screen.root.findByType('NativeTextInput').props.value, '');
 });
 
 test('message composer displays a pending spinner and prevents duplicate sends', async (t) => {
@@ -376,7 +376,7 @@ test('message composer displays a pending spinner and prevents duplicate sends',
   await assert.rejects(screen.press('Sending message'), /Disabled button/);
   assert.equal(sendCount, 1, 'the disabled pending control cannot trigger another send');
   await act(async () => { finishSend(); await Promise.resolve(); });
-  assert.equal(screen.root.findByType('TextInput').props.value, '');
+  assert.equal(screen.root.findByType('NativeTextInput').props.value, '');
 });
 
 test('retrying a direct conversation after a backend failure reconciles the friendship snapshot', async (t) => {

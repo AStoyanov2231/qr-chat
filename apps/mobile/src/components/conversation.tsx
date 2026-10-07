@@ -1,8 +1,8 @@
 import { useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { messageDayLabel, type Message } from '@qr-chat/domain';
-import { Copy, ErrorNotice, Icon, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
+import { Copy, ErrorNotice, Icon, NativeInput, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
 import { Avatar } from './avatar';
 
 type Props = {
@@ -82,7 +82,7 @@ export function Conversation({ messages, userId, loading, error, available, conn
     />}
     <View style={{ paddingHorizontal: 22, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 12) }}>
       {available ? <View style={{ width: '100%', maxWidth: 520, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 30, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.line }}>
-        <TextInput accessibilityLabel={composerLabel} placeholder="Message…" placeholderTextColor={colors.muted} value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy && !sending} style={{ flex: 1, minWidth: 0, minHeight: 48, maxHeight: 150, paddingHorizontal: 10, paddingVertical: 10, fontSize: 16, color: colors.ink }} />
+        <NativeInput accessibilityLabel={composerLabel} placeholder="Message…" value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy && !sending} containerStyle={{ flex: 1, minWidth: 0, minHeight: 48, maxHeight: 150 }} style={{ paddingHorizontal: 10, paddingVertical: 10 }} />
         <Pressable accessibilityRole="button" accessibilityLabel={sending ? 'Sending message' : 'Send message'} accessibilityState={{ disabled: sendDisabled }} disabled={sendDisabled} onPress={() => { void submit(); }} style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: colors.ink, opacity: sendDisabled && !sending ? 0.45 : pressed ? 0.75 : 1 })}>
           {sending ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="send" size={20} color="#fff" />}
         </Pressable>

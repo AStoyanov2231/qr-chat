@@ -16,17 +16,17 @@ for (const platform of ['ios', 'android']) {
     state.params = { groupId: group.id, code: 'Cafe-A', name: 'Cafe' };
     const screen = await render(t, Room);
     assert.match(screen.text(), /Your membership has ended/);
-    assert.equal(screen.root.findAllByType('TextInput').length, 0);
+    assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
 
     state.chat = { ...state.chat, group };
     await screen.update();
     assert.match(screen.text(), /private room message/);
-    assert.equal(screen.root.findAllByType('TextInput').length, 1);
+    assert.equal(screen.root.findAllByType('NativeTextInput').length, 1);
 
     state.chat = { ...state.chat, group: null };
     await screen.update();
     assert.doesNotMatch(screen.text(), /private room message/);
-    assert.equal(screen.root.findAllByType('TextInput').length, 0);
+    assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
     await screen.press('Scan to rejoin');
     assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
   });

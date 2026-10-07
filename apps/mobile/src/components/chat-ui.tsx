@@ -1,7 +1,10 @@
-import { useRef, useState, type PropsWithChildren } from 'react';
+import { useEffect, useRef, useState, type PropsWithChildren } from 'react';
+import { Host, TextInput as NativeTextInput, type TextInputProps as NativeTextInputProps } from '@expo/ui';
+import { useNativeState } from '@expo/ui/swift-ui';
+import { accessibilityLabel as nativeAccessibilityLabel } from '@expo/ui/swift-ui/modifiers';
 import { Image } from 'expo-image';
 import { SymbolView, type AndroidSymbol } from 'expo-symbols';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextProps, type TextInputProps, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextProps, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import { errorMessage } from '@/providers/chat-provider';
 
@@ -48,8 +51,26 @@ export function TextButton({ label, onPress, disabled, danger = false }: { label
     <Text style={{ fontSize: 14, color: danger ? colors.danger : colors.ink }}>{label}</Text>
   </Pressable>;
 }
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
-  return <View style={{ gap: 8 }}><Copy style={{ fontSize: 14 }}>{label}</Copy><TextInput accessibilityLabel={label} placeholderTextColor={colors.muted} {...props} style={[styles.input, props.style]} /></View>;
+export type NativeInputProps = Omit<NativeTextInputProps, 'value'> & { value: string; accessibilityLabel: string; containerStyle?: StyleProp<ViewStyle> };
+export function NativeInput({ value, accessibilityLabel, containerStyle, onChangeText, ...props }: NativeInputProps) {
+  const text = useNativeState(value);
+  const [editedValue, setEditedValue] = useState(value);
+  const processedEdit = useRef(editedValue);
+  // Native typing already updates the observable; only write back external changes.
+  useEffect(() => {
+    const fromTyping = value === editedValue && editedValue !== processedEdit.current;
+    processedEdit.current = editedValue;
+    if (!fromTyping && text.get() !== value) text.set(value);
+  }, [text, value, editedValue]);
+  return <Host matchContents={{ vertical: true }} colorScheme="light" seedColor={colors.ink} accessibilityLabel={accessibilityLabel}
+    style={containerStyle}>
+    <NativeTextInput placeholderTextColor={colors.muted} textStyle={{ color: colors.ink, fontSize: 16 }} {...props} value={text}
+      onChangeText={(next) => { setEditedValue(next); onChangeText?.(next); }}
+      modifiers={process.env.EXPO_OS === 'ios' ? [...(props.modifiers ?? []), nativeAccessibilityLabel(accessibilityLabel)] : props.modifiers} />
+  </Host>;
+}
+export function Field({ label, containerStyle, ...props }: Omit<NativeInputProps, 'accessibilityLabel'> & { label: string }) {
+  return <View style={{ gap: 8 }}><Copy style={{ fontSize: 14 }}>{label}</Copy><NativeInput accessibilityLabel={label} {...props} containerStyle={[styles.input, containerStyle]} /></View>;
 }
 export function ErrorNotice({ message, retry }: { message: string; retry?: () => void }) {
   if (!message) return null;

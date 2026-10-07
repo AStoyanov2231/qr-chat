@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, Stack, useFocusEffect } from 'expo-router';
-import { Linking, Pressable, View, useWindowDimensions } from 'react-native';
+import { Linking, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { unwrapQrCode } from '@qr-chat/domain';
 import { codeKeySchema } from '@qr-chat/validation';
-import { Button, Copy, ErrorNotice, Icon, styles } from '@/components/chat-ui';
+import { Button, Copy, ErrorNotice } from '@/components/chat-ui';
+import { NativeAction } from '@/components/native-action';
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
 import { webOrigin } from '@/lib/supabase';
@@ -47,8 +48,10 @@ export default function ScanScreen() {
   }
   const cameraVisible = permission?.granted && focused && active && !cameraError;
   const targetSize = Math.min(width * 0.7, 340);
+  const closeButton = <NativeAction icon="close" accessibilityLabel="Close scanner" onPress={() => router.back()} />;
   return <View style={{ flex: 1, backgroundColor: '#07090b' }}>
-    <Stack.Screen options={{ statusBarStyle: 'light', headerTransparent: true, headerTintColor: '#fff', title: '', headerRight: () => <Pressable accessibilityRole="button" accessibilityLabel="Close scanner" style={styles.iconButton} onPress={() => router.back()}><Icon name="close" color="#fff" /></Pressable> }} />
+    <Stack.Screen options={{ statusBarStyle: 'light', headerTransparent: true, headerTintColor: '#fff', title: '', headerRight: () => closeButton,
+      unstable_headerRightItems: process.env.EXPO_OS === 'ios' ? () => [{ type: 'custom', element: closeButton, hidesSharedBackground: true }] : undefined }} />
     {cameraVisible && <CameraView key={attempt} accessibilityLabel="Camera preview" style={{ position: 'absolute', inset: 0 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={({ data }) => accept(data)} onMountError={() => setCameraError('The camera could not start. Check camera access and try again.')} />}
     <View pointerEvents="none" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: insets.top + 48 }}>
       {cameraVisible && <View style={{ width: targetSize, height: targetSize, borderWidth: 2, borderColor: '#ffffffeb', borderRadius: 28, boxShadow: '0 0 0 2000px #03050770' }} />}
