@@ -16,12 +16,12 @@ export default function AppLayout() {
   return <ChatProvider key={userId}><Stack screenOptions={{ statusBarStyle: 'dark', headerShadowVisible: false, headerTintColor: colors.ink, contentStyle: { backgroundColor: colors.paper }, headerBackButtonDisplayMode: 'minimal' }}>
     <Stack.Screen name="index" options={{ headerShown: false }} />
     <Stack.Screen name="chats" options={{ headerShown: false }} />
-    <Stack.Screen name="profile" options={{ title: 'Your profile', presentation: 'card' }} />
+    <Stack.Screen name="profile" options={{ title: 'Your profile', presentation: 'card', headerShown: false }} />
     <Stack.Screen name="scan" options={{ ...modal, title: 'Scan a code' }} />
     <Stack.Screen name="join" options={{ ...modal, title: 'Join the room' }} />
     <Stack.Screen name="room" options={{ title: 'Group', headerShown: false, statusBarStyle: 'light' }} />
     <Stack.Screen name="members" options={{ ...modal, title: 'Members' }} />
-    <Stack.Screen name="person/[id]" options={{ ...modal, title: 'Profile' }} />
+    <Stack.Screen name="person/[id]" options={{ title: 'Profile', headerShown: false }} />
     <Stack.Screen name="direct/[id]" options={{ title: 'Direct message', headerShown: false, statusBarStyle: 'light' }} />
     <Stack.Screen name="edit-profile" options={{ ...modal, title: 'Edit Profile' }} />
     <Stack.Screen name="settings" options={{ ...modal, title: 'Settings' }} />

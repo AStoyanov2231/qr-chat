@@ -9,10 +9,10 @@ import { colors, Icon } from './chat-ui';
 type Props = Omit<ButtonProps, 'style'> & {
   align?: 'center' | 'flex-start' | 'flex-end';
   accessibilityLabel?: string;
-  icon?: 'back' | 'settings' | 'close';
+  icon?: 'back' | 'settings' | 'close' | 'browser';
 };
 
-const systemImages = { back: 'chevron.left', settings: 'gearshape', close: 'xmark' } as const;
+const systemImages = { back: 'chevron.left', settings: 'gearshape', close: 'xmark', browser: 'safari' } as const;
 
 export function NativeAction({ align = 'center', accessibilityLabel, icon, ...buttonProps }: Props) {
   const activate = () => { if (!buttonProps.disabled) buttonProps.onPress?.(); };

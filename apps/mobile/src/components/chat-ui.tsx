@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PropsWithChildren } from 'react';
 import { Host, TextInput as NativeTextInput, type TextInputProps as NativeTextInputProps } from '@expo/ui';
 import { useNativeState } from '@expo/ui/swift-ui';
-import { accessibilityLabel as nativeAccessibilityLabel } from '@expo/ui/swift-ui/modifiers';
+import { accessibilityLabel as nativeAccessibilityLabel, ignoreSafeArea } from '@expo/ui/swift-ui/modifiers';
 import { Image } from 'expo-image';
 import { SymbolView, type AndroidSymbol } from 'expo-symbols';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextProps, type ViewStyle } from 'react-native';
@@ -19,6 +19,7 @@ const symbols = {
   block: ['nosign', 'block'], userMinus: ['person.badge.minus.fill', 'person_remove'],
   check: ['checkmark', 'check'], userPlus: ['person.badge.plus.fill', 'person_add'],
   help: ['questionmark.circle', 'help'], pin: ['mappin', 'location_on'], close: ['xmark', 'close'],
+  browser: ['safari', 'open_in_browser'],
 } as const;
 export type IconName = keyof typeof symbols;
 export function Icon({ name, size = 25, color = colors.ink }: { name: IconName; size?: number; color?: string }) {
@@ -66,7 +67,8 @@ export function NativeInput({ value, accessibilityLabel, containerStyle, onChang
     style={containerStyle}>
     <NativeTextInput placeholderTextColor={colors.muted} textStyle={{ color: colors.ink, fontSize: 16 }} {...props} value={text}
       onChangeText={(next) => { setEditedValue(next); onChangeText?.(next); }}
-      modifiers={process.env.EXPO_OS === 'ios' ? [...(props.modifiers ?? []), nativeAccessibilityLabel(accessibilityLabel)] : props.modifiers} />
+      // Screens already move fields above the keyboard; SwiftUI's own avoidance would shift the text inside them.
+      modifiers={process.env.EXPO_OS === 'ios' ? [...(props.modifiers ?? []), nativeAccessibilityLabel(accessibilityLabel), ignoreSafeArea({ regions: 'keyboard' })] : props.modifiers} />
   </Host>;
 }
 export function Field({ label, containerStyle, ...props }: Omit<NativeInputProps, 'accessibilityLabel'> & { label: string }) {
@@ -142,4 +144,6 @@ export const styles = StyleSheet.create({
   skeleton: { borderRadius: 16, backgroundColor: '#e9ecf1' },
   empty: { minHeight: 330, paddingVertical: 32, justifyContent: 'center', alignItems: 'center', gap: 16 },
   panel: { borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 18 },
+  // Rounded sheet that overlaps a photo header, matching the conversation surface.
+  profileSurface: { flex: 1, marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: colors.paper, padding: 22, gap: 16 },
 });

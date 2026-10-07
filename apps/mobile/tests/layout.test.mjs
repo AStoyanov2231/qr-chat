@@ -93,9 +93,21 @@ for (const platform of ['ios', 'android']) {
     assert.deepEqual(state.navigation.at(-1), ['back']);
   });
 
-  test(`${platform}: chats and profile keep scrollable content inside native safe areas`, async (t) => {
+  test(`${platform}: the profile shows its photo header with actions underneath and no current group`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
-    for (const Page of [Chats, Profile]) {
+    state.chat.session = { id: 'me', name: 'Andy', avatarUrl: 'https://cdn.example/me.jpg' };
+    state.chat.group = { id: 'g', venue: { name: 'Cafe Nine', codes: ['cafe'] }, members: [], messages: [] };
+    const screen = await render(t, Profile);
+    assert.ok(screen.root.findAllByType('Image').some(node => node.props.source?.uri === 'https://cdn.example/me.jpg'), 'avatar fills the header');
+    assert.ok(screen.text().includes('Andy'));
+    for (const label of ['Edit profile', 'Settings', 'Privacy', 'Help & Feedback']) await screen.press(label).catch(() => { throw new Error(`Missing action: ${label}`); });
+    assert.deepEqual(state.navigation.filter(([method]) => method === 'push').map(([, href]) => href), ['/edit-profile', '/settings']);
+    assert.doesNotMatch(screen.text(), /Cafe Nine|Current group|No active group/);
+  });
+
+  test(`${platform}: chats keep scrollable content inside native safe areas`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    for (const Page of [Chats]) {
       const screen = await render(t, Page);
       const bounds = screen.root.findByType('NativeSafeAreaView');
       assert.deepEqual(bounds.props.edges, { top: true, bottom: true, left: true, right: true });

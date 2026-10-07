@@ -83,3 +83,18 @@ for (const platform of ['ios', 'android']) {
     }
   });
 }
+
+for (const platform of ['ios', 'android']) {
+  test(`${platform}: a scanned chat with a known name opens the room without showing the join screen`, async (t) => {
+    process.env.EXPO_OS = platform;
+    reset();
+    const joined = [];
+    state.auth.api = { resolveQrChatName: async () => ({ kind: 'saved', name: 'Cafe' }),
+      joinNamedGroup: async (code, name) => { joined.push([code, name]); return { group_id: groupId, display_name: name }; } };
+    const scanner = await render(t, Scan);
+    await act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ data: 'https://venue.example/?table=4' }); });
+    assert.deepEqual(joined, [['https://venue.example/?table=4', 'Cafe']]);
+    assert.ok(!state.navigation.some(([, href]) => href?.pathname === '/join'), 'join screen is skipped');
+    assert.deepEqual(state.navigation.at(-1), ['replace', roomRoute({ id: groupId, venue: { codes: ['https://venue.example/?table=4'], name: 'Cafe' } })]);
+  });
+}

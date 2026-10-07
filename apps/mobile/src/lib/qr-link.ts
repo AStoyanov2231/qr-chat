@@ -12,3 +12,9 @@ export function codeFromLink(value: string | null, webOrigin: string): string | 
     return parsed.success ? parsed.data : null;
   } catch { return null; }
 }
+
+/** A third-party http(s) QR key is the venue's own page, kept exactly as scanned. */
+export function venueUrl(code: string | undefined, webOrigin: string): string | null {
+  if (!code || !/^https?:\/\//i.test(code)) return null;
+  try { return new URL(code).origin === webOrigin ? null : code; } catch { return null; }
+}

@@ -1,9 +1,11 @@
 import { useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { messageDayLabel, type Message } from '@qr-chat/domain';
 import { Copy, ErrorNotice, Icon, NativeInput, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
 import { Avatar } from './avatar';
+import { useChatKeyboard } from '@/hooks/use-chat-keyboard';
 
 type Props = {
   messages: Message[];
@@ -31,6 +33,12 @@ export function Conversation({ messages, userId, loading, error, available, conn
   const action = useAction();
   const list = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
+  const keyboard = useChatKeyboard();
+  const bottomPadding = Math.max(insets.bottom, 12);
+  const surface = useAnimatedStyle(() => ({ marginTop: -24 * (1 - keyboard.expanded.value) }));
+  // Keeps the newest messages clear of the header controls once the surface reaches the top.
+  const controlsSpace = useAnimatedStyle(() => ({ height: (insets.top + 64) * keyboard.expanded.value }));
+  const composer = useAnimatedStyle(() => ({ paddingBottom: Math.max(keyboard.height.value + 8, bottomPadding) }));
   const sendDisabled = action.busy || sending || loading || !!error || !draft.trim();
 
   async function submit() {
@@ -48,7 +56,8 @@ export function Conversation({ messages, userId, loading, error, available, conn
     }
   }
 
-  return <KeyboardAvoidingView style={[styles.screen, { marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }]} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+  return <Animated.View style={[styles.screen, { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }, surface]}>
+    <Animated.View style={controlsSpace} />
     <View style={{ paddingHorizontal: 22, gap: 8 }}>
       <ErrorNotice message={error || action.error} retry={() => { void action.run(refresh); }} />
       {!connected && !error && <Copy accessibilityLiveRegion="polite" style={styles.muted}>Reconnecting…</Copy>}
@@ -63,7 +72,7 @@ export function Conversation({ messages, userId, loading, error, available, conn
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ paddingHorizontal: 22, paddingVertical: 14, gap: 8, flexGrow: 1, justifyContent: available && !messages.length && emptyState ? 'center' : !available || !messages.length ? 'flex-end' : undefined }}
       maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 100 }}
-      ListEmptyComponent={available ? emptyState === undefined ? <Copy style={[styles.muted, { padding: 20, textAlign: 'center' }]}>Be the first to say hello.</Copy> : emptyState : <Copy style={[styles.muted, { padding: 20, textAlign: 'center' }]}>{unavailable}</Copy>}
+      ListEmptyComponent={available ? emptyState : <Copy style={[styles.muted, { padding: 20, textAlign: 'center' }]}>{unavailable}</Copy>}
       ListFooterComponent={<View style={{ gap: 16 }}>{available && nextCursor !== null && <TextButton label="Load older messages" disabled={action.busy} onPress={() => { void action.run(loadOlder); }} />}</View>}
       renderItem={({ item, index }) => {
         const own = item.user === userId;
@@ -80,13 +89,13 @@ export function Conversation({ messages, userId, loading, error, available, conn
         </View>;
       }}
     />}
-    <View style={{ paddingHorizontal: 22, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 12) }}>
+    <Animated.View style={[{ paddingHorizontal: 22, paddingTop: 8 }, composer]}>
       {available ? <View style={{ width: '100%', maxWidth: 520, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 30, backgroundColor: colors.soft, borderWidth: 1, borderColor: colors.line }}>
         <NativeInput accessibilityLabel={composerLabel} placeholder="Message…" value={draft} onChangeText={setDraft} maxLength={4000} multiline editable={!action.busy && !sending} containerStyle={{ flex: 1, minWidth: 0, minHeight: 48, maxHeight: 150 }} style={{ paddingHorizontal: 10, paddingVertical: 10 }} />
         <Pressable accessibilityRole="button" accessibilityLabel={sending ? 'Sending message' : 'Send message'} accessibilityState={{ disabled: sendDisabled }} disabled={sendDisabled} onPress={() => { void submit(); }} style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: colors.ink, opacity: sendDisabled && !sending ? 0.45 : pressed ? 0.75 : 1 })}>
           {sending ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="send" size={20} color="#fff" />}
         </Pressable>
       </View> : !loading && endedAction}
-    </View>
-  </KeyboardAvoidingView>;
+    </Animated.View>
+  </Animated.View>;
 }
