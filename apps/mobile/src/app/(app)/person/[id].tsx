@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { friendshipState } from '@qr-chat/domain';
-import { Avatar } from '@/components/avatar';
-import { Button, Copy, ErrorNotice, Screen, Skeleton, TextButton, styles, useAction } from '@/components/chat-ui';
+import { Button, Copy, ErrorNotice, Skeleton, TextButton, colors, styles, useAction } from '@/components/chat-ui';
+import { ConversationHeader } from '@/components/conversation-header';
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
 
@@ -19,14 +19,11 @@ export default function PersonScreen() {
   const disabled = action.busy || !chat.ready;
   const change = (mutation: () => Promise<unknown>) => { void action.run(async () => { await mutation(); await chat.refresh(); }); };
 
-  return <Screen>
+  return <View style={{ flex: 1, backgroundColor: colors.paper }}>
+    <ConversationHeader title={person?.name ?? 'Profile'} subtitle={person ? relationship === 'accepted' ? 'Friend' : 'QR Chat member' : undefined} imageUrl={person?.avatarUrl} onBack={() => router.back()} />
+    <View style={styles.profileSurface}>
     <ErrorNotice message={action.error || chat.error} retry={() => { void action.run(chat.refresh); }} />
     {!chat.ready && !chat.error ? <Skeleton profile /> : !person ? <Copy>This profile is no longer available.</Copy> : <>
-      <View style={{ alignItems: 'center', gap: 12, paddingVertical: 24 }}>
-        <Avatar name={person.name} url={person.avatarUrl} size={130} />
-        <Copy accessibilityRole="header" style={[styles.subtitle, { textAlign: 'center' }]}>{person.name}</Copy>
-        <Copy style={styles.muted}>{relationship === 'accepted' ? 'Friend' : member ? 'In your current group' : 'QR Chat member'}</Copy>
-      </View>
       {id === userId ? <Button label="Edit profile" onPress={() => router.push('/edit-profile')} />
         : relationship === 'accepted' && friend ? <Button label="Message" disabled={disabled} onPress={() => router.dismissTo({ pathname: '/direct/[id]', params: { id: friend.id } })} />
           : relationship === 'incoming' && friend ? <>
@@ -41,5 +38,6 @@ export default function PersonScreen() {
             <Copy style={styles.muted}>You can message privately after they accept.</Copy>
           </> : <Copy style={styles.muted}>Scan the same venue QR code to connect.</Copy>}
     </>}
-  </Screen>;
+    </View>
+  </View>;
 }

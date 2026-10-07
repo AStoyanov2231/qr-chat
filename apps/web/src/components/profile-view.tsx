@@ -1,12 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
-import { CaretLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, User, X } from "@phosphor-icons/react";
+import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, X } from "@phosphor-icons/react";
 import type { Group, Session } from "@/lib/chat-view";
 
 type Props = {
@@ -21,7 +20,6 @@ type Props = {
 };
 
 export function ProfileView({ session, group, ready, busy, onBack, onSave, onLeave, onSignOut }: Props) {
-  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const [panel, setPanel] = useState("");
   const [name, setName] = useState("");
@@ -46,20 +44,22 @@ export function ProfileView({ session, group, ready, busy, onBack, onSave, onLea
     setName(session?.name ?? "");
     dialog.current?.showModal();
   }
-  const rows = [
-    { label: "Privacy", icon: LockSimple },
-    { label: "Help & Feedback", icon: Question },
+  const actions = [
+    { label: "Edit", panel: "Edit Profile", icon: PencilSimple },
+    { label: "Settings", panel: "Settings", icon: Gear },
+    { label: "Privacy", panel: "Privacy", icon: LockSimple },
+    { label: "Help", panel: "Help & Feedback", icon: Question },
   ];
-  return <section className="profile-view">
-    <div className="profile-toolbar"><Link href="/" onClick={(event) => { if (onBack && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onBack(); } }} className="icon-button" aria-label="Back to chats"><CaretLeft size={26} /></Link><button className="icon-button" aria-label="Settings" onClick={() => open("Settings")}><Gear size={26} /></button></div>
-    <div className="profile-identity">
-      <div className="avatar-wrap"><span className="profile-avatar">{session?.avatarUrl && session.avatarUrl !== failedAvatar ? <Image src={session.avatarUrl} alt="" width={130} height={130} unoptimized onError={() => setFailedAvatar(session.avatarUrl ?? null)} /> : <User size={70} weight="light" />}</span><button className="avatar-edit" aria-label="Edit profile" onClick={() => open("Edit Profile")}><PencilSimple size={20} /></button></div>
-      <strong>{session?.name || "Your profile"}</strong>
-      <small>QR Chat member</small>
+  return <section className="conversation-view profile-view">
+    {/* The photo header mirrors group chats: your avatar fills it, controls float above. */}
+    <header className="chat-photo-header">
+      <div className="chat-header-backdrop" aria-hidden="true" style={session?.avatarUrl ? { backgroundImage: `linear-gradient(rgba(10,20,30,.2),rgba(10,20,30,.38)),url(${JSON.stringify(session.avatarUrl)})` } : undefined} />
+      <div className="chat-header-title"><h1>{session?.name || "Your profile"}</h1><p>QR Chat member</p></div>
+    </header>
+    <div className="chat-header-controls"><Link href="/" onClick={(event) => { if (onBack && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onBack(); } }} aria-label="Back to chats"><ArrowLeft size={23} /></Link></div>
+    <div className="chat-conversation-surface profile-surface">
+      <div className="profile-actions">{actions.map(({ label, panel: title, icon: ActionIcon }) => <button key={title} aria-label={title} onClick={() => open(title)}><span><ActionIcon size={24} /></span>{label}</button>)}</div>
     </div>
-    <div className="profile-membership">{!ready ? "Loading your profile…" : group ? <><strong>{group.venue.name}</strong>Your current group</> : "Scan a QR code to join a group."}</div>
-    <button className="profile-menu-row edit-profile-row" onClick={() => open("Edit Profile")}><User size={25} /><span>Edit Profile</span><CaretRight size={19} /></button>
-    <div className="profile-menu">{rows.map(({ label, icon: RowIcon }) => <button key={label} className="profile-menu-row" onClick={() => open(label)}><RowIcon size={25} /><span>{label}</span><CaretRight size={19} /></button>)}</div>
     <dialog ref={dialog} className="profile-dialog" aria-label={panel} onCancel={(event) => { if (saving) event.preventDefault(); }} onClick={(event) => { if (event.target === dialog.current && !saving) dialog.current?.close(); }}>
       <div className="entry-panel">
         <button className="modal-close" aria-label="Close" disabled={saving} onClick={() => dialog.current?.close()}><X size={20} /></button>

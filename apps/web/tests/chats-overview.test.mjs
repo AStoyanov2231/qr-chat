@@ -16,7 +16,7 @@ const Avatar = ({ name, url, size = 44 }) => React.createElement('span', {
   style: { width: size, height: size },
 }, url ? React.createElement('img', { src: url, alt: '' }) : name.slice(0, 2).toUpperCase());
 const Icon = ({ name }) => React.createElement('span', { 'data-icon': name, 'aria-hidden': 'true' });
-const icons = Object.fromEntries(['Prohibit', 'UserMinus', 'Check', 'UserPlus', 'ArrowRight', 'ChatCircle', 'DeviceMobile', 'Globe', 'QrCode', 'Users', 'CaretLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
+const icons = Object.fromEntries(['Prohibit', 'UserMinus', 'Check', 'UserPlus', 'ArrowRight', 'ChatCircle', 'DeviceMobile', 'Globe', 'QrCode', 'Users', 'CaretLeft', 'ArrowLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
   name,
   (props) => React.createElement('svg', { ...props, 'data-icon': name, 'aria-hidden': 'true' }),
 ]));
@@ -411,4 +411,15 @@ test('request cards show inline actions without a profile popup trigger', () => 
   assert.doesNotMatch(html, /View .*profile/);
   assert.match(html, /Accept Bea Kim/);
   assert.match(html, /Cancel friend request to Kai Tan/);
+});
+
+test('the profile fills its header with the avatar and no longer shows the current group', async () => {
+  const { ProfileView } = await loadTsxModule('../src/components/profile-view.tsx');
+  const html = renderToStaticMarkup(React.createElement(ProfileView, {
+    session: { id: sessionId, name: 'Andy', avatarUrl: 'https://cdn.example/me.jpg' },
+    group: { id: 'g', venue: { name: 'Cafe Nine', codes: ['cafe'] }, members: [], messages: [] }, ready: true, busy: false,
+    onSave: async () => true, onLeave: noOp, onSignOut: noOp,
+  }));
+  assert.match(html, /chat-photo-header[\s\S]*url\(&quot;https:\/\/cdn\.example\/me\.jpg&quot;\)/);
+  assert.doesNotMatch(html, /Cafe Nine|current group/i);
 });

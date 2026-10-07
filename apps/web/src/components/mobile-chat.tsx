@@ -177,6 +177,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     ? pendingNameResult.name
     : null;
   const chosenChatName = pendingNameResult?.kind === "missing" ? chatNameDraft.trim() : suggestedChatName;
+  // Named chats join straight from the camera; the form only appears when a name is needed or joining failed.
+  const joinForm = !!pending && (pendingNameResult?.kind === "missing" || !!error);
 
   const hasSession = !!session;
   const autoJoin = useEffectEvent((name: string) => join(name));
@@ -581,7 +583,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   return (
     <div ref={app} className="qr-app">
       {(!online || backend.connection === "reconnecting") && <div className="connection-status" role="status">{online ? "Reconnecting… Your chats will refresh when connected." : "You’re offline. Reconnect to load chats and send messages."}</div>}
-      <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : ""}`}>
+      <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : "has-profile"}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
           <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
@@ -628,9 +630,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
                 {backend.groupLoading && <MessageSkeleton />}
-                {!backend.groupLoading && !group?.messages.length && (
-                  <p className="first-message">{group ? "Be the first to say hello." : "Your membership has ended."}</p>
-                )}
+                {!backend.groupLoading && !group && <p className="first-message">Your membership has ended.</p>}
                 {visibleGroupMessages.map((message, index) => {
                   const profileAvailable = message.user === session?.id || group?.members.some((member) => member.id === message.user) || backend.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user);
                   return (
@@ -735,7 +735,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
         onMessage={() => { if (!personFriend?.accepted_at) return; setPersonId(null); openDirectMessage(personFriend.id); }} />}
 
       <dialog
-        className={pending ? "join-dialog" : "camera-dialog"}
+        className={joinForm ? "join-dialog" : "camera-dialog"}
         ref={dialog}
         aria-label="Join a conversation"
         onCancel={(event) => { event.preventDefault(); if (!busy) dismissEntry(); }}
@@ -743,11 +743,11 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           if (event.target === dialog.current && !busy) dismissEntry();
         }}
       >
-        {!pending && <>
+        {!joinForm && <>
           <span className="browser-edge-tint browser-edge-top" data-camera-edge="top" aria-hidden="true" />
           <span className="browser-edge-tint browser-edge-bottom" data-camera-edge="bottom" aria-hidden="true" />
         </>}
-        <div className={pending ? "entry-panel" : "camera-panel"}>
+        <div className={joinForm ? "entry-panel" : "camera-panel"}>
           <button
             type="button"
             className="modal-close"
@@ -757,7 +757,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           >
             <Icon name="close" size={20} />
           </button>
-          {pending ? (
+          {joinForm && pending ? (
             <>
               <span className="entry-icon">
                 <Icon name="chat" size={28} />
@@ -811,7 +811,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 <p>
                   {cameraState === "error"
                     ? cameraError
-                    : error || "Hold the QR inside the frame."}
+                    : error || (pending ? `Joining ${suggestedChatName || "chat"}…` : "Hold the QR inside the frame.")}
                 </p>
                 {(cameraState === "error" || error) && (
                   <button

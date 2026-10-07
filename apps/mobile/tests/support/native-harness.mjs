@@ -64,7 +64,8 @@ const mocks = {
     export const frame=params=>({$type:'frame',...params});
     export const accessibilityLabel=label=>({$type:'accessibilityLabel',label});
     export const disabled=value=>({$type:'disabled',value});
-    export const tint=color=>({$type:'tint',color});`,
+    export const tint=color=>({$type:'tint',color});
+    export const ignoreSafeArea=params=>({$type:'ignoreSafeArea',...params});`,
   '@expo/ui/jetpack-compose': `
     import React from 'react';
     export const FilledIconButton=props=>React.createElement('FilledIconButton',props);`,
@@ -81,7 +82,18 @@ const mocks = {
   'expo-router/react-navigation': 'export const useHeaderHeight=()=>64;',
   'react-native-safe-area-context': 'export const useSafeAreaInsets=()=>({top:24,right:0,bottom:24,left:0});',
   'react-native-screens/experimental': "export const SafeAreaView='NativeSafeAreaView';",
-  'react-native-reanimated': "export const useReducedMotion=()=>true;",
+  'react-native-reanimated': `
+    export const useReducedMotion=()=>true;
+    export default {View:'AnimatedView'};
+    export const KeyboardState={UNKNOWN:0,OPENING:1,OPEN:2,CLOSING:3,CLOSED:4};
+    export const Easing={bezier:()=>value=>value};
+    export const useAnimatedKeyboard=()=>({height:{value:0},state:{value:4}});
+    export const useSharedValue=value=>({value});
+    export const useDerivedValue=compute=>({value:compute()});
+    export const withTiming=value=>value;
+    export const useAnimatedStyle=compute=>compute();
+    export const useAnimatedReaction=()=>{};`,
+  'react-native-worklets': 'export const scheduleOnRN=(fn,...args)=>fn(...args);',
   'expo-network': "export const useNetworkState=()=>globalThis.__qrChatNativeTest.networkState ?? {isConnected:true,isInternetReachable:true};",
   'expo-glass-effect': "export const GlassView='GlassView';export const isGlassEffectAPIAvailable=()=>false;",
   'expo-image': "export const Image='Image';",
@@ -101,6 +113,7 @@ const mocks = {
         async renderAsync(){return {async saveAsync(options){state.imageActions.push(['save',options]);return {uri:'file:///prepared.jpg'};},release(){}};},release(){}};
       return context;
     }};`,
+  '../../../modules/chat-browser': "export const ChatBrowser={open:async(...args)=>{globalThis.__qrChatNativeTest.browserOpened=args;}};",
   'expo-symbols': "export const SymbolView='SymbolView';",
   'expo-camera': `export const CameraView='CameraView'; const request=async()=>{globalThis.__qrChatNativeTest.permissionRequested=true;}; const get=async()=>{globalThis.__qrChatNativeTest.permissionChecked=true;}; export const useCameraPermissions=()=>[globalThis.__qrChatNativeTest.permission,request,get];`,
   '@/providers/auth-provider': 'export const useAuth=()=>globalThis.__qrChatNativeTest.auth;',

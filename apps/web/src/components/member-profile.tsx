@@ -29,9 +29,11 @@ export function MemberProfile({ person, friend, userId, canRequest, busy, error,
     <div className="entry-panel member-profile">
       <button className="modal-close" aria-label="Close profile" disabled={busy} onClick={onClose}><Icon name="close" size={20} /></button>
       {person ? <>
-        <Avatar name={person.name} url={person.avatarUrl} size={130} />
-        <h2>{person.name}</h2>
-        <p>{relationship === "accepted" ? "Friend" : canRequest ? "In your current group" : "QR Chat member"}</p>
+        <div className="member-hero" style={person.avatarUrl ? { backgroundImage: `linear-gradient(rgba(10,20,30,.2),rgba(10,20,30,.38)),url(${JSON.stringify(person.avatarUrl)})` } : undefined}>
+          {!person.avatarUrl && <Avatar name={person.name} url={null} size={96} />}
+          <h2>{person.name}</h2>
+          <p>{relationship === "accepted" ? "Friend" : "QR Chat member"}</p>
+        </div>
         {relationship === "accepted" ? <button className="scan-primary" disabled={busy} onClick={onMessage}>Message</button>
           : relationship === "incoming" ? <>
             <p>{person.name} wants to be friends. Accept to start a private conversation.</p>

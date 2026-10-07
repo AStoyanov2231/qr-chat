@@ -7,6 +7,7 @@ import { Button, Copy, ErrorNotice, Field, Icon, Screen, TextButton, colors, sty
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
 import { roomRoute } from '@/lib/room-route';
+import { joinRoom } from '@/lib/join-room';
 import { useRoomParams } from '@/hooks/use-room-params';
 
 export default function JoinScreen() {
@@ -49,14 +50,7 @@ export default function JoinScreen() {
   async function join(chosenName = chatName) {
     if (!parsed.success || !chosenName || !api || !chat.ready || !chat.session || completed) return;
     await action.run(async () => {
-      let room;
-      if (sameGroup) {
-        const canonicalName = await api.nameCurrentQrChatIfEmpty(parsed.data, chosenName);
-        room = { ...sameGroup, venue: { ...sameGroup.venue, name: canonicalName, nameMissing: false } };
-      } else {
-        const membership = await api.joinNamedGroup(parsed.data, chosenName);
-        room = { id: membership.group_id, venue: { id: parsed.data, name: membership.display_name, nameMissing: false, codes: [parsed.data], kind: 'place', label: 'A conversation for this QR code.' } };
-      }
+      const room = await joinRoom(api, sameGroup, parsed.data, chosenName);
       await chat.refresh();
       setCompleted(true);
       chat.clearScan();

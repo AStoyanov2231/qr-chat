@@ -38,7 +38,7 @@ export default function DirectScreen() {
     if (chat.error || !chat.ready) await chat.refresh();
     await direct.refresh();
   }
-  return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false, statusBarStyle: 'light' }} />
+  return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
     <ConversationHeader title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} imageUrl={peer?.avatar_url} />
     <Conversation
       key={id}

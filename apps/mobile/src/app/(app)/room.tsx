@@ -9,9 +9,12 @@ import { Button } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { useRoomParams } from '@/hooks/use-room-params';
+import { venueUrl } from '@/lib/qr-link';
+import { webOrigin } from '@/lib/supabase';
+import { ChatBrowser } from '../../../modules/chat-browser';
 
 export default function RoomScreen() {
-  const { groupId, name } = useRoomParams();
+  const { groupId, code: routeCode, name } = useRoomParams();
   const chat = useChat();
   const openGroup = chat.openGroup;
   useFocusEffect(useCallback(() => groupId ? openGroup(groupId) : undefined, [openGroup, groupId]));
@@ -21,6 +24,7 @@ export default function RoomScreen() {
   const group = chat.group?.id === groupId ? chat.group : null;
   const title = group?.venue.name ?? (typeof name === 'string' ? name : 'Group');
   const code = group?.venue.codes[0];
+  const pageUrl = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueUrl(code ?? routeCode, webOrigin) : null;
   useEffect(() => {
     if (!api || !code) return;
     const controller = new AbortController();
@@ -35,8 +39,9 @@ export default function RoomScreen() {
   }
 
   return <View style={{ flex: 1 }}>
-    <Stack.Screen options={{ title, headerShown: false, statusBarStyle: 'light' }} />
-    <ConversationHeader title={title} imageUrl={group && photo?.code === code ? photo?.url : null} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)} />
+    <Stack.Screen options={{ title, headerShown: false }} />
+    <ConversationHeader title={title} imageUrl={group && photo?.code === code ? photo?.url : null} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)}
+      browse={pageUrl ? () => { void ChatBrowser?.open(pageUrl, title).catch(() => {}); } : undefined} />
     <Conversation
       composerLabel={`Message ${title}`}
       avatars key={groupId ?? 'ended'} messages={group?.messages ?? []} userId={userId!}

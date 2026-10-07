@@ -11,6 +11,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
 import { webOrigin } from '@/lib/supabase';
 import { roomRoute } from '@/lib/room-route';
+import { joinRoom } from '@/lib/join-room';
 
 export default function ScanScreen() {
   const [permission, requestPermission, getPermission] = useCameraPermissions();
@@ -18,8 +19,9 @@ export default function ScanScreen() {
   const [error, setError] = useState('');
   const [cameraError, setCameraError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [joining, setJoining] = useState('');
   const locked = useRef(false);
-  const { active } = useAuth();
+  const { active, api } = useAuth();
   const chat = useChat();
   const { clearScan } = chat;
   const insets = useSafeAreaInsets();
@@ -32,15 +34,30 @@ export default function ScanScreen() {
     return () => { stopped = true; };
   }, [active, focused, getPermission]);
 
-  function accept(value: string) {
+  async function accept(value: string) {
     if (locked.current || !chat.ready || !focused || !active) return;
-    try {
-      const code = codeKeySchema.parse(unwrapQrCode(value, webOrigin));
-      locked.current = true;
-      chat.acceptScan(code);
-      const current = chat.group?.venue.codes[0] === code ? chat.group : null;
-      router.replace(current && !current.venue.nameMissing ? roomRoute(current) : { pathname: '/join', params: { code } });
-    } catch { setError('This QR code is invalid. Try scanning another code.'); }
+    const parsed = codeKeySchema.safeParse(unwrapQrCode(value, webOrigin));
+    if (!parsed.success) { setError('This QR code is invalid. Try scanning another code.'); return; }
+    const code = parsed.data;
+    locked.current = true;
+    chat.acceptScan(code);
+    const current = chat.group?.venue.codes[0] === code ? chat.group : null;
+    if (current && !current.venue.nameMissing) { router.replace(roomRoute(current)); return; }
+    // Named chats join straight from the camera; only unnamed ones need the join screen.
+    if (api && chat.session) {
+      try {
+        const lookup = await api.resolveQrChatName(code);
+        if (lookup.kind !== 'missing') {
+          setJoining(lookup.name);
+          const room = await joinRoom(api, current, code, lookup.name);
+          await chat.refresh();
+          chat.clearScan();
+          router.replace(roomRoute(room));
+          return;
+        }
+      } catch { /* The join screen retries and shows the error. */ }
+    }
+    router.replace({ pathname: '/join', params: { code } });
   }
   function permit() {
     void (permission?.canAskAgain === false ? Linking.openSettings() : requestPermission())
@@ -52,13 +69,13 @@ export default function ScanScreen() {
   return <View style={{ flex: 1, backgroundColor: '#07090b' }}>
     <Stack.Screen options={{ statusBarStyle: 'light', headerTransparent: true, headerTintColor: '#fff', title: '', headerRight: () => closeButton,
       unstable_headerRightItems: process.env.EXPO_OS === 'ios' ? () => [{ type: 'custom', element: closeButton, hidesSharedBackground: true }] : undefined }} />
-    {cameraVisible && <CameraView key={attempt} accessibilityLabel="Camera preview" style={{ position: 'absolute', inset: 0 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={({ data }) => accept(data)} onMountError={() => setCameraError('The camera could not start. Check camera access and try again.')} />}
+    {cameraVisible && <CameraView key={attempt} accessibilityLabel="Camera preview" style={{ position: 'absolute', inset: 0 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={({ data }) => { void accept(data); }} onMountError={() => setCameraError('The camera could not start. Check camera access and try again.')} />}
     <View pointerEvents="none" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: insets.top + 48 }}>
       {cameraVisible && <View style={{ width: targetSize, height: targetSize, borderWidth: 2, borderColor: '#ffffffeb', borderRadius: 28, boxShadow: '0 0 0 2000px #03050770' }} />}
     </View>
     <View style={{ gap: 14, paddingHorizontal: 30, paddingTop: 26, paddingBottom: Math.max(insets.bottom, 20), backgroundColor: '#07090be6' }}>
       <Copy accessibilityRole="header" style={{ color: '#fff', fontSize: 32, lineHeight: 38, fontWeight: '600', letterSpacing: -1 }}>Find the code.</Copy>
-      <Copy style={{ color: '#d5d8df', fontSize: 15 }}>{cameraError || (permission?.granted ? 'Hold the QR inside the frame.' : 'Allow camera access to scan a QR code.')}</Copy>
+      <Copy style={{ color: '#d5d8df', fontSize: 15 }}>{cameraError || (joining ? `Joining ${joining}…` : permission?.granted ? 'Hold the QR inside the frame.' : 'Allow camera access to scan a QR code.')}</Copy>
       {cameraError ? <Button label="Try camera again" subtle onPress={() => { setCameraError(''); setAttempt(attempt + 1); }} /> : !permission?.granted && <Button label={permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'} subtle onPress={permit} />}
       <ErrorNotice message={error || chat.error} retry={chat.error ? () => { void chat.refresh().catch(() => {}); } : undefined} />
     </View>
