@@ -43,6 +43,7 @@ async function loadTsxModule(relativePath) {
     if (specifier === '@/components/icon') return { Icon };
     if (specifier === '@/components/mobile-chat') return { default: () => null };
     if (specifier === '@/lib/avatar') return { prepareAvatar: async () => null };
+    if (specifier === '@/lib/use-edge-color') return { useEdgeColor: () => {} };
     return requireFromTest(specifier);
   };
   const evaluate = runInThisContext(`(function (require, module, exports) { ${output}\n})`, {

@@ -18,6 +18,7 @@ export const messageBodySchema = text(4000);
 export const profileSchema = z.strictObject({
   display_name: displayNameSchema,
   avatar_path: z.string().regex(/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/).nullable().optional(),
+  avatar_color: z.string().regex(/^#[0-9a-f]{6}$/).nullable().optional(),
 });
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const avatarUploadSchema = z.strictObject({

@@ -14,7 +14,7 @@ const actions: { label: string; accessibilityLabel: string; icon: IconName; onPr
 export default function ProfileScreen() {
   const chat = useChat();
   return <View style={{ flex: 1, backgroundColor: colors.paper }}>
-    <ConversationHeader title={chat.session?.name || 'Your profile'} subtitle="QR Chat member" imageUrl={chat.session?.avatarUrl} onBack={() => router.back()} />
+    <ConversationHeader title={chat.session?.name || 'Your profile'} subtitle="QR Chat member" imageUrl={chat.session?.avatarUrl} imageColor={chat.session?.avatarColor} onBack={() => router.back()} tall />
     <View style={styles.profileSurface}>
       <ErrorNotice message={chat.error} retry={() => { void chat.refresh().catch(() => {}); }} />
       {!chat.ready && !chat.error ? <Skeleton profile /> : <View style={{ flexDirection: 'row', justifyContent: 'space-evenly' }}>

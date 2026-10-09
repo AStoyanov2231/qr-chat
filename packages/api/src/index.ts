@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
 import { codeKeySchema, qrNameSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
 import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage, Friend, Profile } from "./overview.ts";
+import { avatarColor } from "./avatar-color.ts";
 export { getChatStore, createChatStore } from "./store.ts";
 export { createObservedFetch } from "./requests.ts";
 export type { RequestObservation, RequestObserver } from "./requests.ts";
@@ -178,7 +179,7 @@ export function createChatApi(
       // A failed response can follow a committed write. Retain the upload on failure
       // rather than deleting an image the profile may now reference.
       if (await userId() !== id) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
-      const saved = await api.saveProfile({ display_name, avatar_path });
+      const saved = await api.saveProfile({ display_name, avatar_path, avatar_color: upload ? avatarColor(upload.data) : null });
       // profiles_avatar_path_check guarantees a stored path is one of this user's own uploads.
       if (previous?.avatar_path && previous.avatar_path !== avatar_path) {
         // Cleanup failure must not turn a committed profile save into a failed form.

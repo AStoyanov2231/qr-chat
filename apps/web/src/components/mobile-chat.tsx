@@ -688,7 +688,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && directId && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? undefined : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={backToChats} />
+            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? undefined : "Reconnecting…"} imageUrl={peer?.avatar_url} imageColor={peer?.avatar_color} onBack={backToChats} />
             <div className="chat-conversation-surface">
               {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
                 <div className="message-stream" aria-live="polite">

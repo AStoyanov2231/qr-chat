@@ -1,6 +1,8 @@
 import { ArrowLeft, GearSix } from '@phosphor-icons/react';
+import { useEdgeColor } from '@/lib/use-edge-color';
 
-export function ConversationHeader({ title, subtitle, imageUrl, onBack, onSettings, settingsLabel, disabled }: { title: string; subtitle?: string; imageUrl?: string | null; onBack: () => void; onSettings?: () => void; settingsLabel?: string; disabled?: boolean }) {
+export function ConversationHeader({ title, subtitle, imageUrl, imageColor, onBack, onSettings, settingsLabel, disabled }: { title: string; subtitle?: string; imageUrl?: string | null; imageColor?: string | null; onBack: () => void; onSettings?: () => void; settingsLabel?: string; disabled?: boolean }) {
+  useEdgeColor(imageColor);
   return <>
     <header className="chat-photo-header">
       <div className="chat-header-backdrop" aria-hidden="true" style={imageUrl ? { backgroundImage: `linear-gradient(rgba(10,20,30,.2),rgba(10,20,30,.38)),url(${JSON.stringify(imageUrl)})` } : undefined} />

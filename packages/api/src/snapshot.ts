@@ -11,8 +11,8 @@ export function groupMessageView(message: GroupMessage): Message {
 export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
   const room = overview.membership?.groups;
   return {
-    session: { id: overview.userId, name: overview.profile?.display_name ?? '', avatarUrl: overview.profile?.avatar_url ?? null, hidden: [] },
-    group: room?.code_key ? { id: room.id, venue: { id: room.id, name: room.name ?? 'Unnamed chat', nameMissing: room.name === null, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: overview.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: overview.groupPreview ? [groupMessageView(overview.groupPreview)] : [], nextCursor: null } : null,
+    session: { id: overview.userId, name: overview.profile?.display_name ?? '', avatarUrl: overview.profile?.avatar_url ?? null, avatarColor: overview.profile?.avatar_color ?? null, hidden: [] },
+    group: room?.code_key ? { id: room.id, venue: { id: room.id, name: room.name ?? 'Unnamed chat', nameMissing: room.name === null, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: overview.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null, avatarColor: member.profiles?.avatar_color ?? null })), messages: overview.groupPreview ? [groupMessageView(overview.groupPreview)] : [], nextCursor: null } : null,
     friends: overview.friends,
     expiresAt: overview.membership?.expires_at ?? null,
     directPreviews: Object.fromEntries(overview.friends.filter((friend) => friend.accepted_at).map((friend) => [friend.id, { status: 'ready' as const, message: overview.directPreviews[friend.id] ?? null }])),

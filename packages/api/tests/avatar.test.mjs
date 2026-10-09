@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import jpeg from 'jpeg-js';
 import { createChatApi } from '../src/index.ts';
+import { avatarColor } from '../src/avatar-color.ts';
 
 const id = '11111111-1111-4111-8111-111111111111';
 const uploadId = '22222222-2222-4222-8222-222222222222';
@@ -36,7 +38,7 @@ test('avatar uploads use the authenticated folder and save before cleaning up th
   assert.deepEqual(f.calls.map(([op])=>op),['upload','save','remove']);
   assert.equal(f.calls[0][2],`${id}/${uploadId}.jpg`);
   assert.deepEqual(f.calls[0][4],{contentType:'image/jpeg',cacheControl:'3600',upsert:false});
-  assert.deepEqual(f.calls[1][1],{display_name:'New name',avatar_path:`${id}/${uploadId}.jpg`});
+  assert.deepEqual(f.calls[1][1],{display_name:'New name',avatar_path:`${id}/${uploadId}.jpg`,avatar_color:null});
   assert.deepEqual(f.calls[2][1],[`${id}/${oldId}.jpg`]);
 });
 
@@ -72,4 +74,10 @@ test('invalid avatar bytes, paths, and oversized images are rejected before netw
 test('profiles without a photo skip cleanup',async()=>{
   const f=fixture(null);await f.api.saveProfileWithAvatar('Andy',null);
   assert.deepEqual(f.calls.map(([op])=>op),['save']);
+});
+
+test('avatar colour is the top-strip average, capped in brightness; undecodable photos give none',()=>{
+  const white=jpeg.encode({width:64,height:64,data:new Uint8Array(64*64*4).fill(255)},90).data;
+  assert.equal(avatarColor(white.buffer.slice(white.byteOffset,white.byteOffset+white.byteLength)),'#595959');
+  assert.equal(avatarColor(photo.data),null);
 });

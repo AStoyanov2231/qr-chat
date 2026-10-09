@@ -39,7 +39,7 @@ export default function DirectScreen() {
     await direct.refresh();
   }
   return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
-    <ConversationHeader title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} imageUrl={peer?.avatar_url} />
+    <ConversationHeader title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} imageUrl={peer?.avatar_url} imageColor={peer?.avatar_color} />
     <Conversation
       key={id}
       avatars

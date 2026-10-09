@@ -81,6 +81,7 @@ const mocks = {
     Stack.Screen=props=>React.createElement('NativeStackScreen',props);`,
   'expo-router/react-navigation': 'export const useHeaderHeight=()=>64;',
   'react-native-safe-area-context': 'export const useSafeAreaInsets=()=>({top:24,right:0,bottom:24,left:0});',
+  'expo-linear-gradient': "export const LinearGradient='NativeLinearGradient';",
   'react-native-screens/experimental': "export const SafeAreaView='NativeSafeAreaView';",
   'react-native-reanimated': `
     export const useReducedMotion=()=>true;

@@ -1,6 +1,6 @@
 export type Venue = { id: string; name: string; label: string; codes: string[]; kind: string; nameMissing?: boolean };
-export type Session = { id: string; name: string; avatarUrl?: string | null; hidden: string[] };
-export type Member = { id: string; name: string; avatarUrl?: string | null };
+export type Session = { id: string; name: string; avatarUrl?: string | null; avatarColor?: string | null; hidden: string[] };
+export type Member = { id: string; name: string; avatarUrl?: string | null; avatarColor?: string | null };
 export type Message = { id: string; user: string; name: string; avatarUrl?: string | null; text: string; time: number };
 export type Group = { id: string; venue: Venue; members: Member[]; messages: Message[]; nextCursor: number | null };
 

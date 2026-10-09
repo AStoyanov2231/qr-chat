@@ -10,7 +10,8 @@
     "@qr-chat/domain": "workspace:*",
     "@qr-chat/types": "workspace:*",
     "@qr-chat/validation": "workspace:*",
-    "@supabase/supabase-js": "2.116.0"
+    "@supabase/supabase-js": "2.116.0",
+    "jpeg-js": "^0.4.4"
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
