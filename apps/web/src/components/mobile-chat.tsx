@@ -90,7 +90,6 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const directFriend = backend.friends.find((friend) => friend.id === directId && friend.accepted_at);
   const peer = directFriend?.user_a_id === session?.id ? directFriend?.user_b : directFriend?.user_a;
   const [sidebar, setSidebar] = useState(false);
-  const [groupPhoto, setGroupPhoto] = useState<{ code: string; url: string | null } | null>(null);
   const [active, setActive] = useState<Venue | null>(null);
   const [pending, setPending] = useState<Venue | null>(null);
   const [chatNameDraftState, setChatNameDraftState] = useState<{ code: string; value: string } | null>(null);
@@ -145,21 +144,12 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
   // The current-membership query is authoritative, even if the member list is capped.
   const group = groups.find((item) => item.id === active?.id);
-  const groupCode = group?.venue.codes[0];
   const openGroup = backend.openGroup;
   useEffect(() => {
     const element = app.current;
     if (element) return observeChatViewport(element);
   }, []);
   useEffect(() => active && view !== "profile" && !directId ? openGroup(active.id) : undefined, [active, view, directId, openGroup]);
-  useEffect(() => {
-    if (!api || !groupCode) return;
-    const controller = new AbortController();
-    void api.resolveQrChatImage(groupCode, controller.signal).then((url) => {
-      if (!controller.signal.aborted) setGroupPhoto({ code: groupCode, url });
-    });
-    return () => controller.abort();
-  }, [api, groupCode]);
 
   const hiddenUsers = useMemo(
     () => new Set(session?.hidden ?? []),
@@ -625,7 +615,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={active.name} imageUrl={group && groupPhoto?.code === groupCode ? groupPhoto?.url : null} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
+            <ConversationHeader title={active.name} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
@@ -688,7 +678,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && directId && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? undefined : "Reconnecting…"} imageUrl={peer?.avatar_url} onBack={backToChats} />
+            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? undefined : "Reconnecting…"} onBack={backToChats} />
             <div className="chat-conversation-surface">
               {!directFriend ? <p className="first-message">This friendship is no longer available.</p> : <>
                 <div className="message-stream" aria-live="polite">

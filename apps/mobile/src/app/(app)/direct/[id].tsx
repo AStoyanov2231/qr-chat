@@ -2,7 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { userIdSchema } from '@qr-chat/validation';
 import { Conversation } from '@/components/conversation';
-import { ConversationHeader } from '@/components/conversation-header';
+import { ChatBar } from '@/components/conversation-header';
 import { Copy, styles } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
@@ -39,7 +39,7 @@ export default function DirectScreen() {
     await direct.refresh();
   }
   return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
-    <ConversationHeader title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} imageUrl={peer?.avatar_url} />
+    <ChatBar title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} />
     <Conversation
       key={id}
       avatars
