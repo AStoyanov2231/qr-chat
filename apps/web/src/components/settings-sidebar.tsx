@@ -6,7 +6,7 @@ export function SettingsSidebar({ label, onClose, children }: { label: string; o
   /** The action to run once the closing animation ends; the first close wins. */
   const [closing, setClosing] = useState<(() => void) | null>(null);
   function close(action = onClose) {
-    setClosing((current) => current ?? (() => action));
+    setClosing((current) => current ?? action);
   }
   useEffect(() => {
     const element = dialog.current;

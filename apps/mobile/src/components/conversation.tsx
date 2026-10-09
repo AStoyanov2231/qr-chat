@@ -35,9 +35,6 @@ export function Conversation({ messages, userId, loading, error, available, conn
   const insets = useSafeAreaInsets();
   const keyboard = useChatKeyboard();
   const bottomPadding = Math.max(insets.bottom, 12);
-  const surface = useAnimatedStyle(() => ({ marginTop: -24 * (1 - keyboard.expanded.value) }));
-  // Keeps the newest messages clear of the header controls once the surface reaches the top.
-  const controlsSpace = useAnimatedStyle(() => ({ height: (insets.top + 64) * keyboard.expanded.value }));
   const composer = useAnimatedStyle(() => ({ paddingBottom: Math.max(keyboard.height.value + 8, bottomPadding) }));
   const sendDisabled = action.busy || sending || loading || !!error || !draft.trim();
 
@@ -56,8 +53,7 @@ export function Conversation({ messages, userId, loading, error, available, conn
     }
   }
 
-  return <Animated.View style={[styles.screen, { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }, surface]}>
-    <Animated.View style={controlsSpace} />
+  return <View style={styles.screen}>
     <View style={{ paddingHorizontal: 22, gap: 8 }}>
       <ErrorNotice message={error || action.error} retry={() => { void action.run(refresh); }} />
       {!connected && !error && <Copy accessibilityLiveRegion="polite" style={styles.muted}>Reconnecting…</Copy>}
@@ -97,5 +93,5 @@ export function Conversation({ messages, userId, loading, error, available, conn
         </Pressable>
       </View> : !loading && endedAction}
     </Animated.View>
-  </Animated.View>;
+  </View>;
 }

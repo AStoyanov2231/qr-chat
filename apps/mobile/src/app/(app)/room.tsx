@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
-import { ConversationHeader } from '@/components/conversation-header';
+import { ChatBar } from '@/components/conversation-header';
 import { GroupDetails } from '@/components/group-details';
 import { SettingsSidebar } from '@/components/settings-sidebar';
 import { router, Stack, useFocusEffect } from 'expo-router';
@@ -20,19 +20,10 @@ export default function RoomScreen() {
   useFocusEffect(useCallback(() => groupId ? openGroup(groupId) : undefined, [openGroup, groupId]));
   const { api, userId } = useAuth();
   const [sidebar, setSidebar] = useState(false);
-  const [photo, setPhoto] = useState<{ code: string; url: string | null } | null>(null);
   const group = chat.group?.id === groupId ? chat.group : null;
   const title = group?.venue.name ?? (typeof name === 'string' ? name : 'Group');
   const code = group?.venue.codes[0];
   const pageUrl = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueUrl(code ?? routeCode, webOrigin) : null;
-  useEffect(() => {
-    if (!api || !code) return;
-    const controller = new AbortController();
-    void api.resolveQrChatImage(code, controller.signal).then((url) => {
-      if (!controller.signal.aborted) setPhoto({ code, url });
-    });
-    return () => controller.abort();
-  }, [api, code]);
   async function sendMessage(body: string) {
     if (!api || !group) throw new Error('Your membership has ended.');
     return api.sendGroupMessage(group.id, body);
@@ -40,7 +31,7 @@ export default function RoomScreen() {
 
   return <View style={{ flex: 1 }}>
     <Stack.Screen options={{ title, headerShown: false }} />
-    <ConversationHeader title={title} imageUrl={group && photo?.code === code ? photo?.url : null} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)}
+    <ChatBar title={title} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)}
       browse={pageUrl ? () => { void ChatBrowser?.open(pageUrl, title).catch(() => {}); } : undefined} />
     <Conversation
       composerLabel={`Message ${title}`}

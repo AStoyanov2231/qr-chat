@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
 import { Alert, Pressable, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Copy, ErrorNotice, Icon, Skeleton, colors, styles, type IconName } from '@/components/chat-ui';
 import { ConversationHeader } from '@/components/conversation-header';
 import { useChat } from '@/providers/chat-provider';
@@ -14,9 +13,8 @@ const actions: { label: string; accessibilityLabel: string; icon: IconName; onPr
 ];
 export default function ProfileScreen() {
   const chat = useChat();
-  const insets = useSafeAreaInsets();
-  return <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.paper }}>
-    <ConversationHeader title={chat.session?.name || 'Your profile'} subtitle="QR Chat member" imageUrl={chat.session?.avatarUrl} belowSafeArea onBack={() => router.back()} />
+  return <View style={{ flex: 1, backgroundColor: colors.paper }}>
+    <ConversationHeader title={chat.session?.name || 'Your profile'} imageUrl={chat.session?.avatarUrl} belowSafeArea onBack={() => router.back()} />
     <View style={styles.profileSurface}>
       <ErrorNotice message={chat.error} retry={() => { void chat.refresh().catch(() => {}); }} />
       {!chat.ready && !chat.error ? <Skeleton profile /> : <View style={{ flexDirection: 'row', justifyContent: 'space-evenly' }}>
