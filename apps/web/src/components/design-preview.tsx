@@ -16,7 +16,7 @@ const idle = async () => {};
 
 function sampleSnapshot(now: number): ChatSnapshot {
   const created_at = new Date(now - 86400000).toISOString();
-  const profile = (id: string, name: string): NonNullable<Friend["user_a"]> => ({ id, display_name: name, avatar_color: null, avatar_path: null, avatar_url: avatar, created_at });
+  const profile = (id: string, name: string): NonNullable<Friend["user_a"]> => ({ id, display_name: name, avatar_path: null, avatar_url: avatar, created_at });
   const names = ["Andy", "Daniel", "Mira", "Sam"];
   return {
     session: { id: localUserId, name: "Local designer", avatarUrl: avatar, hidden: [] },
@@ -106,8 +106,8 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
       const dmId = crypto.randomUUID();
       setSnapshot((current) => ({ ...current, friends: [...current.friends, {
         id: dmId, group_id: dmId, user_a_id: localUserId, user_b_id: id, requested_by_id: localUserId, requested_at: new Date().toISOString(), accepted_at: null,
-        user_a: { id: localUserId, display_name: current.session!.name, avatar_color: null, avatar_path: null, avatar_url: current.session!.avatarUrl ?? null, created_at: new Date(initialTime).toISOString() },
-        user_b: { id, display_name: member.name, avatar_color: null, avatar_path: null, avatar_url: member.avatarUrl ?? null, created_at: new Date(initialTime).toISOString() },
+        user_a: { id: localUserId, display_name: current.session!.name, avatar_path: null, avatar_url: current.session!.avatarUrl ?? null, created_at: new Date(initialTime).toISOString() },
+        user_b: { id, display_name: member.name, avatar_path: null, avatar_url: member.avatarUrl ?? null, created_at: new Date(initialTime).toISOString() },
       }] }));
     },
     async joinNamedGroup(input, title) {

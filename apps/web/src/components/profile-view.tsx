@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
-import { useEdgeColor } from "@/lib/use-edge-color";
 import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, X } from "@phosphor-icons/react";
 import type { Group, Session } from "@/lib/chat-view";
 
@@ -28,7 +27,6 @@ export function ProfileView({ session, group, ready, busy, onBack, onSave, onLea
   const [preview, setPreview] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState("");
   const [preparing, setPreparing] = useState(false);
-  useEdgeColor(session?.avatarColor);
   const selection = useRef(0);
   const submitting = useRef(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -86,8 +84,7 @@ export function ProfileView({ session, group, ready, busy, onBack, onSave, onLea
               finally { if (ticket === selection.current) setPreparing(false); }
             }} />
             {avatar && <button type="button" className="text-button" disabled={saving} onClick={() => { setPhoto(null); setPreview(null); }}>Remove photo</button>}
-            {avatar && <div className="hero-guide" aria-hidden="true" style={{ backgroundImage: `url(${JSON.stringify(avatar)})`, "--k": 240 / window.innerWidth } as CSSProperties} />}
-            <small>{preparing ? "Preparing photo…" : avatar ? "On your profile, the top of your photo fades into colour above the line. Keep your face below it." : "Your photo appears in chats and profiles."}</small>
+            <small>{preparing ? "Preparing photo…" : "Your photo appears in chats and profiles."}</small>
             {photoError && <p className="form-error" role="alert">{photoError}</p>}
           </div>
           <label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required />
