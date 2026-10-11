@@ -24,7 +24,7 @@ assert.equal(auth.error, null, auth.error?.message);
 const api = createChatApi(client);
 const longName = 'Release participant with a maximum length name'.padEnd(50, 'x');
 await api.saveProfile({ display_name: longName });
-const previous = await api.joinNamedGroup(`qrchat-release-lifecycle-old-${user.id}`, 'Previous Release Room');
+const previous = await api.joinGroup(`qrchat-release-lifecycle-old-${user.id}`);
 const browser = await chromium.launch({ channel: 'chromium', headless: true, args: ['--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${output}/camera-lifecycle.y4m`] });
 try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });

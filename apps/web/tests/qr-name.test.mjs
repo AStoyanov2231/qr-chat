@@ -119,7 +119,7 @@ test('the name API route enforces bearer or cookie authentication after proxy by
       data: { claims: token === 'native-token' || (!token && cookieSession) ? { sub: 'member' } : {} },
       error: token === 'bad-token' ? new Error('invalid token') : null,
     }) } }),
-    lookupName: async (code) => { lookups += 1; return `Venue ${code}`; },
+    resolveGroup: async (userId, code) => { lookups += 1; assert.equal(userId, 'member'); return `Venue ${code}`; },
   };
   const makeRequest = (headers = {}) => new Request('https://chat.example/api/qr-name', {
     method: 'POST',

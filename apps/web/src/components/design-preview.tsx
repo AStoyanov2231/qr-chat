@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatSnapshot, Tables } from "@qr-chat/api";
-import { codeKeySchema, displayNameSchema, messageBodySchema, profileSchema, qrNameSchema } from "@qr-chat/validation";
+import { codeKeySchema, displayNameSchema, messageBodySchema, profileSchema } from "@qr-chat/validation";
+import { groupFallbackName } from "@qr-chat/domain";
 import { ChatView, type ChatViewApi, type ChatViewBackend } from "./mobile-chat";
 
 type Friend = ChatSnapshot["friends"][number];
@@ -110,18 +111,15 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
         user_b: { id, display_name: member.name, avatar_path: null, avatar_url: member.avatarUrl ?? null, created_at: new Date(initialTime).toISOString() },
       }] }));
     },
-    async joinNamedGroup(input, title) {
+    async joinGroup(input) {
       const code = codeKeySchema.parse(input);
-      const name = qrNameSchema.parse(title);
       const group = sampleSnapshot(initialTime).groups[0];
       const id = crypto.randomUUID();
       const expires_at = new Date(Date.now() + 24 * 3600000).toISOString();
-      setSnapshot((current) => ({ ...current, groups: [...current.groups, { ...group, id, venue: { ...group.venue, id, name, codes: [code] }, messages: [], expiresAt: expires_at }] }));
-      return { group_id: id, display_name: name, expires_at };
+      setSnapshot((current) => ({ ...current, groups: [...current.groups, { ...group, id, venue: { ...group.venue, id, name: groupFallbackName(code), nameMissing: true, codes: [code] }, messages: [], expiresAt: expires_at }] }));
+      return { group_id: id, expires_at };
     },
-    async nameCurrentQrChatIfEmpty(_code, title) { return qrNameSchema.parse(title); },
-    async resolveQrChatName(code) { const group = snapshot.groups.find((item) => item.venue.codes.includes(String(code))); return group ? { kind: "saved", name: group.venue.name } : { kind: "missing" }; },
-    async resolveQrChatImage() { return "/design-preview/cafe.svg"; },
+    async resolveGroup() { return null; },
     async signOut() { setSnapshot(sampleSnapshot(initialTime)); setDirectRows(sampleDirectMessages(initialTime)); },
   }), [initialTime, snapshot]);
 

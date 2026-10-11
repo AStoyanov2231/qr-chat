@@ -6,7 +6,8 @@ export type Profile = Tables<"profiles"> & { avatar_url: string | null };
 type MembershipRow = Tables<"group_members"> & { expires_at: string };
 /** A friendship's id is its DM group id; DM messages and previews are keyed by it. */
 export type Friend = Tables<"friendships"> & { id: string; user_a: Profile | null; user_b: Profile | null };
-export type Membership = MembershipRow & { groups: Tables<"groups"> | null };
+/** image_url is derived from image_path by the API, like avatar_url. */
+export type Membership = MembershipRow & { groups: (Tables<"groups"> & { image_url: string | null }) | null };
 export type Member = MembershipRow & { profiles: Profile | null };
 export type DirectMessage = Tables<"messages">;
 export type GroupMessage = DirectMessage & { profiles: (Pick<Profile, "display_name" | "avatar_url"> & { avatar_path?: string | null }) | null };

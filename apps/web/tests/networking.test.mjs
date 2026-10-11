@@ -13,36 +13,85 @@ async function load(relative, mocks) {
   return fixture.exports;
 }
 
-test('metadata cache stays outside auth, lasts one hour and excludes transient failures', async () => {
-  let authenticated = true; let lookups = 0; let fails = false; let settings;
-  const entries = new Map();
+test('the route passes only the verified user id to the server-side resolver', async () => {
+  let authenticated = true; let calls = []; let fails = false;
   const { POST } = await load('../src/app/api/qr-name/route.ts', {
-    'next/cache': { unstable_cache(fn, keys, options) {
-      settings = { keys, ...options };
-      return async code => {
-        if (entries.has(code)) return entries.get(code);
-        const value = await fn(code);entries.set(code,value);return value;
-      };
-    } },
-    '@/lib/qr-name-metadata': { lookupQrPageMetadata: async () => { lookups++;return fails ? null : { name: 'Cafe', imageUrl: 'https://public.example/photo.jpg' }; } },
+    '@/lib/group-metadata': { resolveGroup: async (...args) => { calls.push(args); if (fails) throw new Error('down'); return 'Fanta Orange'; } },
     '@/lib/supabase/server': { createClient: async () => ({ auth: { getClaims: async () => ({ data: { claims: authenticated ? { sub: 'test-account' } : {} }, error: null }) } }) },
     '@/lib/qr-name-route': await import('../src/lib/qr-name-route.ts'),
   });
   const request = code => new Request('https://app.example/api/qr-name', { method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code}) });
-  assert.equal(settings.revalidate,3600);
-  for(let i=0;i<2;i++) {
-    const response=await POST(request('https://public.example/menu'));
-    assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+  const response = await POST(request('gtin:5449000006271'));
+  assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await response.json(), { name: 'Fanta Orange' });
+  assert.deepEqual(calls, [['test-account', 'gtin:5449000006271']]);
+  authenticated = false;
+  assert.equal((await POST(request('gtin:5449000006271'))).status, 401);
+  assert.equal(calls.length, 1);
+  authenticated = true; fails = true;
+  assert.equal((await POST(request('gtin:5449000006271'))).status, 503);
+});
+
+// A chainable stand-in for supabase-js: records every builder call, resolves to the next queued result.
+function fakeDb(results) {
+  const log = [];
+  const builder = (table) => new Proxy({}, { get(_, method) {
+    if (method === 'then') { const result = results.shift() ?? { data: null, error: null }; return (resolve) => resolve(result); }
+    return (...args) => { log.push([table, method, ...args]); return builder(table); };
+  } });
+  return { log, client: { from: builder, storage: { from: (bucket) => ({ upload: async (...args) => { log.push([bucket, 'upload', ...args]); return { error: null }; } }) } } };
+}
+async function loadResolver(db, fetches, pageName = null) {
+  const previous = globalThis.fetch;
+  globalThis.fetch = async (url) => { const next = fetches.shift(); assert.ok(next, `unexpected fetch ${url}`); return next(String(url)); };
+  const resolver = await load('../src/lib/group-metadata.ts', {
+    '@supabase/supabase-js': { createClient: () => db.client },
+    '@/lib/qr-name-metadata': { lookupQrPageName: async () => pageName },
+    '@qr-chat/domain': await import('@qr-chat/domain'),
+    '@qr-chat/validation': await import('@qr-chat/validation'),
+  });
+  return { resolveGroup: resolver.resolveGroup, restore: () => { globalThis.fetch = previous; } };
+}
+const groupId = '33333333-3333-4333-8333-333333333333';
+const activeMember = (name = null) => ({ data: { expires_at: new Date(Date.now() + 60_000).toISOString(), groups: { id: groupId, name } }, error: null });
+
+test('product lookup names and photographs only an unnamed group the caller is an active member of', async (t) => {
+  const db = fakeDb([activeMember(), { data: [{ id: groupId }], error: null }, { data: null, error: null }]);
+  const seen = [];
+  const { resolveGroup, restore } = await loadResolver(db, [
+    (url) => { seen.push(url); return Response.json({ product: { product_name: 'Fanta Orange', brands: 'Fanta, Coca-Cola', image_front_url: 'https://images.openfoodfacts.org/images/products/544/front_en.400.jpg' } }); },
+    (url) => { seen.push(url); return new Response(new Uint8Array([0xff, 0xd8, 0xff]), { headers: { 'content-type': 'image/jpeg' } }); },
+  ]);
+  t.after(restore);
+  assert.equal(await resolveGroup('user-1', 'gtin:5449000006271'), 'Fanta Orange');
+  assert.match(seen[0], /\/api\/v2\/product\/5449000006271\?/);
+  assert.ok(db.log.some(([table, method, ...args]) => table === 'group_members' && method === 'eq' && args[0] === 'user_id' && args[1] === 'user-1'));
+  assert.ok(db.log.some(([bucket, method, path]) => bucket === 'group-images' && method === 'upload' && path === `${groupId}.jpg`));
+  const write = db.log.filter(([table, method]) => table === 'groups' && method === 'update').at(-1);
+  assert.deepEqual(write[2], { name: 'Fanta Orange', image_path: `${groupId}.jpg` });
+});
+
+test('non-members, named groups and throttled groups never trigger a lookup', async (t) => {
+  for (const first of [{ data: null, error: null }, activeMember('Fanta Orange'), { data: { expires_at: new Date(Date.now() - 1).toISOString(), groups: { id: groupId, name: null } }, error: null }]) {
+    const { resolveGroup, restore } = await loadResolver(fakeDb([first]), []);
+    t.after(restore);
+    const name = await resolveGroup('user-1', 'gtin:5449000006271');
+    assert.equal(name, first.data?.groups.name && Date.parse(first.data.expires_at) > Date.now() ? 'Fanta Orange' : null);
   }
-  assert.equal(lookups,1);
-  authenticated=false;
-  assert.equal((await POST(request('https://public.example/menu'))).status,401);
-  assert.equal(lookups,1);
-  authenticated=true;fails=true;
-  await POST(request('https://public.example/other'));
-  assert.equal(entries.has('https://public.example/other'),false);
-  fails=false;await POST(request('https://public.example/other'));
-  assert.equal(lookups,3);
+  const throttled = fakeDb([activeMember(), { data: [], error: null }]);
+  const { resolveGroup, restore } = await loadResolver(throttled, []);
+  t.after(restore);
+  assert.equal(await resolveGroup('user-1', 'gtin:5449000006271'), null);
+  assert.equal(throttled.log.filter(([table, method]) => table === 'groups' && method === 'update').length, 1, 'only the claim, no write');
+});
+
+test('EAN-8 codes are looked up unpadded and a product missing from Open Food Facts stays unnamed', async (t) => {
+  const db = fakeDb([activeMember(), { data: [{ id: groupId }], error: null }]);
+  const seen = [];
+  const { resolveGroup, restore } = await loadResolver(db, [(url) => { seen.push(url); return new Response('{}', { status: 404 }); }]);
+  t.after(restore);
+  assert.equal(await resolveGroup('user-1', 'gtin:0000096385074'), null);
+  assert.match(seen[0], /\/product\/96385074\?/);
 });
 
 test('web session host pauses on hidden/offline, resumes once and removes lifecycle listeners', async t => {

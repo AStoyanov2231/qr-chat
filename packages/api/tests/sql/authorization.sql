@@ -99,9 +99,10 @@ begin
 
   perform set_config('request.jwt.claim.sub', a::text, true);
   execute 'set local role authenticated';
-  assert (select display_name from public.join_named_qr_group(room_key, 'Named room')) = 'Named room', 'active members can name an unnamed chat';
-  assert public.name_current_qr_chat_if_empty(room_key, 'Other name') = 'Named room', 'the first name wins';
-  assert public.get_qr_chat_name(room_key) = 'Named room', 'saved names are readable';
+  denied := false;
+  begin update public.groups set name = 'Named room', image_path = null where id = room; exception when insufficient_privilege then denied := true; end;
+  assert denied, 'only the server names groups and sets their photos';
+  assert to_regprocedure('public.join_named_qr_group(text,text)') is null and to_regprocedure('public.join_qr_group(text,text)') is null, 'no RPC accepts a client-supplied group name';
   connection := public.send_friend_request(b);
   assert not public.accept_friend_request(connection), 'sender cannot self accept';
   denied := false;
