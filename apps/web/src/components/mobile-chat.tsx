@@ -24,7 +24,7 @@ import { observeChatViewport } from "@/lib/chat-viewport";
 import { ConversationHeader } from "@/components/conversation-header";
 import { GroupSidebar } from "@/components/group-sidebar";
 import { ProfileView } from "@/components/profile-view";
-import { ChatsOverview, RequestsView } from "@/components/chats-overview";
+import { ChatsOverview } from "@/components/chats-overview";
 import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty, FriendRequestDecision, OutboxBubble } from "@/components/direct-message-parts";
 import { Avatar } from "@/components/avatar";
 import { MemberProfile } from "@/components/member-profile";
@@ -85,19 +85,15 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const profileUrl = preview ? "/design-preview?view=profile" : "/profile";
   const online = useSyncExternalStore(subscribeNetwork, () => navigator.onLine, () => true);
   const { session, api, ready } = backend;
-  const groups = backend.group ? [backend.group] : [];
+  const groups = backend.groups;
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const directFriend = backend.friends.find((friend) => friend.id === directId && friend.accepted_at);
   const request = backend.friends.find((friend) => friend.id === directId && !friend.accepted_at && friend.requested_by_id !== session?.id);
   const peerLink = directFriend ?? request;
   const peer = peerLink?.user_a_id === session?.id ? peerLink?.user_b : peerLink?.user_a;
-  const incomingCount = backend.friends.filter((friend) => !friend.accepted_at && friend.requested_by_id !== session?.id).length;
-  const [requestsOpen, setRequestsOpen] = useState(false);
-  if (requestsOpen && incomingCount === 0) setRequestsOpen(false);
   const [sidebar, setSidebar] = useState(false);
   const [active, setActive] = useState<Venue | null>(null);
-  const showRequests = requestsOpen && !active && !directId;
   const [pending, setPending] = useState<Venue | null>(null);
   const [chatNameDraftState, setChatNameDraftState] = useState<{ code: string; value: string } | null>(null);
   const [nameLookup, setNameLookup] = useState<{ code: string; result: ChatNameResolution | null } | null>(null);
@@ -110,7 +106,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const [personError, setPersonError] = useState("");
   const personFriend = backend.friends.find((friend) => friend.user_a_id === personId || friend.user_b_id === personId);
   const personPeer = personFriend?.user_a_id === session?.id ? personFriend?.user_b : personFriend?.user_a;
-  const personMember = backend.group?.members.find((member) => member.id === personId);
+  const personMember = groups.flatMap((item) => item.members).find((member) => member.id === personId);
   const person = personMember ?? (personPeer ? { id: personPeer.id, name: personPeer.display_name ?? 'Participant', avatarUrl: personPeer.avatar_url } : null);
 
   const [cameraState, setCameraState] = useState<
@@ -128,7 +124,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     afterEntry.current = null;
     action?.();
   });
-  const screen = view === "profile" ? "profile" : directId ? `direct:${directId}` : active ? `group:${active.codes[0]}` : showRequests ? "requests" : "overview";
+  const screen = view === "profile" ? "profile" : directId ? `direct:${directId}` : active ? `group:${active.codes[0]}` : "overview";
   const motion = useScreenTransition(screen);
   const app = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -204,8 +200,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
       accepted = true;
 
-      const current = backend.group;
-      if (current?.venue.codes[0] === venue.codes[0]) {
+      const current = groups.find((item) => item.venue.codes[0] === venue.codes[0]);
+      if (current) {
         if (current.venue.nameMissing) {
           setPending(current.venue);
           setChatNameDraftState({ code: venue.codes[0], value: "" });
@@ -223,9 +219,9 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   }
 
   const openInitialCode = useEffectEvent((value: string) => {
-    // External links can open an authorized current group. New joins require the camera.
-    const current = backend.group;
-    if (current?.venue.codes[0] === value) {
+    // External links can open a group you're already in. New joins require the camera.
+    const current = groups.find((item) => item.venue.codes[0] === value);
+    if (current) {
       motion.initialScreen(`group:${current.venue.codes[0]}`);
       setActive(current.venue);
       switchDirectConversation(null);
@@ -238,10 +234,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     if (!initialCodeHandled.current || view === "profile" || dialog.current?.open) return;
     const code = new URLSearchParams(window.location.search).get("code");
     const connectionId = window.history.state?.qrChatDirect ?? null;
-    const venue = code && backend.group?.venue.codes.includes(code) ? backend.group.venue : null;
-    const requests = !!window.history.state?.qrChatRequests;
-    if (active?.codes[0] === venue?.codes[0] && directId === connectionId && requestsOpen === requests) return;
-    setRequestsOpen(requests);
+    const venue = code ? groups.find((item) => item.venue.codes.includes(code))?.venue ?? null : null;
+    if (active?.codes[0] === venue?.codes[0] && directId === connectionId) return;
     setSidebar(false);
     setPersonId(null);
     switchDirectConversation(connectionId);
@@ -448,7 +442,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     void perform(async () => {
       setError("");
       try {
-        const current = backend.group?.venue.codes[0] === pending.codes[0] ? backend.group : null;
+        const current = groups.find((item) => item.venue.codes[0] === pending.codes[0]);
         let destination: Venue;
         if (current) {
           const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chatName);
@@ -465,7 +459,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
   const sendGroup = (groupId: string) => async (body: string) => {
     const message = await api.sendGroupMessage(groupId, body);
-    void backend.refreshGroup().catch(() => {});
+    void backend.refreshGroup(groupId).catch(() => {});
     return message;
   };
   const sendDirect = (connectionId: string) => async (body: string) => {
@@ -489,16 +483,10 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     setDraft("");
   }
 
-  function navigateChat(code: string | null, connectionId: string | null, requests = false) {
+  function navigateChat(code: string | null, connectionId: string | null) {
     const url = code ? `${chatsUrl}?code=${encodeURIComponent(code)}` : chatsUrl;
-    if (`${window.location.pathname}${window.location.search}` === url && (window.history.state?.qrChatDirect ?? null) === connectionId && !!window.history.state?.qrChatRequests === requests) return;
-    window.history.pushState({ qrChatDirect: connectionId, qrChatRequests: requests, qrChatPosition: ++historyPosition.current }, "", url);
-  }
-
-  function setRequestsView(open: boolean) {
-    motion.prepare(open ? 1 : -1);
-    setRequestsOpen(open);
-    navigateChat(null, null, open);
+    if (`${window.location.pathname}${window.location.search}` === url && (window.history.state?.qrChatDirect ?? null) === connectionId) return;
+    window.history.pushState({ qrChatDirect: connectionId, qrChatPosition: ++historyPosition.current }, "", url);
   }
 
   function openOwnProfile() {
@@ -516,7 +504,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     switchDirectConversation(null);
     if (directId) setDraft("");
     if (view === "profile") { ++historyPosition.current; router.push(chatsUrl); }
-    else navigateChat(null, null, requestsOpen);
+    else navigateChat(null, null);
   }
 
   function openConversation(venue: Venue) {
@@ -536,7 +524,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     setActive(null);
     switchDirectConversation(friendId);
     setDraft("");
-    navigateChat(null, friendId, requestsOpen);
+    navigateChat(null, friendId);
   }
 
   function respondToRequest(kind: "accept" | "decline" | "block") {
@@ -551,10 +539,10 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     });
   }
 
-  function leaveCurrentChat() {
+  function leaveGroup(groupId: string) {
     setSidebar(false);
     void perform(async () => {
-      await api.leaveGroup();
+      await api.leaveGroup(groupId);
       await backend.refresh();
       backToChats();
     });
@@ -566,26 +554,24 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : "has-profile"}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
-          <ProfileView session={session} group={backend.group} ready={ready} busy={busy} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onLeave={leaveCurrentChat} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
+          <ProfileView session={session} ready={ready} busy={busy} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
         </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={openOwnProfile} /> : !active && !directId && (
-          showRequests ? <RequestsView friends={backend.friends} sessionId={session?.id ?? null} onBack={() => setRequestsView(false)} onOpen={openDirectMessage} /> : <ChatsOverview
+          <ChatsOverview
             profileName={session?.name}
             profileAvatarUrl={session?.avatarUrl}
             connected={backend.connection === "connected"}
             onOpenOwnProfile={openOwnProfile}
-            group={backend.group}
+            groups={groups}
             friends={backend.friends}
             directPreviews={backend.directPreviews}
-            expiresAt={backend.expiresAt}
             hasObservedGroup={backend.hasObservedGroup}
             sessionId={session?.id ?? null}
             busy={busy}
             error={backend.error}
             onRetry={() => { void perform(backend.refresh); }}
             onScan={startEntry}
-            onOpenGroup={() => { if (backend.group) openConversation(backend.group.venue); }}
+            onOpenGroup={(groupId) => { const target = groups.find((item) => item.id === groupId); if (target) openConversation(target.venue); }}
             onOpenDirect={openDirectMessage}
-            onOpenRequests={() => setRequestsView(true)}
             onRemoveRequest={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
             onUnfriend={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
             onBlock={async (friendId) => { await api.blockFriend(friendId); await backend.refresh(); }}
@@ -608,7 +594,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             <ConversationHeader title={active.name} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
-                {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(backend.loadOlder)}>Load older messages</button>}
+                {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(() => backend.loadOlder(active.id))}>Load older messages</button>}
                 {backend.groupLoading && <MessageSkeleton />}
                 {!backend.groupLoading && !group && <p className="first-message">Your membership has ended.</p>}
                 {visibleGroupMessages.map((message, index) => {
@@ -662,7 +648,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 </button>
               )}
             </div>
-            {sidebar && group && <GroupSidebar key={group.id} group={group} userId={session?.id} busy={busy} onClose={() => setSidebar(false)} onProfile={openPerson} onLeave={leaveCurrentChat} />}
+            {sidebar && group && <GroupSidebar key={group.id} group={group} userId={session?.id} busy={busy} onClose={() => setSidebar(false)} onProfile={openPerson} onLeave={() => leaveGroup(group.id)} />}
           </section>
         )}
 
@@ -700,7 +686,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           </section>
         )}
 
-      {view === "chats" && !active && !directId && !showRequests && <div className="scan-overlay">
+      {view === "chats" && !active && !directId && <div className="scan-overlay">
         <button type="button" className="floating-scan" aria-label="Scan a QR code" disabled={!ready || !!backend.error} onClick={startEntry}>
           <span className="scan-symbol" aria-hidden="true"><CornersOut size={34} weight="bold" /><QrCode size={21} weight="bold" /></span>
         </button>
@@ -748,7 +734,6 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 : suggestedChatName
                   ? <p>{suggestedChatName}</p>
                   : <p>Unnamed chat</p>}
-              {backend.group && backend.group.venue.codes[0] !== pending.codes[0] && <p>Joining this room leaves your current group.</p>}
               <form onSubmit={(event) => { event.preventDefault(); join(); }}>
                 {pendingNameResult?.kind === "missing" && <>
                   <label htmlFor="chat-name">Chat name</label>

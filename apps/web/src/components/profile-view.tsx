@@ -6,20 +6,18 @@ import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
 import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, X } from "@phosphor-icons/react";
-import type { Group, Session } from "@/lib/chat-view";
+import type { Session } from "@/lib/chat-view";
 
 type Props = {
   session: Session | null;
-  group: Group | null;
   ready: boolean;
   busy: boolean;
   onBack?: () => void;
   onSave: (name: string, photo?: AvatarUpload | null) => Promise<boolean | undefined>;
-  onLeave: () => void;
   onSignOut: () => void;
 };
 
-export function ProfileView({ session, group, ready, busy, onBack, onSave, onLeave, onSignOut }: Props) {
+export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut }: Props) {
   const [saveFailed, setSaveFailed] = useState(false);
   const [panel, setPanel] = useState("");
   const [name, setName] = useState("");
@@ -90,9 +88,9 @@ export function ProfileView({ session, group, ready, busy, onBack, onSave, onLea
           <label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required />
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
         </form>}
-        {panel === "Settings" && <div className="settings-actions">{group && <button className="profile-action danger" disabled={busy} onClick={onLeave}>Leave current chat<CaretRight size={18} /></button>}<button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button></div>}
-        {panel === "Privacy" && <p>Group messages are available to members with active access. Your name and photo are visible to people in your group and your friends. Direct messages are shared with accepted friends. Group access ends after 24 hours; leaving or joining another group also ends that access.</p>}
-        {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code, then join the group. You can be in one group at a time. To keep talking after group access ends, open a member’s profile and send a friend request. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
+        {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button></div>}
+        {panel === "Privacy" && <p>Group messages are available to members with active access. Your name and photo are visible to people in your group and your friends. Direct messages are shared with accepted friends. Each group’s access ends 24 hours after you join it; leaving a group also ends that access.</p>}
+        {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code, then join the group. You can be in as many groups as you scan; each one lasts 24 hours. To keep talking after group access ends, open a member’s profile and send a friend request. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
       </div>
     </dialog>
   </section>;

@@ -41,7 +41,7 @@ export default function ScanScreen() {
     const code = parsed.data;
     locked.current = true;
     chat.acceptScan(code);
-    const current = chat.group?.venue.codes[0] === code ? chat.group : null;
+    const current = chat.groups.find((group) => group.venue.codes[0] === code) ?? null;
     if (current && !current.venue.nameMissing) { router.replace(roomRoute(current)); return; }
     // Named chats join straight from the camera; only unnamed ones need the join screen.
     if (api && chat.session) {

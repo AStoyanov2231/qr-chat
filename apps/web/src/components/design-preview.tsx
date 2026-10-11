@@ -20,7 +20,7 @@ function sampleSnapshot(now: number): ChatSnapshot {
   const names = ["Andy", "Daniel", "Mira", "Sam"];
   return {
     session: { id: localUserId, name: "Local designer", avatarUrl: avatar, hidden: [] },
-    group: {
+    groups: [{
       id: groupId,
       venue: { id: groupId, name: "Cafe Central", label: "Local design preview", kind: "cafe", codes: ["https://qrchat.example/cafe-central"] },
       members: [{ id: localUserId, name: "Local designer", avatarUrl: avatar }, ...names.slice(0, 3).map((name, index) => ({ id: peerId(index), name, avatarUrl: avatar }))],
@@ -31,13 +31,13 @@ function sampleSnapshot(now: number): ChatSnapshot {
         { id: "4", user: peerId(2), name: "Mira", avatarUrl: avatar, text: "Let’s grab a table by the window.", time: now - 12 * 60000 },
       ],
       nextCursor: null,
-    },
+      expiresAt: new Date(now + 15 * 3600000).toISOString(),
+    }],
     friends: names.map((name, index) => ({
       id: connectionId(index), group_id: connectionId(index), user_a_id: localUserId, user_b_id: peerId(index), requested_by_id: peerId(index),
       requested_at: created_at, accepted_at: index === 3 ? null : created_at,
       user_a: profile(localUserId, "Local designer"), user_b: profile(peerId(index), name),
     })),
-    expiresAt: new Date(now + 15 * 3600000).toISOString(),
     directPreviews: {},
   };
 }
@@ -62,7 +62,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
   useEffect(() => {
     // Local fixture control for rendered scanner entry/expiry regressions only.
     const change = (event: Event) => setSnapshot((current) => ({
-      ...current, group: null, expiresAt: null,
+      ...current, groups: [],
       ...((event as CustomEvent).detail === "empty" ? { friends: [], directPreviews: {} } : {}),
     }));
     window.addEventListener("qrchat-preview-state", change);
@@ -83,15 +83,15 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
       } else if (photo === null) url = null;
       setSnapshot((current) => ({ ...current, session: current.session && { ...current.session, name, ...(url === undefined ? {} : { avatarUrl: url }) } }));
     },
-    async sendGroupMessage(_id, input) {
+    async sendGroupMessage(id, input) {
       const text = messageBodySchema.parse(input);
-      setSnapshot((current) => ({ ...current, group: current.group && { ...current.group, messages: [...current.group.messages, { id: crypto.randomUUID(), user: localUserId, name: current.session!.name, avatarUrl: current.session!.avatarUrl, text, time: Date.now() }] } }));
+      setSnapshot((current) => ({ ...current, groups: current.groups.map((group) => group.id === id ? { ...group, messages: [...group.messages, { id: crypto.randomUUID(), user: localUserId, name: current.session!.name, avatarUrl: current.session!.avatarUrl, text, time: Date.now() }] } : group) }));
     },
     async sendDirectMessage(id, input) {
       const body = messageBodySchema.parse(input);
       setDirectRows((rows) => [...rows, { id: Math.max(0, ...rows.map((row) => row.id)) + 1, group_id: id, sender_id: localUserId, body, created_at: new Date().toISOString() }]);
     },
-    async leaveGroup() { setSnapshot((current) => ({ ...current, group: null, expiresAt: null })); },
+    async leaveGroup(id) { setSnapshot((current) => ({ ...current, groups: current.groups.filter((group) => group.id !== id) })); },
     async acceptFriend(id) { setSnapshot((current) => ({ ...current, friends: current.friends.map((friend) => friend.id === id ? { ...friend, accepted_at: new Date().toISOString() } : friend) })); },
     async removeFriend(id) { setSnapshot((current) => ({ ...current, friends: current.friends.filter((friend) => friend.id !== id) })); },
     async blockFriend(id) {
@@ -101,7 +101,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
     },
     async requestFriend(id) {
       if (blockedPeers.current.has(id)) throw new Error("This friendship is unavailable.");
-      const member = snapshot.group?.members.find((member) => member.id === id);
+      const member = snapshot.groups.flatMap((group) => group.members).find((member) => member.id === id);
       if (!member || snapshot.friends.some((friend) => friend.user_b_id === id)) return;
       const dmId = crypto.randomUUID();
       setSnapshot((current) => ({ ...current, friends: [...current.friends, {
@@ -113,13 +113,14 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
     async joinNamedGroup(input, title) {
       const code = codeKeySchema.parse(input);
       const name = qrNameSchema.parse(title);
-      const group = sampleSnapshot(initialTime).group!;
-      const expires_at = new Date(Date.now() + 15 * 3600000).toISOString();
-      setSnapshot((current) => ({ ...current, group: { ...group, venue: { ...group.venue, name, codes: [code] }, messages: [] }, expiresAt: expires_at }));
-      return { group_id: groupId, display_name: name, expires_at };
+      const group = sampleSnapshot(initialTime).groups[0];
+      const id = crypto.randomUUID();
+      const expires_at = new Date(Date.now() + 24 * 3600000).toISOString();
+      setSnapshot((current) => ({ ...current, groups: [...current.groups, { ...group, id, venue: { ...group.venue, id, name, codes: [code] }, messages: [], expiresAt: expires_at }] }));
+      return { group_id: id, display_name: name, expires_at };
     },
     async nameCurrentQrChatIfEmpty(_code, title) { return qrNameSchema.parse(title); },
-    async resolveQrChatName(code) { return snapshot.group?.venue.codes.includes(String(code)) ? { kind: "saved", name: snapshot.group.venue.name } : { kind: "missing" }; },
+    async resolveQrChatName(code) { const group = snapshot.groups.find((item) => item.venue.codes.includes(String(code))); return group ? { kind: "saved", name: group.venue.name } : { kind: "missing" }; },
     async resolveQrChatImage() { return "/design-preview/cafe.svg"; },
     async signOut() { setSnapshot(sampleSnapshot(initialTime)); setDirectRows(sampleDirectMessages(initialTime)); },
   }), [initialTime, snapshot]);

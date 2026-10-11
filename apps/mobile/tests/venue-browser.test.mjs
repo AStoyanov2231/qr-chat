@@ -33,7 +33,7 @@ for (const platform of ['ios', 'android']) {
     await join.type('Chat name', 'Cafe');
     await join.press('Join chat');
     navigate(state.navigation.at(-1)[1]);
-    state.chat.group = { id: groupId, venue: { id: groupId, name: 'Cafe', codes: [venue] }, members: [], messages: [], nextCursor: null };
+    state.chat.groups = [{ id: groupId, venue: { id: groupId, name: 'Cafe', codes: [venue] }, members: [], messages: [], nextCursor: null }];
     const room = await render(t, Room);
     const [button] = browseButton(room);
     assert.ok(button, 'browser button is shown');

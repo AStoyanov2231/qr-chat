@@ -20,7 +20,7 @@ export default function RoomScreen() {
   useFocusEffect(useCallback(() => groupId ? openGroup(groupId) : undefined, [openGroup, groupId]));
   const { api, userId } = useAuth();
   const [sidebar, setSidebar] = useState(false);
-  const group = chat.group?.id === groupId ? chat.group : null;
+  const group = chat.groups.find((item) => item.id === groupId) ?? null;
   const title = group?.venue.name ?? (typeof name === 'string' ? name : 'Group');
   const code = group?.venue.codes[0];
   const pageUrl = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueUrl(code ?? routeCode, webOrigin) : null;
@@ -38,7 +38,7 @@ export default function RoomScreen() {
       avatars key={groupId ?? 'ended'} messages={group?.messages ?? []} userId={userId!}
       loading={(!chat.ready || chat.groupLoading) && !chat.error} error={chat.error} available={!!group && chat.ready}
       connected={chat.connection === 'connected'} nextCursor={group?.nextCursor ?? null}
-      loadOlder={chat.loadOlder} refresh={chat.refreshGroup} send={sendMessage}
+      loadOlder={() => group ? chat.loadOlder(group.id) : Promise.resolve()} refresh={() => groupId ? chat.refreshGroup(groupId) : chat.refresh()} send={sendMessage}
       unavailable={chat.error ? 'Reconnect to open this conversation.' : 'Your membership has ended.'}
       canOpenProfile={(message) => !!group?.members.some((member) => member.id === message.user) || chat.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user)}
       openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}

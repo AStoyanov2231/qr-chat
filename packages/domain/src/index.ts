@@ -2,7 +2,7 @@ export type Venue = { id: string; name: string; label: string; codes: string[]; 
 export type Session = { id: string; name: string; avatarUrl?: string | null; hidden: string[] };
 export type Member = { id: string; name: string; avatarUrl?: string | null };
 export type Message = { id: string; user: string; name: string; avatarUrl?: string | null; text: string; time: number };
-export type Group = { id: string; venue: Venue; members: Member[]; messages: Message[]; nextCursor: number | null };
+export type Group = { id: string; venue: Venue; members: Member[]; messages: Message[]; nextCursor: number | null; expiresAt: string | null };
 
 /** A calendar-day divider for chronologically ordered messages, in the viewer's timezone. */
 export function messageDayLabel(time: number, previousTime?: number): string | null {
@@ -126,7 +126,7 @@ export type GroupAccessIndicator =
   | { state: "ended"; progress: 0; label: "Access ended"; accessibilityLabel: string }
   | { state: "unknown"; progress: null; label: "Time unavailable"; accessibilityLabel: string };
 
-const GROUP_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
+export const GROUP_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
 
 /** Describe remaining group access for display only; authorization remains API-owned. */
 export function groupAccessIndicator(expiresAt: string | null, now = Date.now()): GroupAccessIndicator {
@@ -187,6 +187,20 @@ export function directConversationTime(
     ?? finiteTimestamp(acceptedAt)
     ?? finiteTimestamp(requestedAt)
     ?? 0;
+}
+
+type ChatFriend = { id: string; accepted_at: string | null; requested_at: string };
+type ChatPreview = { status: "ready"; message: { created_at: string } | null } | { status: "error" };
+export type ChatRow<F extends ChatFriend> =
+  | { kind: "group"; id: string; time: number; group: Group }
+  | { kind: "direct" | "request"; id: string; time: number; friend: F };
+/** Groups, DMs and requests in one list; a new message or request moves its row to the top. */
+export function chatRows<F extends ChatFriend>(groups: Group[], friends: F[], previews: Record<string, ChatPreview>): ChatRow<F>[] {
+  const preview = (id: string) => { const value = previews[id]; return value?.status === "ready" ? value.message : null; };
+  return [
+    ...groups.map((group): ChatRow<F> => ({ kind: "group", id: group.id, group, time: group.messages.at(-1)?.time ?? (group.expiresAt ? Date.parse(group.expiresAt) - GROUP_ACCESS_DURATION_MS : 0) })),
+    ...friends.map((friend): ChatRow<F> => ({ kind: friend.accepted_at ? "direct" : "request", id: friend.id, friend, time: directConversationTime(friend.accepted_at ? preview(friend.id) : null, friend.accepted_at, friend.requested_at) })),
+  ].sort((left, right) => right.time - left.time);
 }
 
 /** Build initials from the first two Unicode letter/number words in a group name. */

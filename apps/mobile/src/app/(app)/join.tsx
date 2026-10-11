@@ -21,7 +21,7 @@ export default function JoinScreen() {
   const action = useAction();
   const code = parsed.success ? parsed.data : null;
   const chatNameDraft = chatNameDraftState?.code === code ? chatNameDraftState.value : '';
-  const sameGroup = chat.group?.venue.codes[0] === code ? chat.group : null;
+  const sameGroup = chat.groups.find((group) => group.venue.codes[0] === code) ?? null;
   const lookup = nameLookup?.code === code ? nameLookup.result : null;
   const chatName = lookup?.kind === 'saved' || lookup?.kind === 'suggested' ? lookup.name : chatNameDraft.trim();
   const hasSession = !!chat.session;
@@ -72,7 +72,6 @@ export default function JoinScreen() {
       <Field label="Chat name" value={chatNameDraft} onChangeText={(value) => setChatNameDraftState({ code: parsed.data, value })} maxLength={100} autoCapitalize="words" placeholder="Cafe name" editable={chat.ready && !action.busy} />
       <Copy style={styles.muted}>We couldn’t identify this place. Give this chat a name for everyone.</Copy>
     </>}
-    {chat.group && !sameGroup && <Copy style={styles.muted}>Joining this room leaves your current group.</Copy>}
     <ErrorNotice message={action.error || chat.error} retry={chat.error ? () => { void action.run(chat.refresh); } : undefined} />
     {(lookup?.kind === 'missing' || action.error) && <Button label={action.busy || completed ? 'Joining…' : action.error ? 'Try again' : 'Join chat'} disabled={action.busy || completed || !chat.ready || findingName || !chatName} onPress={() => { void join(); }} />}
     <TextButton label="Scan another code" onPress={() => router.replace('/scan')} disabled={action.busy} />

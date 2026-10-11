@@ -11,7 +11,7 @@ export default function PersonScreen() {
   const chat = useChat();
   const { api, userId } = useAuth();
   const action = useAction();
-  const member = chat.group?.members.find((member) => member.id === id);
+  const member = chat.groups.flatMap((group) => group.members).find((member) => member.id === id);
   const friend = chat.friends.find((friend) => friend.user_a_id === id || friend.user_b_id === id);
   const peer = friend?.user_a_id === userId ? friend?.user_b : friend?.user_a;
   const person = member ?? (peer ? { id: peer.id, name: peer.display_name ?? 'Participant', avatarUrl: peer.avatar_url } : null);

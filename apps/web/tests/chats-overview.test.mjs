@@ -55,7 +55,7 @@ async function loadTsxModule(relativePath) {
 
 const conversationHeader = await loadTsxModule('../src/components/conversation-header.tsx');
 const overviewModule = await loadTsxModule('../src/components/chats-overview.tsx');
-const { ChatsOverview, RequestsView, chatNameMatches } = overviewModule;
+const { ChatsOverview, chatNameMatches } = overviewModule;
 const directParts = await loadTsxModule('../src/components/direct-message-parts.tsx');
 
 const sessionId = 'user-current';
@@ -76,10 +76,9 @@ function friend({ id, peerId, peerName, acceptedAt = null, requestedBy = peerId,
 
 function props(overrides = {}) {
   return {
-    group: null,
+    groups: [],
     friends: [],
     directPreviews: {},
-    expiresAt: null,
     hasObservedGroup: false,
     sessionId,
     busy: false,
@@ -88,7 +87,6 @@ function props(overrides = {}) {
     onScan: noOp,
     onOpenGroup: noOp,
     onOpenDirect: noOp,
-    onOpenRequests: noOp,
     onRemoveRequest: noOp,
     onUnfriend: noOp,
     onBlock: noOp,
@@ -125,6 +123,7 @@ const group = {
   members: [{ id: sessionId, name: 'Current User' }, { id: 'user-maya', name: 'Maya Chen' }],
   messages: [{ id: 'group-message-1', user: 'user-maya', name: 'Maya Chen', text: 'Anyone here for the workshop?', time: Date.now() - 4 * 60_000 }],
   nextCursor: null,
+  expiresAt: null,
 };
 
 test('Chats loading uses one scrolling list below the persistent header and search placeholder', () => {
@@ -138,7 +137,7 @@ test('Chats loading uses one scrolling list below the persistent header and sear
   assert.doesNotMatch(html, /Recent|Nearby|My Groups/);
 });
 
-test('Chats orders the active group before individual requests and ordered DMs', () => {
+test('Chats lists groups, requests and DMs in one list with the newest activity first', () => {
   const mayaMessage = {
     id: 'direct-message-1',
     group_id: acceptedMaya.id,
@@ -147,13 +146,12 @@ test('Chats orders the active group before individual requests and ordered DMs',
     created_at: new Date(Date.now() - 12 * 60_000 - 1_000).toISOString(),
   };
   const html = renderOverview(props({
-    group,
+    groups: [{ ...group, expiresAt: new Date(Date.now() + 18.5 * 60 * 60_000).toISOString() }],
     friends: [acceptedJordan, incomingRequest, acceptedMaya, outgoingRequest],
     directPreviews: {
       [acceptedMaya.id]: { status: 'ready', message: mayaMessage },
       [acceptedJordan.id]: { status: 'ready', message: null },
     },
-    expiresAt: new Date(Date.now() + 18.5 * 60 * 60_000).toISOString(),
   }));
 
   assert.match(html, /<h1>Chats<\/h1>/);
@@ -196,8 +194,8 @@ test('Chats orders the active group before individual requests and ordered DMs',
   const mayaRow = dmList.indexOf('Open direct message with Maya Chen');
   const jordanRow = dmList.indexOf('Open direct message with Jordan Lee');
   assert.ok(mayaRow >= 0 && jordanRow >= 0 && mayaRow < jordanRow, 'the newest conversation appears before other DM rows');
-  assert.ok(dmList.indexOf('Open Brew') < dmList.indexOf("Open friend request from Bea"));
-  assert.ok(dmList.indexOf('Cancel friend request to Kai') < mayaRow);
+  assert.ok(dmList.indexOf('Open Brew') < mayaRow, 'the group with the newest message is first');
+  assert.ok(mayaRow < dmList.indexOf('Open friend request from Bea') && dmList.indexOf('Cancel friend request to Kai') < jordanRow, 'requests sit between DMs by time');
   assert.equal((html.match(/class="chat-list-scroll"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /Recent|Nearby|My Groups|Alexandra Petrov|Niko/);
 });
@@ -223,7 +221,7 @@ test('missing groups take no placeholder space and access-ended notices keep fri
 test('failed chat loads and individual preview failures have explicit recovery without empty claims', () => {
   const loadError = renderOverview(props({ hasObservedGroup: true, error: 'offline' }));
   assert.match(loadError, /Couldn’t load your chats\./);
-  assert.match(loadError, /Try again to see your group, requests, and messages\./);
+  assert.match(loadError, /Try again to see your groups, requests, and messages\./);
   assert.match(loadError, />Retry</);
   assert.doesNotMatch(loadError, /No group yet|Your group access ended|No direct messages/);
   assert.doesNotMatch(loadError, /New message|new-message|accepted friend chooser/);
@@ -243,8 +241,9 @@ test('search matches group and friend names case-insensitively and reports no ma
   assert.equal(chatNameMatches('Alexandra Petrov', '  '), true);
 });
 
-test('incoming requests come before outgoing ones, and requests alone prevent the onboarding empty state', () => {
-  const html = renderOverview(props({ friends: [outgoingRequest, incomingRequest] }));
+test('newer requests come first, and requests alone prevent the onboarding empty state', () => {
+  const newer = { ...incomingRequest, requested_at: '2026-10-01T10:00:00.000Z' };
+  const html = renderOverview(props({ friends: [outgoingRequest, newer] }));
   assert.ok(html.indexOf('Open friend request from Bea') < html.indexOf('Cancel friend request to Kai'));
   assert.doesNotMatch(html, /Your chats start with a scan|No pending requests|Direct messages/);
   const empty = renderOverview();
@@ -377,7 +376,7 @@ test('landing offers browser entry and keeps unavailable native download slots e
   assert.match(html, /Open web app/);
   assert.match(html, /Scan to open QR Chat in your phone/);
   assert.match(html, /Sign in with Google/);
-  assert.match(html, /one active group at a time/);
+  assert.match(html, /Scan as many groups as you like/);
   assert.match(html, /up to 24 hours/);
   assert.equal((html.match(/class="landing-native-slot"[^>]*><\/div>/g) ?? []).length, 2);
   assert.equal((html.match(/Not available yet/g) ?? []).length, 2);
@@ -403,24 +402,28 @@ test('a single incoming request is a row that opens its DM; outgoing ones keep a
   assert.match(html, /Cancel friend request to Kai Tan/);
 });
 
-test('several incoming requests collapse into one summary row that opens the requests list', () => {
+test('every incoming request gets its own row, newest first', () => {
   const second = friend({ id: 'request-cy', peerId: 'user-cy', peerName: 'Cy Ortiz', requestedAt: '2026-10-01T10:00:00.000Z' });
   const html = renderOverview(props({ friends: [incomingRequest, second] }));
-  assert.match(html, /Review 2 friend requests/);
-  assert.match(html, /2 friend requests/);
-  assert.match(html, /Cy Ortiz, Bea Kim/);
-  assert.doesNotMatch(html, /Open friend request from/);
-  const list = renderToStaticMarkup(React.createElement(RequestsView, { friends: [incomingRequest, second, outgoingRequest, acceptedMaya], sessionId, onBack: noOp, onOpen: noOp }));
-  assert.ok(list.indexOf('Open friend request from Cy') < list.indexOf('Open friend request from Bea'), 'newest request first');
-  assert.doesNotMatch(list, /Kai Tan|Maya Chen/);
+  assert.doesNotMatch(html, /Review 2 friend requests|request-summary/);
+  assert.ok(html.indexOf('Open friend request from Cy') < html.indexOf('Open friend request from Bea'), 'newest request first');
+});
+
+test('every joined group gets its own card with its own countdown', () => {
+  const later = { ...group, id: 'group-late', venue: { ...group.venue, id: 'group-late', name: 'Late Bar' }, messages: [{ ...group.messages[0], time: Date.now() - 60_000 }], expiresAt: new Date(Date.now() + 2.5 * 60 * 60_000).toISOString() };
+  const html = renderOverview(props({ groups: [{ ...group, expiresAt: new Date(Date.now() + 18.5 * 60 * 60_000).toISOString() }, later] }));
+  assert.equal((html.match(/class="group-card"/g) ?? []).length, 2);
+  assert.ok(html.indexOf('Open Late Bar') < html.indexOf('Open Brew'), 'newest group message first');
+  assert.match(html, /2h left/);
+  assert.match(html, /18h left/);
 });
 
 test('the profile fills its header with the avatar and no longer shows the current group', async () => {
   const { ProfileView } = await loadTsxModule('../src/components/profile-view.tsx');
   const html = renderToStaticMarkup(React.createElement(ProfileView, {
     session: { id: sessionId, name: 'Andy', avatarUrl: 'https://cdn.example/me.jpg' },
-    group: { id: 'g', venue: { name: 'Cafe Nine', codes: ['cafe'] }, members: [], messages: [] }, ready: true, busy: false,
-    onSave: async () => true, onLeave: noOp, onSignOut: noOp,
+    ready: true, busy: false,
+    onSave: async () => true, onSignOut: noOp,
   }));
   assert.match(html, /chat-photo-header[\s\S]*url\(&quot;https:\/\/cdn\.example\/me\.jpg&quot;\)/);
   assert.doesNotMatch(html, /Cafe Nine|current group/i);

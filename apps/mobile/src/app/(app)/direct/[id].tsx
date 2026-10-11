@@ -3,7 +3,8 @@ import { View } from 'react-native';
 import { userIdSchema } from '@qr-chat/validation';
 import { Conversation } from '@/components/conversation';
 import { ChatBar } from '@/components/conversation-header';
-import { Copy, styles } from '@/components/chat-ui';
+import { Avatar } from '@/components/avatar';
+import { Button, Copy, ErrorNotice, TextButton, styles, useAction } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { useDirectMessages } from '@/hooks/use-direct-messages';
@@ -12,8 +13,11 @@ export default function DirectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const chat = useChat();
   const { api, userId } = useAuth();
-  const friend = userIdSchema.safeParse(id).success ? chat.friends.find((friend) => friend.id === id && friend.accepted_at) : undefined;
-  const peer = friend?.user_a_id === userId ? friend.user_b : friend?.user_a;
+  const action = useAction();
+  const link = userIdSchema.safeParse(id).success ? chat.friends.find((friend) => friend.id === id) : undefined;
+  const friend = link?.accepted_at ? link : undefined;
+  const request = link && !link.accepted_at && link.requested_by_id !== userId ? link : undefined;
+  const peer = link?.user_a_id === userId ? link.user_b : link?.user_a;
   const direct = useDirectMessages(friend?.id ?? null);
   const peerName = peer?.display_name ?? 'Friend';
   const messages = direct.messages.map((message) => {
@@ -38,6 +42,17 @@ export default function DirectScreen() {
     if (chat.error || !chat.ready) await chat.refresh();
     await direct.refresh();
   }
+  if (request) return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
+    <ChatBar title={peerName} />
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20 }}>
+      <Avatar name={peerName} url={peer?.avatar_url} size={72} />
+      <Copy style={{ fontSize: 20, lineHeight: 26, fontWeight: '700', textAlign: 'center' }}>{`${peerName} wants to be friends`}</Copy>
+      <Copy style={[styles.muted, { textAlign: 'center' }]}>Accept to start a private conversation.</Copy>
+      <ErrorNotice message={action.error} />
+      <Button label={action.busy ? 'Updating…' : 'Accept'} disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.acceptFriend(request.id); await chat.refresh(); }); }} />
+      <TextButton label="Decline" disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.removeFriend(request.id); await chat.refresh(); router.back(); }); }} />
+    </View>
+  </View>;
   return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
     <ChatBar title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} />
     <Conversation

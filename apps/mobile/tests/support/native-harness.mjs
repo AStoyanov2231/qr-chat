@@ -133,7 +133,7 @@ const mocks = {
     export {getChatStore} from '${new URL('./chat-store.mjs', import.meta.url).href}';
     export const loadDirectSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadDirectSnapshot(...args);
     export const loadChatSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadChatSnapshot(...args);
-    export const emptySnapshot={session:null,group:null,friends:[],expiresAt:null,directPreviews:{}};
+    export const emptySnapshot={session:null,groups:[],friends:[],directPreviews:{}};
     export function watchChanges(client,filters,refresh,onState) {
       const watcher={filters,refresh,onState,stopped:false,stop(){this.stopped=true;}};
       globalThis.__qrChatNativeTest.watchers.push(watcher);onState('connected');return watcher;
@@ -184,8 +184,8 @@ export function reset() {
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
     auth: { userId: 'me', active: true, api: { resolveQrChatImage: async () => null } },
-    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, group: null, expiresAt: null, friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
-    loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},group:null,friends:[],expiresAt:null,directPreviews:{}}),
+    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
+    loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},groups:[],friends:[],directPreviews:{}}),
   });
 }
 

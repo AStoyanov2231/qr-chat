@@ -96,7 +96,7 @@ for (const platform of ['ios', 'android']) {
   test(`${platform}: the profile shows its photo header with actions underneath and no current group`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     state.chat.session = { id: 'me', name: 'Andy', avatarUrl: 'https://cdn.example/me.jpg' };
-    state.chat.group = { id: 'g', venue: { name: 'Cafe Nine', codes: ['cafe'] }, members: [], messages: [] };
+    state.chat.groups = [{ id: 'g', venue: { name: 'Cafe Nine', codes: ['cafe'] }, members: [], messages: [] }];
     const screen = await render(t, Profile);
     assert.ok(screen.root.findAllByType('Image').some(node => node.props.source?.uri === 'https://cdn.example/me.jpg'), 'avatar fills the header');
     assert.ok(screen.text().includes('Andy'));

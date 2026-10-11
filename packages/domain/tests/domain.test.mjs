@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  chatRows,
   unwrapQrCode,
   messageAge,
   groupAccessIndicator,
@@ -89,4 +90,17 @@ test('QR page metadata resolves venue titles while rejecting generic, technical,
     structuredData: [{ types: ['https://schema.org/Restaurant'], names: ['Happy Cafe'] }],
     openGraphTitles: ['Happy Cafe - Menu'],
   })), 'Happy Cafe');
+});
+
+test('chat rows mix groups, DMs and requests with the newest activity first', () => {
+  const group = (id, time, expiresAt) => ({ id, messages: time ? [{ time: Date.parse(time) }] : [], expiresAt });
+  const rows = chatRows(
+    [group('quiet', null, '2026-01-02T10:00:00Z'), group('busy', '2026-01-01T12:00:00Z', '2026-01-02T00:00:00Z')],
+    [
+      { id: 'dm', accepted_at: '2026-01-01T00:00:00Z', requested_at: '2026-01-01T00:00:00Z' },
+      { id: 'request', accepted_at: null, requested_at: '2026-01-01T11:00:00Z' },
+    ],
+    { dm: { status: 'ready', message: { created_at: '2026-01-01T13:00:00Z' } } },
+  );
+  assert.deepEqual(rows.map(row => `${row.kind}:${row.id}`), ['direct:dm', 'group:busy', 'request:request', 'group:quiet']);
 });

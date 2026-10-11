@@ -13,7 +13,7 @@ export function errorMessage(reason: unknown) {
 }
 const empty = { snapshot: emptySnapshot, ready: false, error: '', connection: 'connecting' as ConnectionState, hasObservedGroup: false, groupLoading: false, directs: {} };
 const idle = async () => {};
-const noGroup = () => () => {};
+const noGroup = (_groupId: string) => () => {};
 function useBackend() {
   const { api, userId, active } = useAuth();
   const store = useMemo(() => api ? getChatStore(api) : null, [api]);
@@ -27,7 +27,7 @@ function useBackend() {
     void store.start();
     return () => store.pause();
   }, [store, userId, active]);
-  return { ...state.snapshot, ready: state.ready, error: state.error ? errorMessage(new Error(state.error)) : '', groupAccessEnded: state.ready && state.hasObservedGroup && !state.snapshot.group,
+  return { ...state.snapshot, ready: state.ready, error: state.error ? errorMessage(new Error(state.error)) : '', groupAccessEnded: state.ready && state.hasObservedGroup && !state.snapshot.groups.length,
     groupLoading: state.groupLoading, connection: active ? state.connection : 'reconnecting' as ConnectionState,
     refresh: store?.refresh ?? idle, refreshGroup: store?.refreshGroup ?? idle, openGroup: store?.openGroup ?? noGroup,
     loadOlder: store?.loadOlderGroup ?? idle, scannedCode, acceptScan, clearScan };

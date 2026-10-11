@@ -8,7 +8,7 @@ const info = (title: string, detail: string) => () => Alert.alert(title, detail)
 const actions: { label: string; accessibilityLabel: string; icon: IconName; onPress: () => void }[] = [
   { label: 'Edit', accessibilityLabel: 'Edit profile', icon: 'edit', onPress: () => router.push('/edit-profile') },
   { label: 'Settings', accessibilityLabel: 'Settings', icon: 'settings', onPress: () => router.push('/settings') },
-  { label: 'Privacy', accessibilityLabel: 'Privacy', icon: 'lock', onPress: info('Privacy', 'Only members of your current group can read its messages. Direct messages are shared with your accepted friends.') },
+  { label: 'Privacy', accessibilityLabel: 'Privacy', icon: 'lock', onPress: info('Privacy', 'Only current members of a group can read its messages. Direct messages are shared with your accepted friends.') },
   { label: 'Help', accessibilityLabel: 'Help & Feedback', icon: 'help', onPress: info('Help & Feedback', 'Tap the scan button at the bottom of Chats to scan a QR code, then join the group. Camera access can be enabled in your device settings.') },
 ];
 export default function ProfileScreen() {

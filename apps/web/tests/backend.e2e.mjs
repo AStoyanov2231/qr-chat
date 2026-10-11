@@ -72,7 +72,7 @@ try {
   const [alice, bob] = await Promise.all(users.slice(0, 2).map(login));
   for (const actor of [alice, bob]) {
     for (const friend of await actor.api.friends()) await actor.api.removeFriend(friend.id);
-    await actor.api.leaveGroup();
+    for (const membership of await actor.api.memberships()) await actor.api.leaveGroup(membership.group_id);
   }
   for (const [actor, name] of [[alice, 'Alice QA'], [bob, 'Bob QA']]) {
     await actor.api.saveProfile({ display_name: name });
@@ -96,8 +96,8 @@ try {
     }
     await actor.page.getByLabel('Message', { exact: true }).waitFor({ timeout });
   }
-  const membership = await alice.api.currentMembership();
-  assert.equal((await bob.api.currentMembership()).group_id, membership.group_id);
+  const [membership] = await alice.api.memberships();
+  assert.equal((await bob.api.memberships())[0].group_id, membership.group_id);
   assert.equal(membership.groups.code_key, code);
   assert.equal((await alice.api.members(membership.group_id)).length, 2);
   pass('Actual browser camera QR decoding, named joins, and shared membership');
@@ -284,10 +284,11 @@ try {
   await bob.page.getByRole('button', { name: 'Group settings', exact: true }).click();
   await bob.page.getByLabel('2 members', { exact: true }).waitFor({ timeout });
   await alice.page.bringToFront();
-  await alice.page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await alice.page.goto(`${origin}/?code=${encodeURIComponent(code)}`);
+  await alice.page.getByRole('button', { name: 'Group settings', exact: true }).click();
   const leaveStarted = Date.now();
-  await alice.page.getByRole('button', { name: 'Leave current chat' }).click();
-  await eventually(async () => await alice.api.currentMembership() === null, 'leave must revoke membership');
+  await alice.page.getByRole('button', { name: 'Leave group' }).click();
+  await eventually(async () => (await alice.api.memberships()).length === 0, 'leave must revoke membership');
   await twin.page.bringToFront();
   await twin.page.locator('.group-card').waitFor({ state: 'hidden', timeout });
   assert.equal(await twin.page.locator('.group-card').count(), 0);

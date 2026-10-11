@@ -26,8 +26,8 @@ test('join and leave each call only the authoritative transactional RPC', async 
   const calls = [];
   const api = createChatApi({ rpc: async (...args) => { calls.push(args); return { data: [{ group_id: id }], error: null }; } });
   await api.joinGroup(' Room-a ');
-  await api.leaveGroup();
-  assert.deepEqual(calls, [['join_qr_group', { p_code_key: 'Room-a' }], ['leave_qr_group']]);
+  await api.leaveGroup('22222222-2222-4222-8222-222222222222');
+  assert.deepEqual(calls, [['join_qr_group', { p_code_key: 'Room-a' }], ['leave_qr_group', { p_group_id: '22222222-2222-4222-8222-222222222222' }]]);
 });
 
 test('named joins use the required-name RPC and return the database winner', async () => {

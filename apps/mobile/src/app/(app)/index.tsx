@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, Animated, Easing, Keyboard, PanResponder, Pre
 import { useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import type { ChatSnapshot } from '@qr-chat/api';
-import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from '@qr-chat/domain';
+import { chatRows, directMessagePreview, groupAccessIndicator, groupInitials, messageAge, type Group } from '@qr-chat/domain';
 import { Avatar } from '@/components/avatar';
 import { Copy, Icon, NativeInput, Skeleton, colors, shadowFloat, styles, useAction } from '@/components/chat-ui';
 import { NativeAction } from '@/components/native-action';
@@ -47,10 +47,44 @@ function GroupAccessRing({ name, indicator }: { name: string; indicator: ReturnT
 }
 
 type Friend = ChatSnapshot['friends'][number];
-function RequestRow({ friend, peer, userId, busy, onNotice, refresh }: {
+type Peer = { id: string; name: string; avatarUrl: string | null };
+function GroupCard({ group, userId, profileName }: { group: Group; userId: string | null; profileName?: string }) {
+  const accessIndicator = useGroupAccessCountdown(group.expiresAt);
+  const latestGroupMessage = group.messages.at(-1);
+  const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}. ${accessIndicator.accessibilityLabel}`} onPress={() => router.push(roomRoute(group))} style={({ pressed }) => [homeStyles.groupCard, { opacity: pressed ? 0.85 : 1 }]}>
+    <View style={homeStyles.groupAvatar}>
+      <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
+      <Copy style={homeStyles.expiry}>{accessIndicator.label}</Copy>
+    </View>
+    <View style={[homeStyles.copy, { alignSelf: 'flex-start' }]}>
+      <View style={[homeStyles.titleRow, { alignItems: 'center' }]}>
+        <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.name, { flex: 1 }]}>{group.venue.name}</Copy>
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={homeStyles.memberCount}><Copy style={homeStyles.memberNumber}>{group.members.length}</Copy><Icon name="group" size={14} color={colors.onSecondary} /></View>
+      </View>
+      <View style={homeStyles.groupMeta}>
+        <Copy numberOfLines={1} style={[homeStyles.meta, homeStyles.onTint, { flexShrink: 1 }]}>{latestGroupMessage ? latestGroupMessage.user === userId ? 'You' : latestGroupMessage.name : profileName || 'You'}</Copy>
+        {latestGroupMessage && <><Copy style={[homeStyles.meta, homeStyles.onTint]}>·</Copy><Copy style={[homeStyles.meta, homeStyles.onTint]}>{groupMessageAge === 'Now' ? 'Now' : `${groupMessageAge} ago`}</Copy></>}
+      </View>
+      <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.preview, homeStyles.onTint]}>{latestGroupMessage ? latestGroupMessage.text : 'You’re in. Say hello.'}</Copy>
+    </View>
+  </Pressable>;
+}
+
+function IncomingRequestRow({ friend, peer }: { friend: Friend; peer: Peer }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Open friend request from ${peer.name}`} onPress={() => router.push({ pathname: '/direct/[id]', params: { id: friend.id } })} style={({ pressed }) => [homeStyles.dmRow, pressed && { backgroundColor: colors.primaryTint }]}>
+    <View style={[homeStyles.requestIdentity, { width: 52, height: 52, borderRadius: 26 }]}>
+      <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[homeStyles.requestMarker, { borderColor: colors.canvas }]}><Icon name="userPlus" size={13} color={colors.onSecondary} /></View>
+    </View>
+    <View style={homeStyles.copy}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy><Copy selectable={false} numberOfLines={1} style={[homeStyles.preview, { color: colors.text, fontWeight: '700' }]}>Wants to be friends</Copy></View>
+    <Copy style={[homeStyles.meta, { alignSelf: 'flex-start', paddingTop: 2 }]}>{messageAge(Date.parse(friend.requested_at))}</Copy>
+  </Pressable>;
+}
+
+function RequestRow({ friend, peer, busy, onNotice, refresh }: {
   friend: Friend;
-  peer: { id: string; name: string; avatarUrl: string | null };
-  userId: string | null;
+  peer: Peer;
   busy: boolean;
   onNotice: (message: string) => void;
   refresh: () => Promise<void>;
@@ -58,19 +92,18 @@ function RequestRow({ friend, peer, userId, busy, onNotice, refresh }: {
   const { api } = useAuth();
   const action = useAction();
   const lock = useRef(false);
-  const [pending, setPending] = useState<'accept' | 'remove' | null>(null);
-  const incoming = friend.requested_by_id !== userId;
+  const [pending, setPending] = useState(false);
   const { width } = useWindowDimensions();
-  async function respond(kind: 'accept' | 'remove') {
+  async function cancel() {
     if (!api || busy || lock.current) return;
     lock.current = true;
-    setPending(kind);
+    setPending(true);
     const success = await action.run(async () => {
-      await (kind === 'accept' ? api.acceptFriend(friend.id) : api.removeFriend(friend.id));
+      await api.removeFriend(friend.id);
       await refresh();
     });
-    if (success) onNotice(kind === 'accept' ? `You and ${peer.name} are now friends.` : incoming ? `Declined ${peer.name}'s friend request.` : `Cancelled friend request to ${peer.name}.`);
-    setPending(null);
+    if (success) onNotice(`Cancelled friend request to ${peer.name}.`);
+    setPending(false);
     lock.current = false;
   }
   return <View style={homeStyles.requestCard}>
@@ -82,17 +115,13 @@ function RequestRow({ friend, peer, userId, busy, onNotice, refresh }: {
         </View>
         <View style={homeStyles.copy}>
           <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy>
-          <Copy style={homeStyles.preview}>{incoming ? 'Sent you a friend request' : 'Friend request sent'}</Copy>
+          <Copy style={homeStyles.preview}>Friend request sent</Copy>
         </View>
       </View>
       <View style={homeStyles.requestActions}>
-        {incoming && <Pressable accessibilityRole="button" accessibilityLabel={`Accept ${peer.name}'s friend request`} accessibilityState={{ disabled: busy || action.busy, busy: pending === 'accept' }} disabled={busy || action.busy} onPress={() => { void respond('accept'); }} style={({ pressed }) => [homeStyles.requestAction, { backgroundColor: colors.primary, opacity: busy || action.busy ? 0.4 : 1, transform: [{ scale: pressed ? 1.08 : 1 }] }]}>
-          {pending === 'accept' ? <ActivityIndicator size="small" color={colors.onPrimary} accessibilityLabel="Accepting…" /> : <Icon name="check" size={20} color={colors.onPrimary} />}
-          {width >= 600 && <Copy style={homeStyles.requestActionText}>{pending === 'accept' ? 'Accepting…' : 'Accept'}</Copy>}
-        </Pressable>}
-        <Pressable accessibilityRole="button" accessibilityLabel={incoming ? `Decline ${peer.name}'s friend request` : `Cancel friend request to ${peer.name}`} accessibilityState={{ disabled: busy || action.busy, busy: pending === 'remove' }} disabled={busy || action.busy} onPress={() => { void respond('remove'); }} style={({ pressed }) => [homeStyles.requestAction, { backgroundColor: colors.fill, opacity: busy || action.busy ? 0.4 : 1, transform: [{ scale: pressed ? 1.08 : 1 }] }]}>
-          {pending === 'remove' ? <ActivityIndicator size="small" color={colors.text} accessibilityLabel={incoming ? 'Declining…' : 'Cancelling…'} /> : <Icon name="close" size={20} color={colors.text} />}
-          {width >= 600 && <Copy style={homeStyles.requestActionText}>{pending === 'remove' ? incoming ? 'Declining…' : 'Cancelling…' : incoming ? 'Decline' : 'Cancel'}</Copy>}
+        <Pressable accessibilityRole="button" accessibilityLabel={`Cancel friend request to ${peer.name}`} accessibilityState={{ disabled: busy || action.busy, busy: pending }} disabled={busy || action.busy} onPress={() => { void cancel(); }} style={({ pressed }) => [homeStyles.requestAction, { backgroundColor: colors.fill, opacity: busy || action.busy ? 0.4 : 1, transform: [{ scale: pressed ? 1.08 : 1 }] }]}>
+          {pending ? <ActivityIndicator size="small" color={colors.text} accessibilityLabel="Cancelling…" /> : <Icon name="close" size={20} color={colors.text} />}
+          {width >= 600 && <Copy style={homeStyles.requestActionText}>{pending ? 'Cancelling…' : 'Cancel'}</Copy>}
         </Pressable>
       </View>
     </View>
@@ -174,42 +203,24 @@ export default function ChatsScreen() {
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [notice, setNotice] = useState('');
-  const groupId = chat.group?.id;
-  const [expiryNotice, setExpiryNotice] = useState({ groupId, dismissed: false });
-  if (expiryNotice.groupId !== groupId) setExpiryNotice({ groupId, dismissed: false });
-  const expiryDismissed = expiryNotice.groupId === groupId && expiryNotice.dismissed;
+  const hasGroups = chat.groups.length > 0;
+  const [expiryNotice, setExpiryNotice] = useState({ hasGroups, dismissed: false });
+  if (expiryNotice.hasGroups !== hasGroups) setExpiryNotice({ hasGroups, dismissed: false });
+  const expiryDismissed = expiryNotice.hasGroups === hasGroups && expiryNotice.dismissed;
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
   const query = search.trim().toLocaleLowerCase();
-  const group = chat.group;
-  const latestGroupMessage = group?.messages.at(-1);
-  const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
-  const acceptedFriends = useMemo(() => chat.friends.filter((friend) => friend.accepted_at !== null), [chat.friends]);
-  const pendingRequests = useMemo(() => chat.friends.filter((friend) => friend.accepted_at === null), [chat.friends]);
-  const peerFor = (friend: Friend) => {
+  const peerFor = (friend: Friend): Peer => {
     const profile = friend.user_a_id === userId ? friend.user_b : friend.user_a;
     return { id: profile?.id ?? (friend.user_a_id === userId ? friend.user_b_id : friend.user_a_id), name: profile?.display_name?.trim() || 'Participant', avatarUrl: profile?.avatar_url ?? null };
   };
-  const nameFor = (friend: Friend) => peerFor(friend).name;
-  const groupMatches = !!group && (!query || group.venue.name.toLocaleLowerCase().includes(query));
-  const accessIndicator = useGroupAccessCountdown(chat.ready && !chat.error && groupMatches ? chat.expiresAt : null);
-  const visibleFriends = acceptedFriends
-    .filter((friend) => nameFor(friend).toLocaleLowerCase().includes(query))
-    .sort((first, second) => {
-      const firstPreview = chat.directPreviews[first.id];
-      const secondPreview = chat.directPreviews[second.id];
-      const firstMessage = firstPreview?.status === 'ready' ? firstPreview.message : null;
-      const secondMessage = secondPreview?.status === 'ready' ? secondPreview.message : null;
-      return directConversationTime(secondMessage, second.accepted_at, second.requested_at) - directConversationTime(firstMessage, first.accepted_at, first.requested_at);
-    });
-  const visibleRequests = pendingRequests.filter((friend) => nameFor(friend).toLocaleLowerCase().includes(query))
-    .sort((left, right) => Date.parse(right.requested_at) - Date.parse(left.requested_at));
-  const hasMatches = groupMatches || visibleRequests.length > 0 || visibleFriends.length > 0;
+  const rows = useMemo(() => chatRows(chat.groups, chat.friends, chat.directPreviews), [chat.groups, chat.friends, chat.directPreviews])
+    .filter((row) => (row.kind === 'group' ? row.group.venue.name : peerFor(row.friend).name).toLocaleLowerCase().includes(query));
 
-  function openDirectMessage(friend: typeof chat.friends[number]) {
+  function openDirectMessage(friend: Friend) {
     router.push({ pathname: '/direct/[id]', params: { id: friend.id } });
   }
 
@@ -233,37 +244,24 @@ export default function ChatsScreen() {
       {!!action.error && <View accessibilityRole="alert" style={styles.notice}><Copy style={homeStyles.requestError}>Couldn’t refresh your chats. Try again.</Copy><NativeAction label="Retry" variant="outlined" onPress={() => action.run(chat.refresh)} /></View>}
       {chat.error ? <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={homeStyles.loadError}>
         <Copy style={homeStyles.emptyTitle}>Couldn’t load your chats.</Copy>
-        <Copy style={homeStyles.meta}>Try again to see your group, requests, and messages.</Copy>
+        <Copy style={homeStyles.meta}>Try again to see your groups, requests, and messages.</Copy>
         <NativeAction label={action.busy ? 'Trying again…' : 'Retry'} variant="outlined" disabled={action.busy} onPress={() => action.run(chat.refresh)} />
       </View> : !chat.ready ? <Skeleton view="chats" /> : <>
-        {!query && !group && chat.groupAccessEnded && !expiryDismissed && <View style={homeStyles.accessNotice}>
+        {!query && chat.groupAccessEnded && !expiryDismissed && <View style={homeStyles.accessNotice}>
           <Copy accessibilityLiveRegion="polite" style={{ flex: 1, color: colors.muted, fontSize: 14, lineHeight: 20 }}>Your group access ended. Your friends and DMs stay.</Copy>
-          <Pressable accessibilityRole="button" accessibilityLabel="Dismiss group access notice" onPress={() => setExpiryNotice({ groupId, dismissed: true })} style={homeStyles.clearSearch}><Icon name="close" size={18} color={colors.muted} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Dismiss group access notice" onPress={() => setExpiryNotice({ hasGroups, dismissed: true })} style={homeStyles.clearSearch}><Icon name="close" size={18} color={colors.muted} /></Pressable>
         </View>}
-        {group && groupMatches && <Pressable accessibilityRole="button" accessibilityLabel={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}. ${accessIndicator.accessibilityLabel}`} onPress={() => router.push(roomRoute(group))} style={({ pressed }) => [homeStyles.groupCard, { opacity: pressed ? 0.85 : 1 }]}>
-          <View style={homeStyles.groupAvatar}>
-            <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
-            <Copy style={homeStyles.expiry}>{accessIndicator.label}</Copy>
-          </View>
-          <View style={[homeStyles.copy, { alignSelf: 'flex-start' }]}>
-            <View style={[homeStyles.titleRow, { alignItems: 'center' }]}>
-              <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.name, { flex: 1 }]}>{group.venue.name}</Copy>
-              <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={homeStyles.memberCount}><Copy style={homeStyles.memberNumber}>{group.members.length}</Copy><Icon name="group" size={14} color={colors.onSecondary} /></View>
-            </View>
-            <View style={homeStyles.groupMeta}>
-              <Copy numberOfLines={1} style={[homeStyles.meta, homeStyles.onTint, { flexShrink: 1 }]}>{latestGroupMessage ? latestGroupMessage.user === userId ? 'You' : latestGroupMessage.name : chat.session?.name || 'You'}</Copy>
-              {latestGroupMessage && <><Copy style={[homeStyles.meta, homeStyles.onTint]}>·</Copy><Copy style={[homeStyles.meta, homeStyles.onTint]}>{groupMessageAge === 'Now' ? 'Now' : `${groupMessageAge} ago`}</Copy></>}
-            </View>
-            <Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.preview, homeStyles.onTint]}>{latestGroupMessage ? latestGroupMessage.text : 'You’re in. Say hello.'}</Copy>
-          </View>
-        </Pressable>}
-        {visibleRequests.map((friend) => <RequestRow key={friend.id} friend={friend} peer={peerFor(friend)} userId={userId} busy={action.busy} onNotice={setNotice} refresh={chat.refresh} />)}
-        {visibleFriends.map((friend) => {
+        {rows.map((row) => {
+          if (row.kind === 'group') return <GroupCard key={row.id} group={row.group} userId={userId} profileName={chat.session?.name} />;
+          const { friend } = row;
           const peer = peerFor(friend);
+          if (row.kind === 'request') return friend.requested_by_id !== userId
+            ? <IncomingRequestRow key={row.id} friend={friend} peer={peer} />
+            : <RequestRow key={row.id} friend={friend} peer={peer} busy={action.busy} onNotice={setNotice} refresh={chat.refresh} />;
           const preview = chat.directPreviews[friend.id];
           const failed = !preview || preview.status === 'error';
           const message = preview?.status === 'ready' ? preview.message : null;
-          return <View key={friend.id}>
+          return <View key={row.id}>
             <DirectRow friend={friend} peer={peer} open={revealedId === friend.id} onReveal={(open) => setRevealedId(open ? friend.id : null)} onOpen={() => openDirectMessage(friend)} refresh={chat.refresh} onNotice={setNotice}>
               <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
               <View style={homeStyles.copy}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.preview}>{failed ? 'Preview unavailable' : directMessagePreview(message, userId)}</Copy></View>
@@ -272,7 +270,7 @@ export default function ChatsScreen() {
             {failed && <View style={{ marginLeft: 80 }}><NativeAction label="Retry" accessibilityLabel={`Retry loading message preview for ${peer.name}`} variant="text" disabled={action.busy} onPress={() => action.run(chat.refresh)} align="flex-start" /></View>}
           </View>;
         })}
-        {!hasMatches && (query ? <View style={homeStyles.empty}>
+        {!rows.length && (query ? <View style={homeStyles.empty}>
           <Copy style={homeStyles.emptyCopy}>{`No chats or requests match “${search.trim()}”.`}</Copy>
           <NativeAction label="Clear search" variant="text" onPress={() => setSearch('')} />
         </View> : <View style={homeStyles.empty}>
@@ -303,7 +301,7 @@ const homeStyles = StyleSheet.create({
   meta: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.muted },
   preview: { fontSize: 14, lineHeight: 20, color: colors.muted },
   onTint: { color: colors.onPrimaryTint },
-  groupCard: { flexDirection: 'row', alignItems: 'center', minHeight: 98, padding: 16, gap: 12, marginBottom: 8, borderRadius: 24, borderCurve: 'continuous', backgroundColor: colors.primaryTint },
+  groupCard: { flexDirection: 'row', alignItems: 'center', minHeight: 98, padding: 16, gap: 12, marginVertical: 4, borderRadius: 24, borderCurve: 'continuous', backgroundColor: colors.primaryTint },
   groupAvatar: { position: 'relative', width: 74, height: 72, alignItems: 'center' },
   expiry: { position: 'absolute', bottom: 0, maxWidth: 74, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden', backgroundColor: colors.surface, fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.onPrimaryTint, textAlign: 'center' },
   groupMeta: { flexDirection: 'row', gap: 6, alignItems: 'center' },

@@ -30,7 +30,7 @@ function assertNativeButtonsHosted(screen) {
 
 for (const platform of ['ios', 'android']) {
   test(`${platform}: scanning the current code opens its conversation without joining again`, async (t) => {
-    reset(); process.env.EXPO_OS = platform; state.chat.group = group;
+    reset(); process.env.EXPO_OS = platform; state.chat.groups = [group];
     const screen = await render(t, Scan);
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({ data: 'https://chat.example/chats?code=Cafe-A' }); });
     assert.equal(state.navigation.length, 1);
@@ -102,7 +102,7 @@ for (const platform of ['ios', 'android']) {
   test(`${platform}: an unnamed active room is named in place and failed refresh preserves the draft`, async (t) => {
     reset(); process.env.EXPO_OS = platform; state.params = { code: 'Old-Room' };
     state.chat.scannedCode = 'Old-Room';
-    state.chat.group = { ...group, venue: { ...group.venue, name: 'Unnamed chat', nameMissing: true, codes: ['Old-Room'] } };
+    state.chat.groups = [{ ...group, venue: { ...group.venue, name: 'Unnamed chat', nameMissing: true, codes: ['Old-Room'] } }];
     const calls = [];
     state.auth.api = {
       saveProfile: async () => calls.push('profile'),
@@ -121,7 +121,7 @@ for (const platform of ['ios', 'android']) {
 
   test(`${platform}: an unnamed current group scan opens its naming preview instead of its room`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
-    state.chat.group = { ...group, venue: { ...group.venue, name: 'Unnamed chat', nameMissing: true } };
+    state.chat.groups = [{ ...group, venue: { ...group.venue, name: 'Unnamed chat', nameMissing: true } }];
     const screen = await render(t, Scan);
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({ data: 'Cafe-A' }); });
     assert.deepEqual(state.navigation, [['replace', { pathname: '/join', params: { code: 'Cafe-A' } }]]);
@@ -151,9 +151,9 @@ for (const platform of ['ios', 'android']) {
   test(`${platform}: a room that expires or is replaced cannot show the new group's messages`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     state.params = { groupId: group.id, code: group.venue.codes[0], name: group.venue.name };
-    state.chat.group = group;
+    state.chat.groups = [group];
     const screen = await render(t, Room);
-    state.chat.group = { ...group, id: 'different', messages: [{ id: '1', user: 'peer', name: 'Sam', text: 'different-room-private-text', time: 0 }] };
+    state.chat.groups = [{ ...group, id: 'different', messages: [{ id: '1', user: 'peer', name: 'Sam', text: 'different-room-private-text', time: 0 }] }];
     await screen.update();
     assert.doesNotMatch(screen.text(), /different-room-private-text/);
     assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
@@ -185,7 +185,7 @@ for (const platform of ['ios', 'android']) {
   });
 
   test(`${platform}: member actions stop when that membership is no longer current`, async (t) => {
-    reset(); process.env.EXPO_OS = platform; state.params = { groupId: group.id }; state.chat.group = group;
+    reset(); process.env.EXPO_OS = platform; state.params = { groupId: group.id }; state.chat.groups = [group];
     const calls = [];
     state.auth.api = { requestFriend: async id => calls.push(['request', id]), leaveGroup: async () => calls.push(['leave']) };
     const screen = await render(t, Members);
@@ -195,7 +195,7 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Leave group');
     await act(async () => { state.alerts.at(-1)[2].find(button => button.text === 'Leave').onPress(); });
     assert.deepEqual(state.navigation.at(-1), ['dismissTo', '/']);
-    state.chat.group = { ...group, id: 'new-room' }; await screen.update();
+    state.chat.groups = [{ ...group, id: 'new-room' }]; await screen.update();
     assert.match(screen.text(), /membership has ended/);
     assert.equal(screen.root.findAllByType('Pressable').length, 0);
   });
@@ -213,7 +213,7 @@ for (const platform of ['ios', 'android']) {
   });
 
   test(`${platform}: a member profile supports requesting, accepting and messaging with live relationship changes`, async (t) => {
-    reset(); process.env.EXPO_OS = platform; state.params={id:'peer'}; state.chat.group=group;
+    reset(); process.env.EXPO_OS = platform; state.params={id:'peer'}; state.chat.groups = [group];
     const friend = {id:friendId,user_a_id:'me',user_b_id:'peer',requested_by_id:'me',accepted_at:null,user_b:{id:'peer',display_name:'Sam',avatar_url:null}};
     const calls=[];
     state.auth.api={requestFriend:async id=>{calls.push(['request',id]);state.chat.friends=[friend];},removeFriend:async id=>{calls.push(['remove',id]);state.chat.friends=[];},acceptFriend:async id=>{calls.push(['accept',id]);friend.accepted_at='2026-09-30';}};
@@ -227,7 +227,7 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Message');
     assert.deepEqual(calls,[['request','peer'],['remove',friendId],['accept',friendId]]);
     assert.deepEqual(state.navigation.at(-1),['dismissTo',{pathname:'/direct/[id]',params:{id:friendId}}]);
-    state.chat.group=null;await screen.update();
+    state.chat.groups = [];await screen.update();
     assert.match(screen.text(),/Sam/,'An existing friendship remains visible after leaving the venue');
     state.chat.friends=[];await screen.update();
     assert.match(screen.text(),/profile is no longer available/);

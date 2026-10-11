@@ -117,6 +117,6 @@ try {
   for(const actor of actors) {
     actor.unsubscribe?.();actor.store.dispose();await actor.client.auth.stopAutoRefresh();await actor.client.removeAllChannels();
     for(const friend of await actor.api.friends()) await actor.api.removeFriend(friend.id).catch(()=>{});
-    await actor.api.leaveGroup();
+    for(const membership of await actor.api.memberships()) await actor.api.leaveGroup(membership.group_id);
   }
 }

@@ -136,9 +136,8 @@ export function createChatApi(
       return {
         ...overview,
         profile: overview.profile && withAvatar(overview.profile),
-        members: overview.members.map(withProfiles),
+        memberships: overview.memberships.map((membership) => ({ ...membership, members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
         friends: overview.friends.map(friendView),
-        groupPreview: overview.groupPreview && withProfiles(overview.groupPreview),
       };
     },
     async access(signal?: AbortSignal): Promise<ChatAccess> {
@@ -234,10 +233,10 @@ export function createChatApi(
       } catch { return { kind: "missing" }; }
       finally { clearTimeout(timeout); signal?.removeEventListener("abort", cancel); }
     },
-    leaveGroup: () => nullableResult(client.rpc("leave_qr_group")),
-    async currentMembership() {
-      return nullableResult(client.from("group_members")
-        .select("*, expires_at, groups(*)").eq("user_id", await userId()).maybeSingle());
+    leaveGroup: (groupId: string) => nullableResult(client.rpc("leave_qr_group", { p_group_id: userIdSchema.parse(groupId) })),
+    async memberships() {
+      return result(client.from("group_members")
+        .select("*, expires_at, groups(*)").eq("user_id", await userId()).order("joined_at", { ascending: false }));
     },
     async members(groupId: string) {
       return (await result(client.from("group_members").select("*, expires_at, profiles(*)")

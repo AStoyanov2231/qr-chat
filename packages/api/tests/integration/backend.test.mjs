@@ -25,7 +25,7 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
   t.after(async () => {
     for (const { api, client } of actors) {
       for (const friend of await api.friends()) await api.removeFriend(friend.id).catch(() => {});
-      await api.leaveGroup();
+      for (const membership of await api.memberships()) await api.leaveGroup(membership.group_id);
       await client.removeAllChannels();
     }
   });
@@ -48,9 +48,7 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
     group = rooms[0].group_id;
     assert.equal((await alice.api.members(group)).length, 2);
     await Promise.all([alice.api.joinGroup(code), alice.api.joinGroup(`${code}-other`), alice.api.joinGroup(code)]);
-    const membership = await alice.api.currentMembership();
-    assert.ok(membership, 'exactly one membership survives serialized switches');
-    await alice.api.joinGroup(code);
+    assert.equal((await alice.api.memberships()).length, 2, 'repeated joins never duplicate a membership');
   });
   await t.test('RLS rejects outsider reads and sender spoofing', async () => {
     await assert.rejects(eve.api.sendGroupMessage(group, 'outsider'));
@@ -162,7 +160,7 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
       await eventually(() => peerStore.getState().connection === 'connected' && sameAccountStore.getState().connection === 'connected', 'profile subscriptions must be ready');
       await alice.api.saveProfile({ display_name: 'Updated live profile' });
       await eventually(() => sameAccountStore.getState().snapshot.session?.name === 'Updated live profile', 'same account must receive its profile edit');
-      await eventually(() => peerStore.getState().snapshot.group?.members.some(member => member.id === alice.id && member.name === 'Updated live profile'), 'peer membership must receive profile edit');
+      await eventually(() => peerStore.getState().snapshot.groups.some(group => group.members.some(member => member.id === alice.id && member.name === 'Updated live profile')), 'peer membership must receive profile edit');
       assert.ok(peerStore.getState().snapshot.group.messages.filter(message => message.user === alice.id).every(message => message.name === 'Updated live profile'), 'already loaded messages use the updated author');
     } finally {
       close();peerStore.dispose();sameAccountStore.dispose();
@@ -203,8 +201,8 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
     assert.equal((await eve.api.profile()).id, eve.id);
   });
   await t.test('leaving immediately revokes access and sign-out ends the session', async () => {
-    await eve.api.leaveGroup();
-    assert.equal(await eve.api.currentMembership(), null);
+    for (const membership of await eve.api.memberships()) await eve.api.leaveGroup(membership.group_id);
+    assert.deepEqual(await eve.api.memberships(), []);
     await eve.api.signOut();
     await assert.rejects(eve.api.profile());
     // Remove signed-out actor from cleanup: it has no test rows or channels.

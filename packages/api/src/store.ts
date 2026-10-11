@@ -29,7 +29,9 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   let generation = 0;
   let identity: string | null = null;
   const groupViews = new Map<string, number>();
-  const viewingGroup = (id: string) => groupViews.has('*') || groupViews.has(id);
+  const viewingGroup = (id: string) => groupViews.has(id);
+  const hasGroup = (id: string) => state.snapshot.groups.some((group) => group.id === id);
+  const viewedGroupLoading = (groups: ChatSnapshot['groups']) => groups.some((group) => viewingGroup(group.id) && !conversations.get(`g:${group.id}`)?.loaded);
   let safety: ReturnType<typeof setTimeout> | undefined;
   let expiry: ReturnType<typeof setTimeout> | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -50,7 +52,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   }
   function groupMessageViews(rows: Row[], snapshot: ChatSnapshot) {
     const profiles = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-    for (const member of [snapshot.session, ...(snapshot.group?.members ?? [])]) {
+    for (const member of [snapshot.session, ...snapshot.groups.flatMap((group) => group.members)]) {
       if (member) profiles.set(member.id, { display_name: member.name, avatar_url: member.avatarUrl ?? null });
     }
     for (const friend of snapshot.friends) {
@@ -66,8 +68,10 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!cache) return;
     const rows = [...cache.rows.values()].sort((a, b) => a.id - b.id);
     const id = key.slice(2);
-    if (key.startsWith('g:') && state.snapshot.group?.id === id) {
-      publish({ snapshot: { ...state.snapshot, group: { ...state.snapshot.group, messages: groupMessageViews(rows, state.snapshot), nextCursor: cache.nextCursor } }, groupLoading: false });
+    if (key.startsWith('g:')) {
+      if (!hasGroup(id)) return;
+      const groups = state.snapshot.groups.map((group) => group.id === id ? { ...group, messages: groupMessageViews(rows, state.snapshot), nextCursor: cache.nextCursor } : group);
+      publish({ snapshot: { ...state.snapshot, groups }, groupLoading: viewedGroupLoading(groups) });
     } else if (key.startsWith('d:') && accepted().has(id)) {
       const latest = rows.at(-1) as DirectMessage | undefined;
       const previous = state.snapshot.directPreviews[id];
@@ -81,15 +85,16 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   }
   function prune(access: ChatAccess) {
     const allowed = new Set(access.acceptedConnectionIds);
+    const memberships = new Map(access.memberships.map((membership) => [membership.group_id, membership.expires_at]));
     const directs = { ...state.directs };
     const previews = { ...state.snapshot.directPreviews };
     for (const key of new Set([...conversations.keys(), ...pendingWrites.keys(), ...writtenIds.keys()])) {
-      if (key.startsWith('g:') ? key.slice(2) !== access.membership?.group_id : !allowed.has(key.slice(2))) forgetConversation(key);
+      if (key.startsWith('g:') ? !memberships.has(key.slice(2)) : !allowed.has(key.slice(2))) forgetConversation(key);
     }
     for (const id of Object.keys(directs)) if (!allowed.has(id)) delete directs[id];
     for (const id of Object.keys(previews)) if (!allowed.has(id)) delete previews[id];
-    const group = state.snapshot.group?.id === access.membership?.group_id ? state.snapshot.group : null;
-    publish({ directs, snapshot: { ...state.snapshot, group, expiresAt: group ? access.membership!.expires_at : null, friends: state.snapshot.friends.filter((friend) => !friend.accepted_at || allowed.has(friend.id)), directPreviews: previews } });
+    const groups = state.snapshot.groups.filter((group) => memberships.has(group.id)).map((group) => ({ ...group, expiresAt: memberships.get(group.id)! }));
+    publish({ directs, snapshot: { ...state.snapshot, groups, friends: state.snapshot.friends.filter((friend) => !friend.accepted_at || allowed.has(friend.id)), directPreviews: previews } });
   }
   function fail(error: unknown, ticket: number) {
     if (!current(ticket)) return;
@@ -109,13 +114,12 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       { table: 'friendships', column: 'user_a_id', id: identity },
       { table: 'friendships', column: 'user_b_id', id: identity },
     ];
-    const groupId = state.snapshot.group?.id;
-    if (groupId) filters.push({ table: 'group_members', column: 'group_id', id: groupId }, { table: 'messages', column: 'group_id', id: groupId });
+    for (const id of state.snapshot.groups.map((group) => group.id).sort()) filters.push({ table: 'group_members', column: 'group_id', id }, { table: 'messages', column: 'group_id', id });
     // RLS-protected DELETE payloads expose only primary keys, not participant
     // columns. Watch already authorized connections by id to retire them promptly.
     for (const id of state.snapshot.friends.map(friend => friend.id).sort()) filters.push({ table: 'friendships', column: 'group_id', id, event: 'DELETE' });
     for (const id of [...accepted()].sort()) filters.push({ table: 'messages', column: 'group_id', id });
-    const profiles = new Set([identity, ...(state.snapshot.group?.members.map(member => member.id) ?? [])]);
+    const profiles = new Set([identity, ...state.snapshot.groups.flatMap((group) => group.members.map((member) => member.id))]);
     for (const friend of state.snapshot.friends) {
       if (friend.user_a) profiles.add(friend.user_a.id);
       if (friend.user_b) profiles.add(friend.user_b.id);
@@ -135,9 +139,9 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       scheduleSafety();
     }, (options.safetyMs ?? 120000) * (0.95 + random() * 0.05));
   }
-  function scheduleExpiry(members: ChatOverview['members']) {
+  function scheduleExpiry(memberships: ChatOverview['memberships']) {
     clearTimeout(expiry);
-    const deadlines = [state.snapshot.expiresAt, ...members.map(member => member.expires_at)].filter(Boolean).map(value => Date.parse(value!)).filter(Number.isFinite);
+    const deadlines = memberships.flatMap((membership) => [membership.expires_at, ...membership.members.map((member) => member.expires_at)]).filter(Boolean).map(value => Date.parse(value!)).filter(Number.isFinite);
     // Expired peers lose membership/profile visibility even if no database write
     // occurs at their deadline. Reconcile at the earliest visible expiry.
     if (active && deadlines.length) expiry = setTimeout(() => { void refresh('expiry').catch(() => {}); }, Math.min(2147483647, Math.max(1000, Math.min(...deadlines) - Date.now() + 100)));
@@ -163,17 +167,21 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       if (!current(ticket)) return;
       if (next.userId !== identity || sessionId !== identity) throw new Error('Please sign in again.');
       const allowed = new Set(next.friends.filter((friend) => friend.accepted_at).map((friend) => friend.id));
-      for (const key of new Set([...conversations.keys(), ...pendingWrites.keys(), ...writtenIds.keys()])) if (key.startsWith('g:') ? key.slice(2) !== next.membership?.group_id : !allowed.has(key.slice(2))) forgetConversation(key);
+      const headIds = new Map(next.memberships.map((membership) => [membership.group_id, membership.headIds]));
+      for (const key of new Set([...conversations.keys(), ...pendingWrites.keys(), ...writtenIds.keys()])) if (key.startsWith('g:') ? !headIds.has(key.slice(2)) : !allowed.has(key.slice(2))) forgetConversation(key);
       const snapshot = snapshotFromOverview(next);
-      const cache = snapshot.group ? conversations.get(`g:${snapshot.group.id}`) : undefined;
-      if (snapshot.group && cache?.loaded) snapshot.group = { ...snapshot.group, messages: groupMessageViews([...cache.rows.values()].sort((a, b) => a.id - b.id), snapshot), nextCursor: cache.nextCursor };
+      snapshot.groups = snapshot.groups.map((group) => {
+        const cache = conversations.get(`g:${group.id}`);
+        return cache?.loaded ? { ...group, messages: groupMessageViews([...cache.rows.values()].sort((a, b) => a.id - b.id), snapshot), nextCursor: cache.nextCursor } : group;
+      });
       const directs = Object.fromEntries(Object.entries(state.directs).filter(([id]) => allowed.has(id)));
-      publish({ snapshot, directs, ready: true, error: '', groupLoading: !!snapshot.group && viewingGroup(snapshot.group.id) && !cache?.loaded, hasObservedGroup: state.hasObservedGroup || !!snapshot.group });
-      updateWatcher(); scheduleExpiry(next.members);
+      publish({ snapshot, directs, ready: true, error: '', groupLoading: viewedGroupLoading(snapshot.groups), hasObservedGroup: state.hasObservedGroup || snapshot.groups.length > 0 });
+      updateWatcher(); scheduleExpiry(next.memberships);
       const tasks: Promise<void>[] = [];
-      if (snapshot.group && viewingGroup(snapshot.group.id)) {
-        const key = `g:${snapshot.group.id}`;
-        if (!cache?.loaded || validate || next.groupHeadIds.join(',') !== cache.headIds.join(',')) tasks.push(refreshConversation(key, true, false, validate && !!cache?.loaded));
+      for (const group of snapshot.groups) if (viewingGroup(group.id)) {
+        const key = `g:${group.id}`;
+        const cache = conversations.get(key);
+        if (!cache?.loaded || validate || headIds.get(group.id)!.join(',') !== cache.headIds.join(',')) tasks.push(refreshConversation(key, true, false, validate && !!cache?.loaded));
       }
       for (const id of directViews.keys()) if (allowed.has(id)) {
         const key = `d:${id}`;
@@ -233,7 +241,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       if (!current(ticket)) return;
       try {
         const id = key.slice(2);
-        if (key.startsWith('g:') ? state.snapshot.group?.id !== id : !accepted().has(id)) return;
+        if (key.startsWith('g:') ? !hasGroup(id) : !accepted().has(id)) return;
         const cache = conversation(key);
         // Work in a copy until the final authorization check succeeds.
         const next = { ...cache, rows: new Map(cache.rows), headIds: [...cache.headIds] };
@@ -262,7 +270,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
         }
         if (next.loaded) next.headIds = [...next.rows.keys()].sort((a, b) => b - a).slice(0, 50);
         const access = await checkAccess(ticket);
-        if (!access || (key.startsWith('g:') ? access.membership?.group_id !== id : !access.acceptedConnectionIds.includes(id))) { updateWatcher(); return; }
+        if (!access || (key.startsWith('g:') ? !access.memberships.some((membership) => membership.group_id === id) : !access.acceptedConnectionIds.includes(id))) { updateWatcher(); return; }
         conversations.set(key, next); publishMessages(key);
       } catch (error) { fail(error, ticket); throw error; }
     });
@@ -274,7 +282,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!change.id || change.eventType !== 'INSERT') { void refresh('reconnect').catch(() => {}); return; }
     // A callback includes its filter so we can route without trusting the payload.
     const groupId = change.filterId;
-    if (groupId && groupId === state.snapshot.group?.id) enqueue(`g:${groupId}`, change.id);
+    if (groupId && hasGroup(groupId)) enqueue(`g:${groupId}`, change.id);
     else if (groupId && accepted().has(groupId)) enqueue(`d:${groupId}`, change.id);
   }
   function enqueue(key: string, id: number) {
@@ -335,21 +343,19 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     getDirect: (id: string | null) => id && state.ready ? state.directs[id] ?? emptyDirect : emptyDirect,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     start, pause, refresh,
-    openGroup(groupId?: string) {
-      const key = groupId ?? '*';
-      groupViews.set(key, (groupViews.get(key) ?? 0) + 1);
-      const id = groupId ?? state.snapshot.group?.id;
-      if (id && id === state.snapshot.group?.id && active) { publish({ groupLoading: !conversations.get(`g:${id}`)?.loaded }); void refreshConversation(`g:${id}`, true).catch(() => {}); }
-      return () => { const count = (groupViews.get(key) ?? 1) - 1; if (count) groupViews.set(key, count); else groupViews.delete(key); };
+    openGroup(groupId: string) {
+      groupViews.set(groupId, (groupViews.get(groupId) ?? 0) + 1);
+      if (active && hasGroup(groupId)) { publish({ groupLoading: !conversations.get(`g:${groupId}`)?.loaded }); void refreshConversation(`g:${groupId}`, true).catch(() => {}); }
+      return () => { const count = (groupViews.get(groupId) ?? 1) - 1; if (count) groupViews.set(groupId, count); else groupViews.delete(groupId); };
     },
     openDirect(id: string) {
       directViews.set(id, (directViews.get(id) ?? 0) + 1);
       if (active && state.ready) void refreshConversation(`d:${id}`, true).catch(() => {});
       return () => { const count = (directViews.get(id) ?? 1) - 1; if (count) directViews.set(id, count); else directViews.delete(id); };
     },
-    refreshGroup() { const id = state.snapshot.group?.id; return !state.ready ? refresh() : id ? refreshConversation(`g:${id}`) : Promise.resolve(); },
+    refreshGroup(groupId: string) { return !state.ready ? refresh() : hasGroup(groupId) ? refreshConversation(`g:${groupId}`) : Promise.resolve(); },
     async refreshDirect(id: string) { if (!state.ready) await refresh(); else await refreshConversation(`d:${id}`); },
-    loadOlderGroup() { const id = state.snapshot.group?.id; return id ? refreshConversation(`g:${id}`, false, true) : Promise.resolve(); },
+    loadOlderGroup: (groupId: string) => refreshConversation(`g:${groupId}`, false, true),
     loadOlderDirect: (id: string) => refreshConversation(`d:${id}`, false, true),
     dispose() { pause(); authSubscription?.unsubscribe(); authSubscription = undefined; unlistenMutation?.(); unlistenMutation = undefined; },
   };

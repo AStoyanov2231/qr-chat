@@ -49,7 +49,7 @@ export function LandingPage() {
       <div className="landing-section-heading"><p className="landing-eyebrow">From nearby to connected</p><h2 id="landing-how-title">Start with a hello.</h2></div>
       <div className="landing-steps">
         <article><span className="landing-step-icon"><QrCode size={28} aria-hidden="true" /></span><span className="landing-step-number">01</span><h3>Scan the same code</h3><p>Sign in with Google, then use your phone’s camera to scan a venue’s QR code.</p></article>
-        <article><span className="landing-step-icon"><ChatCircle size={28} aria-hidden="true" /></span><span className="landing-step-number">02</span><h3>Join the conversation</h3><p>Chat with the group for up to 24 hours. You have one active group at a time.</p></article>
+        <article><span className="landing-step-icon"><ChatCircle size={28} aria-hidden="true" /></span><span className="landing-step-number">02</span><h3>Join the conversation</h3><p>Chat with the group for up to 24 hours. Scan as many groups as you like.</p></article>
         <article><span className="landing-step-icon"><Users size={28} aria-hidden="true" /></span><span className="landing-step-number">03</span><h3>Keep the connection</h3><p>Send a friend request. Once accepted, you can message each other after group access ends.</p></article>
       </div>
     </section>

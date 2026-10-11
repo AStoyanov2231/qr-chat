@@ -10,17 +10,16 @@ export type Membership = MembershipRow & { groups: Tables<"groups"> | null };
 export type Member = MembershipRow & { profiles: Profile | null };
 export type DirectMessage = Tables<"messages">;
 export type GroupMessage = DirectMessage & { profiles: (Pick<Profile, "display_name" | "avatar_url"> & { avatar_path?: string | null }) | null };
+/** One entry per active QR group, newest join first. */
+export type GroupOverview = Membership & { members: Member[]; preview: GroupMessage | null; headIds: number[] };
 export type ChatOverview = {
   userId: string;
   profile: Profile | null;
-  membership: Membership | null;
-  members: Member[];
+  memberships: GroupOverview[];
   friends: Friend[];
   directPreviews: Record<string, DirectMessage | null>;
-  groupHeadIds: number[];
-  groupPreview: GroupMessage | null;
 };
-export type ChatAccess = { userId: string; membership: Pick<MembershipRow, "group_id" | "expires_at"> | null; acceptedConnectionIds: string[] };
+export type ChatAccess = { userId: string; memberships: Pick<MembershipRow, "group_id" | "expires_at">[]; acceptedConnectionIds: string[] };
 export type ChatMutation =
   | { kind: "overview" }
   | { kind: "group"; userId: string; message: GroupMessage }
