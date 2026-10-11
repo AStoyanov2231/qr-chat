@@ -91,9 +91,9 @@ begin
   execute 'set local role authenticated';
   perform public.join_qr_group(room_key);
   assert (select count(*) = 1 from public.messages where group_id = room), 'member reads shared messages';
-  assert public.get_chat_overview()->'membership'->>'group_id' = room::text, 'overview is scoped to authorized membership';
-  assert public.get_chat_overview()->'membership'->'groups'->>'code_key' = room_key, 'overview includes the QR code';
-  assert jsonb_array_length(public.get_chat_overview()->'groupHeadIds') = 1, 'overview recovers authorized message heads';
+  assert public.get_chat_overview()->'memberships'->0->>'group_id' = room::text, 'overview is scoped to authorized membership';
+  assert public.get_chat_overview()->'memberships'->0->'groups'->>'code_key' = room_key, 'overview includes the QR code';
+  assert jsonb_array_length(public.get_chat_overview()->'memberships'->0->'headIds') = 1, 'overview recovers authorized message heads';
   assert (select count(*) = 2 from public.profiles where id in (a,b)), 'members see each other';
   execute 'reset role';
 
@@ -149,18 +149,20 @@ begin
   begin insert into public.messages(group_id,sender_id,body) values(room,a,'expired'); exception when insufficient_privilege then denied:=true; end;
   assert denied, 'expired member cannot send';
   assert (select count(*) = 1 from public.messages where group_id=connection), 'friendship survives expiration';
-  assert public.get_chat_access()->'membership' = 'null'::jsonb, 'access RPC rejects expiration before cleanup';
-  assert public.get_chat_overview()->'membership' = 'null'::jsonb, 'overview rejects expiration before cleanup';
+  assert public.get_chat_access()->'memberships' = '[]'::jsonb, 'access RPC rejects expiration before cleanup';
+  assert public.get_chat_overview()->'memberships' = '[]'::jsonb, 'overview rejects expiration before cleanup';
   assert public.get_chat_overview()->'directPreviews'->connection::text->>'body' = 'accepted', 'batched DM previews survive group expiry';
   insert into public.messages(group_id,sender_id,body) values(connection,a,'still friends');
   select group_id into other_room from public.join_qr_group(room_key || '-other');
-  assert other_room <> room, 'switching chats moves the membership';
-  perform public.leave_qr_group();
+  assert other_room <> room, 'joining another chat adds a membership';
+  assert jsonb_array_length(public.get_chat_access()->'memberships') = 1, 'only the unexpired membership is listed';
+  perform public.leave_qr_group(other_room);
+  perform public.leave_qr_group(room);
   execute 'reset role';
 
   perform set_config('request.jwt.claim.sub', b::text, true);
   execute 'set local role authenticated';
-  perform public.leave_qr_group();
+  perform public.leave_qr_group(room);
   assert (select count(*) = 0 from public.messages where group_id=room), 'left member cannot read';
   execute 'reset role';
   assert (select count(*) = 0 from public.messages where group_id=room), 'last leave clears the chat';

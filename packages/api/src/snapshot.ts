@@ -1,20 +1,23 @@
 import type { Message, Group, Session } from '@qr-chat/domain';
 import type { ChatApi } from './index.ts';
-import type { ChatOverview, GroupMessage, Friend, DirectMessage } from './overview.ts';
+import type { ChatOverview, GroupMessage, GroupOverview, Friend, DirectMessage } from './overview.ts';
 
 export type DirectPreview = { status: 'ready'; message: DirectMessage | null } | { status: 'error' };
-export type ChatSnapshot = { session: Session | null; group: Group | null; friends: Friend[]; expiresAt: string | null; directPreviews: Record<string, DirectPreview> };
-export const emptySnapshot: ChatSnapshot = { session: null, group: null, friends: [], expiresAt: null, directPreviews: {} };
+export type ChatSnapshot = { session: Session | null; groups: Group[]; friends: Friend[]; directPreviews: Record<string, DirectPreview> };
+export const emptySnapshot: ChatSnapshot = { session: null, groups: [], friends: [], directPreviews: {} };
 export function groupMessageView(message: GroupMessage): Message {
   return { id: String(message.id), user: message.sender_id ?? 'deleted', name: message.profiles?.display_name ?? 'Former participant', avatarUrl: message.profiles?.avatar_url ?? null, text: message.body, time: Date.parse(message.created_at) };
 }
+function groupView(membership: GroupOverview): Group | null {
+  const room = membership.groups;
+  if (!room?.code_key) return null;
+  return { id: room.id, venue: { id: room.id, name: room.name ?? 'Unnamed chat', nameMissing: room.name === null, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: membership.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: membership.preview ? [groupMessageView(membership.preview)] : [], nextCursor: null, expiresAt: membership.expires_at };
+}
 export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
-  const room = overview.membership?.groups;
   return {
     session: { id: overview.userId, name: overview.profile?.display_name ?? '', avatarUrl: overview.profile?.avatar_url ?? null, hidden: [] },
-    group: room?.code_key ? { id: room.id, venue: { id: room.id, name: room.name ?? 'Unnamed chat', nameMissing: room.name === null, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: overview.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: overview.groupPreview ? [groupMessageView(overview.groupPreview)] : [], nextCursor: null } : null,
+    groups: overview.memberships.flatMap((membership) => groupView(membership) ?? []),
     friends: overview.friends,
-    expiresAt: overview.membership?.expires_at ?? null,
     directPreviews: Object.fromEntries(overview.friends.filter((friend) => friend.accepted_at).map((friend) => [friend.id, { status: 'ready' as const, message: overview.directPreviews[friend.id] ?? null }])),
   };
 }
@@ -23,8 +26,7 @@ export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
 export async function loadChatSnapshot(api: ChatApi, pages: { groupId: string; count: number }): Promise<ChatSnapshot> {
   const id = await api.userId();
   const snapshot = snapshotFromOverview(await api.overview());
-  if (snapshot.group) {
-    const group = snapshot.group;
+  for (const group of snapshot.groups) {
     const count = pages.groupId === group.id ? pages.count : 1;
     let before: number | undefined;
     const messages: GroupMessage[] = [];
@@ -38,7 +40,8 @@ export async function loadChatSnapshot(api: ChatApi, pages: { groupId: string; c
   }
   const access = await api.access();
   if (await api.userId() !== id || access.userId !== id || snapshot.session?.id !== id) throw new Error('Please sign in again.');
-  if (snapshot.group?.id !== access.membership?.group_id) { snapshot.group = null; snapshot.expiresAt = null; }
+  const memberships = new Map(access.memberships.map((membership) => [membership.group_id, membership.expires_at]));
+  snapshot.groups = snapshot.groups.filter((group) => memberships.has(group.id)).map((group) => ({ ...group, expiresAt: memberships.get(group.id)! }));
   const accepted = new Set(access.acceptedConnectionIds);
   snapshot.friends = snapshot.friends.filter((friend) => !friend.accepted_at || accepted.has(friend.id));
   for (const connectionId of Object.keys(snapshot.directPreviews)) if (!accepted.has(connectionId)) delete snapshot.directPreviews[connectionId];

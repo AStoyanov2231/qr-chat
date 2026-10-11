@@ -11,7 +11,7 @@ export default function PersonScreen() {
   const chat = useChat();
   const { api, userId } = useAuth();
   const action = useAction();
-  const member = chat.group?.members.find((member) => member.id === id);
+  const member = chat.groups.flatMap((group) => group.members).find((member) => member.id === id);
   const friend = chat.friends.find((friend) => friend.user_a_id === id || friend.user_b_id === id);
   const peer = friend?.user_a_id === userId ? friend?.user_b : friend?.user_a;
   const person = member ?? (peer ? { id: peer.id, name: peer.display_name ?? 'Participant', avatarUrl: peer.avatar_url } : null);
@@ -19,7 +19,7 @@ export default function PersonScreen() {
   const disabled = action.busy || !chat.ready;
   const change = (mutation: () => Promise<unknown>) => { void action.run(async () => { await mutation(); await chat.refresh(); }); };
 
-  return <View style={{ flex: 1, backgroundColor: colors.paper }}>
+  return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
     <ConversationHeader title={person?.name ?? 'Profile'} subtitle={person ? relationship === 'accepted' ? 'Friend' : 'QR Chat member' : undefined} imageUrl={person?.avatarUrl} onBack={() => router.back()} />
     <View style={styles.profileSurface}>
     <ErrorNotice message={action.error || chat.error} retry={() => { void action.run(chat.refresh); }} />

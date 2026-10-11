@@ -98,7 +98,7 @@ export type Database = {
           {
             foreignKeyName: "group_members_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -377,7 +377,7 @@ export type Database = {
           group_id: string
         }[]
       }
-      leave_qr_group: { Args: never; Returns: string }
+      leave_qr_group: { Args: { p_group_id: string }; Returns: string }
       my_permissions: { Args: { p_group_id?: string }; Returns: string[] }
       name_current_qr_chat_if_empty: {
         Args: { p_code_key: string; p_display_name: string }

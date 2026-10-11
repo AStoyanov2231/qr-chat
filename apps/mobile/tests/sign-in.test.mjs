@@ -34,6 +34,7 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, SignIn);
     await screen.press('Continue with Google');
     assert.match(screen.text(), /Could not start sign-in/);
-    assert.equal(screen.root.findAllByType('Pressable').find(button => button.props.accessibilityRole === 'button').props.disabled, false);
+    const button = screen.root.findAll(node => node.type === 'SwiftUIButton' || node.type === 'ComposeButton')[0];
+    assert.equal(button.props.enabled ?? !button.props.modifiers.some(modifier => modifier.$type === 'disabled' && modifier.value), true);
   });
 }

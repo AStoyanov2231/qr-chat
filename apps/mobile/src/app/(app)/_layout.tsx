@@ -13,7 +13,7 @@ export default function AppLayout() {
     clearPendingCode();
   }, [pendingCode, clearPendingCode]);
   const modal = { presentation: 'modal' as const, headerRight: () => <IconButton name="close" label="Close" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} /> };
-  return <ChatProvider key={userId}><Stack screenOptions={{ statusBarStyle: 'dark', headerShadowVisible: false, headerTintColor: colors.ink, contentStyle: { backgroundColor: colors.paper }, headerBackButtonDisplayMode: 'minimal' }}>
+  return <ChatProvider key={userId}><Stack screenOptions={{ statusBarStyle: 'dark', headerShadowVisible: false, headerTintColor: colors.text, contentStyle: { backgroundColor: colors.canvas }, headerBackButtonDisplayMode: 'minimal' }}>
     <Stack.Screen name="index" options={{ headerShown: false }} />
     <Stack.Screen name="chats" options={{ headerShown: false }} />
     <Stack.Screen name="profile" options={{ title: 'Your profile', presentation: 'card', headerShown: false }} />

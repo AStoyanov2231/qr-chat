@@ -72,7 +72,7 @@ try {
   const [alice, bob] = await Promise.all(users.slice(0, 2).map(login));
   for (const actor of [alice, bob]) {
     for (const friend of await actor.api.friends()) await actor.api.removeFriend(friend.id);
-    await actor.api.leaveGroup();
+    for (const membership of await actor.api.memberships()) await actor.api.leaveGroup(membership.group_id);
   }
   for (const [actor, name] of [[alice, 'Alice QA'], [bob, 'Bob QA']]) {
     await actor.api.saveProfile({ display_name: name });
@@ -96,8 +96,8 @@ try {
     }
     await actor.page.getByLabel('Message', { exact: true }).waitFor({ timeout });
   }
-  const membership = await alice.api.currentMembership();
-  assert.equal((await bob.api.currentMembership()).group_id, membership.group_id);
+  const [membership] = await alice.api.memberships();
+  assert.equal((await bob.api.memberships())[0].group_id, membership.group_id);
   assert.equal(membership.groups.code_key, code);
   assert.equal((await alice.api.members(membership.group_id)).length, 2);
   pass('Actual browser camera QR decoding, named joins, and shared membership');
@@ -105,19 +105,19 @@ try {
   const failGroupSend = (route) => route.request().method() === 'POST' ? route.abort('connectionfailed') : route.continue();
   await alice.context.route('**/rest/v1/messages*', failGroupSend);
   await send(alice, 'Hello from Alice');
-  await visible(alice.page, 'Could not send your message. Your draft is still here; try again.');
-  assert.equal(await alice.page.getByLabel('Message', { exact: true }).inputValue(), 'Hello from Alice');
+  await visible(alice.page, 'Not sent. Tap ! to retry');
+  assert.equal(await alice.page.getByLabel('Message', { exact: true }).inputValue(), '', 'The draft clears at once; the failed message stays in the conversation');
   await screenshot(alice.page, 'web-group-failed-send');
   await alice.context.unroute('**/rest/v1/messages*', failGroupSend);
   await alice.context.setOffline(true);
   await visible(alice.page, 'You’re offline. Reconnect to load chats and send messages.');
   await alice.context.setOffline(false);
   await alice.page.getByLabel('Message', { exact: true }).waitFor({ timeout });
-  assert.equal(await alice.page.getByLabel('Message', { exact: true }).inputValue(), 'Hello from Alice');
+  await visible(alice.page, 'Not sent. Tap ! to retry');
   assert.equal(await alice.page.locator('dialog.camera-dialog[open]').count(), 0);
-  console.log('Group reconnect retained the draft and did not replay the initial QR link.');
-  await alice.page.getByRole('button', { name: 'Send message', exact: true }).click();
-  pass('Failed group send retains its draft across reconnect and recovers on retry without reopening the scanner');
+  console.log('Group reconnect kept the failed message and did not replay the initial QR link.');
+  await alice.page.getByRole('button', { name: 'Message not sent. Retry' }).click({ timeout });
+  pass('A failed group send stays marked across reconnect and goes through on retry without reopening the scanner');
   await visible(bob.page, 'Hello from Alice');
   await send(bob, 'Hello from Bob');
   await visible(alice.page, 'Hello from Bob');
@@ -161,7 +161,8 @@ try {
   await screenshot(alice.page, 'web-member-profile-requested');
   await overview(bob);
   const declineStarted = Date.now();
-  await bob.page.getByRole('button', { name: "Decline Alice QA's friend request", exact: true }).click({ timeout });
+  await bob.page.getByRole('button', { name: 'Open friend request from Alice QA', exact: true }).click({ timeout });
+  await bob.page.getByRole('button', { name: 'Decline', exact: true }).click({ timeout });
   await eventually(async () => (await alice.api.friends()).length === 0, 'Decline must delete the backend friendship');
   await alice.page.bringToFront();
   await alice.page.getByRole('button', { name: 'Add friend', exact: true }).waitFor({ timeout });
@@ -175,7 +176,9 @@ try {
   await alice.page.getByRole('button', { name: 'Add friend', exact: true }).click();
   await visible(alice.page, 'Request sent. You can message after they accept.');
   await overview(bob);
-  await bob.page.getByRole('button', { name: "Accept Alice QA's friend request", exact: true }).click({ timeout });
+  await bob.page.getByRole('button', { name: 'Open friend request from Alice QA', exact: true }).click({ timeout });
+  await bob.page.getByRole('button', { name: 'Accept', exact: true }).click({ timeout });
+  await bob.page.getByLabel('Direct message', { exact: true }).waitFor({ timeout });
   await openDirect(alice, 'Bob QA');
   await openDirect(bob, 'Alice QA');
   await send(alice, 'A private hello', true);
@@ -199,12 +202,11 @@ try {
   const failMessage = (route) => route.request().method() === 'POST' ? route.abort('connectionfailed') : route.continue();
   await alice.context.route('**/rest/v1/messages*', failMessage);
   await send(alice, 'Retained failed draft', true);
-  await visible(alice.page, 'Could not send your message. Your draft is still here; try again.');
-  assert.equal(await alice.page.getByLabel('Direct message', { exact: true }).inputValue(), 'Retained failed draft');
-  assert.ok(!(await alice.page.locator('.toast').innerText()).includes('TypeError'), 'Transport errors must not expose implementation details');
+  await visible(alice.page, 'Not sent. Tap ! to retry');
+  assert.equal(await alice.page.getByLabel('Direct message', { exact: true }).inputValue(), '', 'The draft clears at once; the failed message stays in the conversation');
   await screenshot(alice.page, 'web-dm-failed-send');
   await alice.context.unroute('**/rest/v1/messages*', failMessage);
-  await alice.page.getByRole('button', { name: 'Send direct message', exact: true }).click();
+  await alice.page.getByRole('button', { name: 'Message not sent. Retry' }).click({ timeout });
   await visible(bob.page, 'Retained failed draft');
   assert.equal((await bob.api.directMessages(friendship.id)).items.filter((row) => row.body === 'Retained failed draft').length, 1);
   pass('Failed direct send preserves the draft and one retry creates exactly one message');
@@ -282,10 +284,11 @@ try {
   await bob.page.getByRole('button', { name: 'Group settings', exact: true }).click();
   await bob.page.getByLabel('2 members', { exact: true }).waitFor({ timeout });
   await alice.page.bringToFront();
-  await alice.page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await alice.page.goto(`${origin}/?code=${encodeURIComponent(code)}`);
+  await alice.page.getByRole('button', { name: 'Group settings', exact: true }).click();
   const leaveStarted = Date.now();
-  await alice.page.getByRole('button', { name: 'Leave current chat' }).click();
-  await eventually(async () => await alice.api.currentMembership() === null, 'leave must revoke membership');
+  await alice.page.getByRole('button', { name: 'Leave group' }).click();
+  await eventually(async () => (await alice.api.memberships()).length === 0, 'leave must revoke membership');
   await twin.page.bringToFront();
   await twin.page.locator('.group-card').waitFor({ state: 'hidden', timeout });
   assert.equal(await twin.page.locator('.group-card').count(), 0);

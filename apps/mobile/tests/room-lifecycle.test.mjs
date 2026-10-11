@@ -18,12 +18,12 @@ for (const platform of ['ios', 'android']) {
     assert.match(screen.text(), /Your membership has ended/);
     assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
 
-    state.chat = { ...state.chat, group };
+    state.chat = { ...state.chat, groups: [group] };
     await screen.update();
     assert.match(screen.text(), /private room message/);
     assert.equal(screen.root.findAllByType('NativeTextInput').length, 1);
 
-    state.chat = { ...state.chat, group: null };
+    state.chat = { ...state.chat, groups: [] };
     await screen.update();
     assert.doesNotMatch(screen.text(), /private room message/);
     assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);

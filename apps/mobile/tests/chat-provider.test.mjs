@@ -17,21 +17,21 @@ test('group access is ended only after a successful snapshot observes active-to-
   state.auth.api = { client: {}, userId: async () => 'me' };
   const activeSnapshot = {
     session: { id: 'me', name: 'Andy', avatarUrl: null, hidden: [] },
-    group: { id: 'room-one' }, friends: [], expiresAt: '2026-10-02T00:00:00Z', directPreviews: {},
+    groups: [{ id: 'room-one', expiresAt: '2026-10-02T00:00:00Z' }], friends: [], directPreviews: {},
   };
   state.loadChatSnapshot = async () => activeSnapshot;
   let chat;
   function Probe() { chat = useChat(); return React.createElement('Text', null, chat.groupAccessEnded ? 'ended' : 'active'); }
   function Root() { return React.createElement(ChatProvider, null, React.createElement(Probe)); }
   const screen = await render(t, Root);
-  assert.equal(chat.group.id, 'room-one');
+  assert.equal(chat.groups[0].id, 'room-one');
   assert.equal(chat.groupAccessEnded, false);
 
   state.loadChatSnapshot = async () => { throw new Error('Offline'); };
   await act(async () => { await assert.rejects(chat.refresh(), /Offline/); });
   assert.equal(chat.groupAccessEnded, false, 'A failed read cannot be mistaken for expired membership');
 
-  state.loadChatSnapshot = async () => ({ ...activeSnapshot, group: null, expiresAt: null });
+  state.loadChatSnapshot = async () => ({ ...activeSnapshot, groups: [] });
   await act(async () => { await chat.refresh(); });
   assert.equal(chat.groupAccessEnded, true, 'A successful active-to-none read explains the expired access state');
   await screen.update();
@@ -41,7 +41,7 @@ test('accepted DM previews subscribe to message changes and stop after friendshi
   reset();
   state.auth.api = { client: {}, userId: async () => 'me' };
   const friendship = { id: '11111111-1111-4111-8111-111111111111', user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'me', accepted_at: '2026-09-30T12:00:00Z', requested_at: '2026-09-30T12:00:00Z', user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } };
-  const snapshot = { session: { id: 'me', name: 'Andy', avatarUrl: null, hidden: [] }, group: null, friends: [friendship], expiresAt: null, directPreviews: { [friendship.id]: { status: 'ready', message: null } } };
+  const snapshot = { session: { id: 'me', name: 'Andy', avatarUrl: null, hidden: [] }, groups: [], friends: [friendship], directPreviews: { [friendship.id]: { status: 'ready', message: null } } };
   state.loadChatSnapshot = async () => snapshot;
   let chat;
   function Probe() { chat = useChat(); return null; }

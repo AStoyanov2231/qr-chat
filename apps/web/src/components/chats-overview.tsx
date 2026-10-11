@@ -1,13 +1,12 @@
 "use client";
 
 import type { ChatSnapshot } from "@qr-chat/api";
-import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from "@qr-chat/domain";
-import { Check, MagnifyingGlass, Prohibit, UserMinus, UserPlus, Users, X } from "@phosphor-icons/react";
+import { chatRows, directMessagePreview, groupAccessIndicator, groupInitials, messageAge, type Group } from "@qr-chat/domain";
+import { MagnifyingGlass, Prohibit, UserMinus, UserPlus, Users, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Avatar } from "./avatar";
 
 type FriendConnection = ChatSnapshot["friends"][number];
-type AcceptedFriend = FriendConnection & { accepted_at: string };
 type Peer = { id: string; name: string; avatarUrl: string | null };
 
 type HeaderProps = {
@@ -19,10 +18,9 @@ type HeaderProps = {
 type LoadingProps = HeaderProps & { loading: true };
 type ReadyProps = HeaderProps & {
   loading?: false;
-  group: ChatSnapshot["group"];
+  groups: ChatSnapshot["groups"];
   friends: ChatSnapshot["friends"];
   directPreviews: ChatSnapshot["directPreviews"];
-  expiresAt: string | null;
   hasObservedGroup: boolean;
   sessionId: string | null;
   busy: boolean;
@@ -31,7 +29,6 @@ type ReadyProps = HeaderProps & {
   onScan: (event: MouseEvent<HTMLButtonElement>) => void;
   onOpenGroup: (groupId: string) => void;
   onOpenDirect: (friendId: string) => void;
-  onAcceptRequest: (friendId: string) => Promise<void>;
   onRemoveRequest: (friendId: string) => Promise<void>;
   onUnfriend: (friendId: string) => Promise<void>;
   onBlock: (friendId: string) => Promise<void>;
@@ -96,6 +93,50 @@ function useGroupAccessCountdown(expiresAt: string | null) {
   return countdown;
 }
 
+function GroupCard({ group, sessionId, profileName, onOpen }: { group: Group; sessionId: string | null; profileName?: string; onOpen: () => void }) {
+  const accessIndicator = useGroupAccessCountdown(group.expiresAt);
+  const latestGroupMessage = group.messages.at(-1);
+  const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
+  return <button type="button" className="group-card" onClick={onOpen} aria-label={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? "member" : "members"}. ${accessIndicator.accessibilityLabel}`}>
+    <span className="group-card-main">
+      <span className="group-identity" aria-hidden="true">
+        <span className="group-access-ring">
+          <svg viewBox="0 0 72 72" aria-hidden="true">
+            <circle className="group-access-track" cx="36" cy="36" r="33" />
+            <circle
+              className="group-access-progress"
+              cx="36"
+              cy="36"
+              r="33"
+              strokeDasharray={2 * Math.PI * 33}
+              strokeDashoffset={2 * Math.PI * 33 * (1 - (accessIndicator.progress ?? 0))}
+            />
+          </svg>
+          <span className="group-initials">{groupInitials(group.venue.name)}</span>
+        </span>
+        <span className={`group-expiry ${accessIndicator.state}`}>{accessIndicator.label}</span>
+      </span>
+      <span className="group-copy">
+        <span className="group-title-row">
+          <strong>{group.venue.name}</strong>
+          <span className="group-member-count" aria-hidden="true">{group.members.length}<Users size={18} weight="fill" /></span>
+        </span>
+        <span className="group-meta">
+          <span className="group-author">{latestGroupMessage ? latestGroupMessage.user === sessionId ? "You" : latestGroupMessage.name : profileName || "You"}</span>
+          {latestGroupMessage && <><span aria-hidden="true">·</span><time dateTime={new Date(latestGroupMessage.time).toISOString()}>{groupMessageAge === "Now" ? "Now" : `${groupMessageAge} ago`}</time></>}
+        </span>
+        <span className="group-preview-row">
+          <span className="group-preview">
+          {latestGroupMessage
+            ? latestGroupMessage.text
+            : "You’re in. Say hello."}
+          </span>
+        </span>
+      </span>
+    </span>
+  </button>;
+}
+
 function getPeer(friend: FriendConnection, sessionId: string | null): Peer {
   const profile = friend.user_a_id === sessionId ? friend.user_b : friend.user_a;
   const id = friend.user_a_id === sessionId ? friend.user_b_id : friend.user_a_id;
@@ -111,49 +152,56 @@ export function chatNameMatches(name: string, query: string): boolean {
   return !normalizedQuery || name.toLocaleLowerCase().includes(normalizedQuery);
 }
 
-function RequestRow({ friend, peer, incoming, busy, onAccept, onRemove, onNotice }: {
+const isIncoming = (friend: FriendConnection, sessionId: string | null) => friend.accepted_at === null && friend.requested_by_id !== sessionId;
+
+function RequestRow({ friend, peer, busy, onRemove, onNotice }: {
   friend: FriendConnection;
   peer: Peer;
-  incoming: boolean;
   busy: boolean;
-  onAccept: (friendId: string) => Promise<void>;
   onRemove: (friendId: string) => Promise<void>;
   onNotice: (message: string) => void;
 }) {
   const lock = useRef(false);
-  const [pending, setPending] = useState<"accept" | "remove" | null>(null);
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  async function respond(kind: "accept" | "remove") {
+  async function cancel() {
     if (lock.current || busy) return;
     lock.current = true;
-    setPending(kind);
+    setPending(true);
     setError("");
     try {
-      await (kind === "accept" ? onAccept : onRemove)(friend.id);
-      onNotice(kind === "accept" ? `You and ${peer.name} are now friends.` : incoming ? `Declined ${peer.name}'s friend request.` : `Cancelled friend request to ${peer.name}.`);
+      await onRemove(friend.id);
+      onNotice(`Cancelled friend request to ${peer.name}.`);
     } catch {
       setError("Couldn’t update this request. Try again.");
     } finally {
       lock.current = false;
-      setPending(null);
+      setPending(false);
     }
   }
-  return <li className="friend-request-row" aria-busy={pending !== null}>
+  return <li className="friend-request-row" aria-busy={pending}>
     <div className="request-person">
       <span className="request-identity"><Avatar name={peer.name} url={peer.avatarUrl} size={44} /><span className="request-marker" aria-hidden="true"><UserPlus size={13} weight="fill" /></span></span>
       <span className="request-copy">
         <strong>{peer.name}</strong>
-        <small>{incoming ? "Sent you a friend request" : "Friend request sent"}</small>
+        <small>Friend request sent</small>
       </span>
     </div>
-    <div className="request-actions" role="group" aria-label={pending ? pending === "accept" ? "Accepting…" : incoming ? "Declining…" : "Cancelling…" : "Friend request actions"}>
-      {incoming && <button type="button" className="request-action" disabled={busy || !!pending} onClick={() => void respond("accept")} aria-label={pending === "accept" ? `Accepting ${peer.name}'s friend request` : `Accept ${peer.name}'s friend request`}><Check size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending === "accept" ? "Accepting…" : "Accept"}</span></button>}
-      <button type="button" className="request-action quiet" disabled={busy || !!pending} onClick={() => void respond("remove")} aria-label={incoming ? `Decline ${peer.name}'s friend request` : `Cancel friend request to ${peer.name}`}>
-        <X size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending === "remove" ? incoming ? "Declining…" : "Cancelling…" : incoming ? "Decline" : "Cancel"}</span>
+    <div className="request-actions" role="group" aria-label={pending ? "Cancelling…" : "Friend request actions"}>
+      <button type="button" className="request-action quiet" disabled={busy || pending} onClick={() => void cancel()} aria-label={`Cancel friend request to ${peer.name}`}>
+        <X size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending ? "Cancelling…" : "Cancel"}</span>
       </button>
     </div>
     {error && <p className="request-error" role="alert">{error}</p>}
   </li>;
+}
+
+function IncomingRequestRow({ peer, sentAt, onOpen }: { peer: Peer; sentAt: string; onOpen: () => void }) {
+  return <button type="button" className="dm-row-open" onClick={onOpen} aria-label={`Open friend request from ${peer.name}`}>
+    <span className="request-identity"><Avatar name={peer.name} url={peer.avatarUrl} size={52} /><span className="request-marker" aria-hidden="true"><UserPlus size={13} weight="fill" /></span></span>
+    <span className="dm-copy"><strong>{peer.name}</strong><span className="dm-preview request-unread">Wants to be friends</span></span>
+    <time dateTime={sentAt}>{messageAge(Date.parse(sentAt))}</time>
+  </button>;
 }
 
 function DirectRow({ peer, id, children, open, onReveal, onOpen, busy, onUnfriend, onBlock, onNotice }: {
@@ -235,25 +283,20 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
   const [search, setSearch] = useState("");
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  const groupId = !props.loading ? props.group?.id : undefined;
-  const [expiryNotice, setExpiryNotice] = useState({ groupId, dismissed: false });
-  if (expiryNotice.groupId !== groupId) setExpiryNotice({ groupId, dismissed: false });
-  const expiryDismissed = expiryNotice.groupId === groupId && expiryNotice.dismissed;
+  const hasGroups = !props.loading && props.groups.length > 0;
+  const [expiryNotice, setExpiryNotice] = useState({ hasGroups, dismissed: false });
+  if (expiryNotice.hasGroups !== hasGroups) setExpiryNotice({ hasGroups, dismissed: false });
+  const expiryDismissed = expiryNotice.hasGroups === hasGroups && expiryNotice.dismissed;
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 5000);
     return () => window.clearTimeout(timer);
   }, [notice]);
-  const normalizedSearch = search.trim().toLocaleLowerCase();
-  const countdownExpiry = !props.loading && !props.error && props.group && chatNameMatches(props.group.venue.name, normalizedSearch)
-    ? props.expiresAt
-    : null;
-  const accessIndicator = useGroupAccessCountdown(countdownExpiry);
 
   if (props.loading) return <ChatsLoading {...props} />;
 
   const {
-    group,
+    groups,
     friends,
     directPreviews,
     hasObservedGroup,
@@ -264,34 +307,13 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     onScan,
     onOpenGroup,
     onOpenDirect,
-    onAcceptRequest,
     onRemoveRequest,
     onUnfriend,
     onBlock,
   } = props;
-  const query = normalizedSearch;
-  const accepted = friends.filter((friend): friend is AcceptedFriend => friend.accepted_at !== null);
-  const requests = friends.filter((friend) => friend.accepted_at === null);
-  const acceptedWithPeers = accepted.map((friend) => ({ id: friend.id, friend, peer: getPeer(friend, sessionId) }))
-    .sort((left, right) => {
-      const leftPreview = directPreviews[left.id];
-      const rightPreview = directPreviews[right.id];
-      const leftMessage = leftPreview?.status === "ready" ? leftPreview.message : null;
-      const rightMessage = rightPreview?.status === "ready" ? rightPreview.message : null;
-      return directConversationTime(rightMessage, right.friend.accepted_at, right.friend.requested_at)
-        - directConversationTime(leftMessage, left.friend.accepted_at, left.friend.requested_at);
-    });
-  const visibleFriends = acceptedWithPeers.filter(({ peer }) => chatNameMatches(peer.name, query));
-  const groupMatches = !!group && chatNameMatches(group.venue.name, query);
-  const requestPeers = requests.map((friend) => ({
-    friend,
-    peer: getPeer(friend, sessionId),
-    incoming: friend.requested_by_id !== sessionId,
-  })).filter(({ peer }) => chatNameMatches(peer.name, query))
-    .sort((left, right) => Date.parse(right.friend.requested_at) - Date.parse(left.friend.requested_at));
-  const hasSearchMatches = groupMatches || requestPeers.length > 0 || visibleFriends.length > 0;
-  const latestGroupMessage = group?.messages.at(-1);
-  const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
+  const query = search.trim().toLocaleLowerCase();
+  const rows = chatRows(groups, friends, directPreviews)
+    .filter((row) => chatNameMatches(row.kind === "group" ? row.group.venue.name : getPeer(row.friend, sessionId).name, query));
 
   return (
     <section className="chats-view">
@@ -304,80 +326,45 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
       </div>
 
       <div className="chat-list-scroll">
-        {!error && !query && !group && hasObservedGroup && !expiryDismissed && <div className="chat-access-notice" role="status">
+        {!error && !query && !hasGroups && hasObservedGroup && !expiryDismissed && <div className="chat-access-notice" role="status">
           <span>Your group access ended. Your friends and DMs stay.</span>
-          <button type="button" className="clear-chat-search" aria-label="Dismiss group access notice" onClick={() => setExpiryNotice({ groupId, dismissed: true })}><X size={18} /></button>
+          <button type="button" className="clear-chat-search" aria-label="Dismiss group access notice" onClick={() => setExpiryNotice({ hasGroups, dismissed: true })}><X size={18} /></button>
         </div>}
         {error ? <div className="overview-error" role="alert">
           <h2>Couldn’t load your chats.</h2>
-          <p>Try again to see your group, requests, and messages.</p>
+          <p>Try again to see your groups, requests, and messages.</p>
           <button type="button" className="scan-primary" disabled={busy} onClick={onRetry}>{busy ? "Trying again…" : "Retry"}</button>
         </div> : <>
           <ul className="chat-list" aria-label="Chats and friend requests">
-            {group && groupMatches && <li>
-              <button type="button" className="group-card" onClick={() => onOpenGroup(group.id)} aria-label={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? "member" : "members"}. ${accessIndicator.accessibilityLabel}`}>
-                <span className="group-card-main">
-                  <span className="group-identity" aria-hidden="true">
-                    <span className="group-access-ring">
-                      <svg viewBox="0 0 72 72" aria-hidden="true">
-                        <circle className="group-access-track" cx="36" cy="36" r="33" />
-                        <circle
-                          className="group-access-progress"
-                          cx="36"
-                          cy="36"
-                          r="33"
-                          strokeDasharray={2 * Math.PI * 33}
-                          strokeDashoffset={2 * Math.PI * 33 * (1 - (accessIndicator.progress ?? 0))}
-                        />
-                      </svg>
-                      <span className="group-initials">{groupInitials(group.venue.name)}</span>
-                    </span>
-                    <span className={`group-expiry ${accessIndicator.state}`}>{accessIndicator.label}</span>
-                  </span>
-                  <span className="group-copy">
-                    <span className="group-title-row">
-                      <strong>{group.venue.name}</strong>
-                      <span className="group-member-count" aria-hidden="true">{group.members.length}<Users size={18} weight="fill" /></span>
-                    </span>
-                    <span className="group-meta">
-                      <span className="group-author">{latestGroupMessage ? latestGroupMessage.user === sessionId ? "You" : latestGroupMessage.name : props.profileName || "You"}</span>
-                      {latestGroupMessage && <><span aria-hidden="true">·</span><time dateTime={new Date(latestGroupMessage.time).toISOString()}>{groupMessageAge === "Now" ? "Now" : `${groupMessageAge} ago`}</time></>}
-                    </span>
-                    <span className="group-preview-row">
-                      <span className="group-preview">
-                      {latestGroupMessage
-                        ? latestGroupMessage.text
-                        : "You’re in. Say hello."}
+            {rows.map((row) => {
+              if (row.kind === "group") return <li key={row.id}><GroupCard group={row.group} sessionId={sessionId} profileName={props.profileName} onOpen={() => onOpenGroup(row.id)} /></li>;
+              const { friend } = row;
+              const peer = getPeer(friend, sessionId);
+              if (row.kind === "request") return isIncoming(friend, sessionId)
+                ? <li key={row.id}><IncomingRequestRow peer={peer} sentAt={friend.requested_at} onOpen={() => onOpenDirect(row.id)} /></li>
+                : <RequestRow key={row.id} friend={friend} peer={peer} busy={busy} onRemove={onRemoveRequest} onNotice={setNotice} />;
+              const preview = directPreviews[row.id];
+              const failed = !preview || preview.status === "error";
+              const message = preview?.status === "ready" ? preview.message : null;
+              const age = message ? messageAge(Date.parse(message.created_at)) : null;
+              return (
+                <li className="dm-list-item" key={row.id}>
+                  <DirectRow peer={peer} id={row.id} open={revealedId === row.id} onReveal={(open) => setRevealedId(open ? row.id : null)} onOpen={() => onOpenDirect(row.id)} busy={busy} onUnfriend={onUnfriend} onBlock={onBlock} onNotice={setNotice}>
+                    <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
+                    <span className="dm-copy">
+                      <strong>{peer.name}</strong>
+                      <span className={failed ? "dm-preview dm-preview-error" : "dm-preview"}>
+                      {failed ? "Preview unavailable" : directMessagePreview(message, sessionId ?? "")}
                       </span>
                     </span>
-                  </span>
-                </span>
-              </button>
-            </li>}
-            {requestPeers.map(({ friend, peer, incoming }) => <RequestRow key={friend.id} friend={friend} peer={peer} incoming={incoming} busy={busy} onAccept={onAcceptRequest} onRemove={onRemoveRequest} onNotice={setNotice} />)}
-              {visibleFriends.map(({ id, peer }) => {
-                const preview = directPreviews[id];
-                const failed = !preview || preview.status === "error";
-                const message = preview?.status === "ready" ? preview.message : null;
-                const age = message ? messageAge(Date.parse(message.created_at)) : null;
-                return (
-                  <li className="dm-list-item" key={id}>
-                    <DirectRow peer={peer} id={id} open={revealedId === id} onReveal={(open) => setRevealedId(open ? id : null)} onOpen={() => onOpenDirect(id)} busy={busy} onUnfriend={onUnfriend} onBlock={onBlock} onNotice={setNotice}>
-                      <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
-                      <span className="dm-copy">
-                        <strong>{peer.name}</strong>
-                        <span className={failed ? "dm-preview dm-preview-error" : "dm-preview"}>
-                        {failed ? "Preview unavailable" : directMessagePreview(message, sessionId ?? "")}
-                        </span>
-                      </span>
-                      {age && <time dateTime={message?.created_at}>{age}</time>}
-                    </DirectRow>
-                    {failed && <button type="button" className="preview-retry" disabled={busy} onClick={onRetry} aria-label={`Retry loading message preview for ${peer.name}`}>Retry</button>}
-                  </li>
-                );
-              })}
+                    {age && <time dateTime={message?.created_at}>{age}</time>}
+                  </DirectRow>
+                  {failed && <button type="button" className="preview-retry" disabled={busy} onClick={onRetry} aria-label={`Retry loading message preview for ${peer.name}`}>Retry</button>}
+                </li>
+              );
+            })}
           </ul>
-          {!hasSearchMatches && (query ? <div className="chat-search-empty" role="status">
+          {!rows.length && (query ? <div className="chat-search-empty" role="status">
             <p>No chats or requests match “{search.trim()}”.</p>
             <button type="button" className="text-button clear-search-button" onClick={() => setSearch("")}>Clear search</button>
           </div> : <div className="chat-list-empty">
