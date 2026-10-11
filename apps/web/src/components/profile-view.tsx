@@ -88,9 +88,10 @@ export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut }:
           <label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required />
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
         </form>}
-        {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button></div>}
+        {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button>
+          <p>Product data and photos © <a href="https://openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a> contributors (ODbL / CC-BY-SA).</p></div>}
         {panel === "Privacy" && <p>Group messages are available to members with active access. Your name and photo are visible to people in your group and your friends. Direct messages are shared with accepted friends. Each group’s access ends 24 hours after you join it; leaving a group also ends that access.</p>}
-        {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code, then join the group. You can be in as many groups as you scan; each one lasts 24 hours. To keep talking after group access ends, open a member’s profile and send a friend request. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
+        {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code or a product barcode, then join the group. You can be in as many groups as you scan; each one lasts 24 hours. To keep talking after group access ends, open a member’s profile and send a friend request. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
       </div>
     </dialog>
   </section>;

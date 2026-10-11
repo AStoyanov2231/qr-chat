@@ -10,8 +10,8 @@ export function isRouteAuthenticatedApiPath(pathname: string): boolean {
 
 type Dependencies = {
   createClient: () => Promise<Pick<SupabaseClient<Database>, "auth">>;
-  lookupName: (code: string) => Promise<string | null>;
-  lookupMetadata?: (code: string) => Promise<{ name: string | null; imageUrl: string | null } | null>;
+  /** Fills a missing name and photo for a group the user is an active member of. */
+  resolveGroup: (userId: string, code: string) => Promise<string | null>;
 };
 
 async function readBoundedBody(request: Request, maxBytes: number): Promise<string | null> {
@@ -46,12 +46,12 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 
-async function isAuthenticated(request: Request, createClient: Dependencies["createClient"]): Promise<boolean> {
+async function authenticatedUserId(request: Request, createClient: Dependencies["createClient"]): Promise<string | null> {
   const authorization = request.headers.get("authorization");
   let bearer: string | undefined;
   if (authorization !== null) {
     const match = /^Bearer\s+([^\s]+)$/iu.exec(authorization);
-    if (!match) return false;
+    if (!match) return null;
     bearer = match[1];
   }
   try {
@@ -59,15 +59,16 @@ async function isAuthenticated(request: Request, createClient: Dependencies["cre
     const { data, error } = bearer
       ? await client.auth.getClaims(bearer)
       : await client.auth.getClaims();
-    return !error && !!data?.claims.sub;
+    return (!error && data?.claims.sub) || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 /** Route core separated from Next so cookie and bearer auth behavior is unit-testable. */
 export async function handleQrNamePost(request: Request, dependencies: Dependencies): Promise<Response> {
-  if (!(await isAuthenticated(request, dependencies.createClient))) return json({ error: "Authentication required" }, 401);
+  const userId = await authenticatedUserId(request, dependencies.createClient);
+  if (!userId) return json({ error: "Authentication required" }, 401);
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return json({ error: "Expected a JSON request" }, 415);
   }
@@ -78,14 +79,9 @@ export async function handleQrNamePost(request: Request, dependencies: Dependenc
   const parsed = qrNameLookupRequestSchema.safeParse(value);
   if (!parsed.success) return json({ error: "Invalid QR code" }, 400);
 
-  if (dependencies.lookupMetadata) {
-    let metadata = null;
-    try { metadata = await dependencies.lookupMetadata(parsed.data.code); } catch { /* optional metadata is unavailable */ }
-    const response = qrNameLookupResponseSchema.safeParse(metadata ?? { name: null, imageUrl: null });
-    return json(response.success ? response.data : { name: null, imageUrl: null });
-  }
-  let name: string | null = null;
-  try { name = await dependencies.lookupName(parsed.data.code); } catch { /* lookup failure asks the participant to name it */ }
+  let name: string | null;
+  try { name = await dependencies.resolveGroup(userId, parsed.data.code); }
+  catch (error) { console.error("Group metadata lookup failed", error); return json({ error: "Lookup unavailable" }, 503); }
   const response = qrNameLookupResponseSchema.safeParse({ name });
   return json({ name: response.success ? response.data.name : null });
 }

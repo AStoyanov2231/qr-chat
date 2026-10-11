@@ -27,7 +27,7 @@ assert.equal(error, null, error?.message);
 const api = createChatApi(client);
 await api.saveProfile({ display_name: process.env.QR_CHAT_TEST_NAME || 'Safari QA' });
 const code = process.env.QR_CHAT_TEST_CODE || 'qrchat-release-mobile-browser-20261003';
-await api.joinNamedGroup(code, 'Mobile Browser QA');
+await api.joinGroup(code);
 const path = `/${randomUUID()}`;
 let used = false;
 const server = createServer((request, response) => {

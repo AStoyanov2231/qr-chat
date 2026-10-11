@@ -21,7 +21,6 @@ function fixture(options = {}) {
     directMessages: async (_id, options = {}) => call(`direct:${options.before ?? 'head'}`, page(directRows, options.before)),
     groupMessageIds: async (_id, ids) => call('group:ids', groupRows.filter(row => ids.includes(row.id))),
     directMessageIds: async (_id, ids) => call('direct:ids', directRows.filter(row => ids.includes(row.id))),
-    clearSessionCache() {},
     onMutation(listener) { mutations.add(listener); return () => mutations.delete(listener); },
     client: {
       auth: { onAuthStateChange(listener) { authListener = listener; return { data: { subscription: { unsubscribe() {} } } }; } },

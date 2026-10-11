@@ -1,4 +1,4 @@
-import type { Message, Group, Session } from '@qr-chat/domain';
+import { groupFallbackName, type Message, type Group, type Session } from '@qr-chat/domain';
 import type { ChatApi } from './index.ts';
 import type { ChatOverview, GroupMessage, GroupOverview, Friend, DirectMessage } from './overview.ts';
 
@@ -11,7 +11,7 @@ export function groupMessageView(message: GroupMessage): Message {
 function groupView(membership: GroupOverview): Group | null {
   const room = membership.groups;
   if (!room?.code_key) return null;
-  return { id: room.id, venue: { id: room.id, name: room.name ?? 'Unnamed chat', nameMissing: room.name === null, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: membership.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: membership.preview ? [groupMessageView(membership.preview)] : [], nextCursor: null, expiresAt: membership.expires_at };
+  return { id: room.id, venue: { id: room.id, name: room.name ?? groupFallbackName(room.code_key), nameMissing: room.name === null, imageUrl: room.image_url, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: membership.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: membership.preview ? [groupMessageView(membership.preview)] : [], nextCursor: null, expiresAt: membership.expires_at };
 }
 export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
   return {

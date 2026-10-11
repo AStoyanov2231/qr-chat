@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
-import { codeKeySchema, qrNameSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
+import { codeKeySchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
 import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage, Friend, Profile } from "./overview.ts";
 export { getChatStore, createChatStore } from "./store.ts";
 export { createObservedFetch } from "./requests.ts";
@@ -22,25 +22,6 @@ export class ChatApiError extends Error {
   }
 }
 
-function abortable<T>(promise: PromiseLike<T>, signal: AbortSignal): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const finish = (action: () => void) => {
-      signal.removeEventListener("abort", onAbort);
-      action();
-    };
-    const onAbort = () => finish(() => reject(signal.reason ?? new Error("Operation cancelled")));
-    if (signal.aborted) {
-      reject(signal.reason ?? new Error("Operation cancelled"));
-      return;
-    }
-    signal.addEventListener("abort", onAbort, { once: true });
-    Promise.resolve(promise).then(
-      (value) => finish(() => resolve(value)),
-      (error: unknown) => finish(() => reject(error)),
-    );
-  });
-}
-
 async function nullableResult<T>(request: PromiseLike<{ data: T; error: { message: string; code?: string } | null }>): Promise<T> {
   const { data, error } = await request;
   if (error) throw new ChatApiError(error.message, error.code);
@@ -54,10 +35,6 @@ async function result<T>(request: PromiseLike<{ data: T; error: { message: strin
 }
 
 /** Inject an authenticated public client. Session storage and auth lifecycle belong to the host platform. */
-export type ChatNameResolution =
-  | { kind: "saved" | "suggested"; name: string }
-  | { kind: "missing" };
-
 export function createChatApi(
   client: SupabaseClient<Database>,
   options: { qrNameEndpoint?: string; fetcher?: typeof fetch } = {},
@@ -70,6 +47,8 @@ export function createChatApi(
   function withAvatar<T extends { avatar_path?: string | null }>(profile: T): T & { avatar_url: string | null } {
     return { ...profile, avatar_url: profile.avatar_path ? client.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl : null };
   }
+  const withImage = <T extends { image_path: string | null }>(group: T) =>
+    ({ ...group, image_url: group.image_path ? client.storage.from("group-images").getPublicUrl(group.image_path).data.publicUrl : null });
   const withProfiles = <T extends { profiles: { avatar_path?: string | null } | null }>(message: T) => ({ ...message, profiles: message.profiles && withAvatar(message.profiles) });
   const friendView = <T extends { user_a: { avatar_path?: string | null } | null; user_b: { avatar_path?: string | null } | null }>(friend: T) =>
     ({ ...friend, user_a: friend.user_a && withAvatar(friend.user_a), user_b: friend.user_b && withAvatar(friend.user_b) });
@@ -79,56 +58,10 @@ export function createChatApi(
     if (error || !data.session?.user) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
     return data.session.user.id;
   }
-  const metadata = new Map<string, { userId: string; expires: number; value: { name: string | null; imageUrl?: string | null } }>();
-  const metadataRequests = new Map<string, Promise<{ name: string | null; imageUrl?: string | null }>>();
-  let sessionGeneration = 0;
-  async function lookupMetadata(code: string) {
-    if (!qrNameEndpoint) return { name: null, imageUrl: null };
-    const { data, error } = await client.auth.getSession();
-    const session = data.session;
-    if (error || !session) return { name: null, imageUrl: null };
-    const key = `${session.user.id}:${code}`;
-    const cached = metadata.get(key);
-    if (cached && cached.expires > Date.now()) return cached.value;
-    const pending = metadataRequests.get(key);
-    if (pending) return pending;
-    const request = (async () => {
-      const generation = sessionGeneration;
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3500);
-      try {
-        const response = await fetcher(qrNameEndpoint, {
-          method: "POST", credentials: "same-origin",
-          headers: { authorization: `Bearer ${session.access_token}`, "content-type": "application/json" },
-          body: JSON.stringify({ code }), signal: controller.signal,
-        });
-        if (!response.ok) throw new Error("Metadata unavailable");
-        const value = qrNameLookupResponseSchema.parse(await response.json());
-        const currentId = await userId();
-        if (generation !== sessionGeneration || currentId !== session.user.id) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
-        if (value.name || value.imageUrl) {
-          if (metadata.size >= 100) metadata.delete(metadata.keys().next().value!);
-          metadata.set(key, { userId: session.user.id, expires: Date.now() + 3600000, value });
-        }
-        return value;
-      } finally { clearTimeout(timeout); }
-    })();
-    metadataRequests.set(key, request);
-    try { return await request; } finally { if (metadataRequests.get(key) === request) metadataRequests.delete(key); }
-  }
-  async function qrChatName(code: unknown, signal?: AbortSignal): Promise<string | null> {
-    let request = client.rpc("get_qr_chat_name", {
-      p_code_key: codeKeySchema.parse(code),
-    });
-    if (signal) request = request.abortSignal(signal);
-    const name = await nullableResult(request);
-    return typeof name === "string" && name.trim() ? qrNameSchema.parse(name) : null;
-  }
   const api = {
     client,
     userId,
     onMutation(listener: (event: ChatMutation) => void) { mutations.add(listener); return () => { mutations.delete(listener); }; },
-    clearSessionCache() { sessionGeneration++; metadata.clear(); metadataRequests.clear(); },
     async overview(signal?: AbortSignal): Promise<ChatOverview> {
       let query = client.rpc("get_chat_overview");
       if (signal) query = query.abortSignal(signal);
@@ -136,7 +69,7 @@ export function createChatApi(
       return {
         ...overview,
         profile: overview.profile && withAvatar(overview.profile),
-        memberships: overview.memberships.map((membership) => ({ ...membership, members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
+        memberships: overview.memberships.map((membership) => ({ ...membership, groups: membership.groups && withImage(membership.groups), members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
         friends: overview.friends.map(friendView),
       };
     },
@@ -185,53 +118,23 @@ export function createChatApi(
       }
       return saved;
     },
-    async joinGroup(code: unknown, name?: unknown) {
-      const data = await result(client.rpc("join_qr_group", {
-        p_code_key: codeKeySchema.parse(code),
-        ...(name === undefined ? {} : { p_display_name: qrNameSchema.parse(name) }),
-      }));
+    async joinGroup(code: unknown) {
+      const data = await result(client.rpc("join_qr_group", { p_code_key: codeKeySchema.parse(code) }));
       if (!data[0]) throw new ChatApiError("Unable to join this room.");
       return data[0];
     },
-    async joinNamedGroup(code: unknown, name: unknown) {
-      const { data, error } = await client.rpc("join_named_qr_group", {
-        p_code_key: codeKeySchema.parse(code),
-        p_display_name: qrNameSchema.parse(name),
-      });
-      if (error) throw new ChatApiError(error.message, error.code);
-      if (!data?.[0]) throw new ChatApiError("Unable to join this chat.");
-      return data[0];
-    },
-    qrChatName,
-    async nameCurrentQrChatIfEmpty(code: unknown, name: unknown): Promise<string> {
-      return result(client.rpc("name_current_qr_chat_if_empty", {
-        p_code_key: codeKeySchema.parse(code),
-        p_display_name: qrNameSchema.parse(name),
-      }));
-    },
-    async resolveQrChatImage(code: unknown, signal?: AbortSignal): Promise<string | null> {
+    /** Asks the server to fill a joined group's missing name and photo. Never throws; null means no name yet. */
+    async resolveGroup(code: unknown): Promise<string | null> {
       try {
-        const request = lookupMetadata(codeKeySchema.parse(code));
-        const value = signal ? await abortable(request, signal) : await request;
-        return value.imageUrl ?? null;
+        const { data } = await client.auth.getSession();
+        if (!qrNameEndpoint || !data.session) return null;
+        const response = await fetcher(qrNameEndpoint, {
+          method: "POST", credentials: "same-origin",
+          headers: { authorization: `Bearer ${data.session.access_token}`, "content-type": "application/json" },
+          body: JSON.stringify({ code: codeKeySchema.parse(code) }), signal: AbortSignal.timeout(3500),
+        });
+        return response.ok ? qrNameLookupResponseSchema.parse(await response.json()).name : null;
       } catch { return null; }
-    },
-    async resolveQrChatName(code: unknown, signal?: AbortSignal): Promise<ChatNameResolution> {
-      const codeKey = codeKeySchema.parse(code);
-      const controller = new AbortController();
-      const cancel = () => controller.abort();
-      if (signal?.aborted) cancel();
-      else signal?.addEventListener("abort", cancel, { once: true });
-      const timeout = setTimeout(cancel, 3500);
-      try {
-        let saved: string | null = null;
-        try { saved = await abortable(qrChatName(codeKey, controller.signal), controller.signal); } catch { /* Try optional metadata. */ }
-        if (saved) return { kind: "saved", name: saved };
-        if (controller.signal.aborted) return { kind: "missing" };
-        const value = await abortable(lookupMetadata(codeKey), controller.signal);
-        return value.name ? { kind: "suggested", name: value.name } : { kind: "missing" };
-      } catch { return { kind: "missing" }; }
-      finally { clearTimeout(timeout); signal?.removeEventListener("abort", cancel); }
     },
     leaveGroup: (groupId: string) => nullableResult(client.rpc("leave_qr_group", { p_group_id: userIdSchema.parse(groupId) })),
     async memberships() {
@@ -312,7 +215,6 @@ export function createChatApi(
     async signOut() {
       const { error } = await client.auth.signOut({ scope: "local" });
       if (error) throw new ChatApiError(error.message, "SIGN_OUT_FAILED");
-      api.clearSessionCache();
       await client.removeAllChannels();
     },
   };

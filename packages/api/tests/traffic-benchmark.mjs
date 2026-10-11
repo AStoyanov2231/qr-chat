@@ -61,7 +61,7 @@ try {
     // Dedicated accounts are required because setup removes their previous relationships.
     for(const friend of await api.friends()) await api.removeFriend(friend.id);
     await api.saveProfile({display_name:`Benchmark ${index+1}`});
-    await api.joinNamedGroup(`benchmark-${runId}-${actor.room}`,'Traffic benchmark');
+    await api.joinGroup(`benchmark-${runId}-${actor.room}`);
     await sleep(200);
   }
   const pairs = new Set();
@@ -70,10 +70,10 @@ try {
     const pair=[i,j].sort((a,b)=>a-b).join(':');if(pairs.has(pair)) continue;pairs.add(pair);
     // Accepted friendships persist after shared membership ends; use a temporary room.
     const code=`benchmark-${runId}-connections`;
-    await actors[i].api.joinNamedGroup(code,'Benchmark connections');await actors[j].api.joinNamedGroup(code,'Benchmark connections');
+    await actors[i].api.joinGroup(code);await actors[j].api.joinGroup(code);
     const connection=await actors[i].api.requestFriend(actors[j].user.id);await actors[j].api.acceptFriend(connection);
   }
-  if(friendCount) for(const actor of actors) await actor.api.joinNamedGroup(`benchmark-${runId}-${actor.room}`,'Traffic benchmark');
+  if(friendCount) for(const actor of actors) await actor.api.joinGroup(`benchmark-${runId}-${actor.room}`);
   for(const actor of actors) {actor.store.openGroup();actor.unsubscribe=actor.store.subscribe(()=>delivered(actor));await actor.store.start();actor.groupId=actor.store.getState().snapshot.group.id;}
   // Allow both channel-join and PostgreSQL readiness reconciliations to finish.
   await sleep(5000);

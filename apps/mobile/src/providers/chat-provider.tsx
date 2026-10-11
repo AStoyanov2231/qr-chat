@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useEffect, useMemo, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
+import { createContext, use, useCallback, useEffect, useMemo, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { emptySnapshot, getChatStore, type ConnectionState } from '@qr-chat/api';
 import { z } from '@qr-chat/validation';
 import { useAuth } from './auth-provider';
@@ -20,8 +20,6 @@ function useBackend() {
   const subscribe = useCallback((listener: () => void) => store ? store.subscribe(listener) : () => {}, [store]);
   const getState = useCallback(() => store?.getState() ?? empty, [store]);
   const state = useSyncExternalStore(subscribe, getState, getState);
-  const [scannedCode, acceptScan] = useState<string | null>(null);
-  const clearScan = useCallback(() => acceptScan(null), []);
   useEffect(() => {
     if (!store || !userId || !active) return;
     void store.start();
@@ -30,7 +28,7 @@ function useBackend() {
   return { ...state.snapshot, ready: state.ready, error: state.error ? errorMessage(new Error(state.error)) : '', groupAccessEnded: state.ready && state.hasObservedGroup && !state.snapshot.groups.length,
     groupLoading: state.groupLoading, connection: active ? state.connection : 'reconnecting' as ConnectionState,
     refresh: store?.refresh ?? idle, refreshGroup: store?.refreshGroup ?? idle, openGroup: store?.openGroup ?? noGroup,
-    loadOlder: store?.loadOlderGroup ?? idle, scannedCode, acceptScan, clearScan };
+    loadOlder: store?.loadOlderGroup ?? idle };
 }
 const Context = createContext<ReturnType<typeof useBackend> | null>(null);
 export function ChatProvider({ children }: PropsWithChildren) { const value = useBackend(); return <Context value={value}>{children}</Context>; }

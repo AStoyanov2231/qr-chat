@@ -183,8 +183,8 @@ export function reset() {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
-    auth: { userId: 'me', active: true, api: { resolveQrChatImage: async () => null } },
-    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {}, scannedCode: null, acceptScan: code => { state.chat.scannedCode=code; }, clearScan: () => { state.chat.scannedCode=null; } },
+    auth: { userId: 'me', active: true, api: { resolveGroup: async () => null } },
+    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
     loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},groups:[],friends:[],directPreviews:{}}),
   });
 }

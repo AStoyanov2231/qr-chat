@@ -305,7 +305,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   function resetIdentity(id: string | null) {
     generation++; controller.abort(); controller = new AbortController(); coordinator.cancel(); stopWatcher();
     clearTimeout(expiry); clearTimeout(retry); attempts = 0;
-    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); recoverOverview = false; api.clearSessionCache(); identity = id;
+    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); recoverOverview = false; identity = id;
     publish({ ...initialState });
   }
   function pause() {

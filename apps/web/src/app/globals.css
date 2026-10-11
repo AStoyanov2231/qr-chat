@@ -74,6 +74,7 @@ h1, h2, p { margin: 0; }
 .group-access-track { stroke: var(--line); }
 .group-access-progress { stroke: var(--online); stroke-linecap: round; transition: stroke-dashoffset .2s ease; transform: rotate(-90deg); transform-origin: 36px 36px; }
 .group-initials { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 999px; background: var(--surface); color: var(--on-primary-tint); font-size: 20px; font-weight: 700; }
+img.group-initials { object-fit: cover; }
 .group-copy, .dm-copy, .request-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .group-title-row { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .group-copy strong, .dm-copy strong, .request-copy strong { flex: 1; min-width: 0; overflow: hidden; font-size: 16px; line-height: 22px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
@@ -641,17 +642,6 @@ dialog::backdrop {
   background: var(--fill);
 }
 
-.entry-icon {
-  width: 64px;
-  height: 64px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 24px;
-  border-radius: 999px;
-  background: var(--primary);
-  color: var(--on-primary);
-}
-
 .entry-panel h2 {
   font-size: 30px;
   line-height: 36px;
@@ -958,7 +948,6 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
   .landing-footer > span:nth-child(2) { font-size: 12px; }
 }
 
-.join-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
 .entry-panel input:not([type="file"]) { height: 52px; padding: 0 20px; border: 1px solid var(--line); border-radius: 999px; background: var(--fill); color: var(--text); font-size: 16px; }
 .entry-panel input:not([type="file"]):focus-visible { outline-offset: 2px; }
 .connection-status { flex-shrink: 0; padding: 8px 16px; color: var(--on-warning); background: var(--warning); font-size: 14px; line-height: 20px; }

@@ -1,4 +1,4 @@
-export type Venue = { id: string; name: string; label: string; codes: string[]; kind: string; nameMissing?: boolean };
+export type Venue = { id: string; name: string; label: string; codes: string[]; kind: string; nameMissing?: boolean; imageUrl?: string | null };
 export type Session = { id: string; name: string; avatarUrl?: string | null; hidden: string[] };
 export type Member = { id: string; name: string; avatarUrl?: string | null };
 export type Message = { id: string; user: string; name: string; avatarUrl?: string | null; text: string; time: number };
@@ -111,6 +111,41 @@ export function unwrapQrCode(input: string, origin: string): string {
     if (url.origin === origin && url.searchParams.has("code")) return url.searchParams.get("code")!;
   }
   return input;
+}
+
+const RETAIL_FORMATS = new Set(["ean13", "ean8", "upca", "upce"]);
+/** Retail barcodes become `gtin:` + GTIN-13, so one product is one group on every device. Other codes stay opaque. */
+export function scannedCode(format: string, value: string): string {
+  const kind = format.toLowerCase().replace(/[^a-z\d]/gu, "");
+  if (!RETAIL_FORMATS.has(kind) || !/^\d+$/u.test(value)) return value;
+  let digits = value;
+  if (kind === "upce" && value.length === 8) {
+    // UPC-E is zero-suppressed UPC-A; expand it so both scans share a key.
+    const [system, a, b, c, d, e, f, check] = value;
+    const body = f! <= "2" ? `${a}${b}${f}0000${c}${d}${e}` : f === "3" ? `${a}${b}${c}00000${d}${e}`
+      : f === "4" ? `${a}${b}${c}${d}00000${e}` : `${a}${b}${c}${d}${e}0000${f}`;
+    digits = `${system}${body}${check}`;
+  }
+  return [8, 12, 13].includes(digits.length) ? `gtin:${digits.padStart(13, "0")}` : value;
+}
+
+/** Shown while a group has no server-resolved name. */
+export function groupFallbackName(code: string): string {
+  if (code.startsWith("gtin:")) return `Product ${code.slice(5)}`;
+  if (/^https?:\/\//iu.test(code)) {
+    try { return new URL(code).hostname; } catch { /* not a URL after all */ }
+  }
+  return code.length > 40 ? `${code.slice(0, 39)}…` : code;
+}
+
+/** "Fanta Orange" from Open Food Facts fields: English name first, no pack size, brand prefixed only when missing. */
+export function productGroupName(product: { product_name_en?: string; product_name?: string; brands?: string }): string | null {
+  const name = (product.product_name_en || product.product_name || "").replace(/\s+/gu, " ")
+    .replace(/\s+\d+(?:[.,]\d+)?\s*(?:ml|cl|l|g|kg|oz|lb)?$/iu, "").trim();
+  const brand = (product.brands ?? "").split(",")[0]!.trim();
+  // OFF "brands" is sometimes the manufacturer ("COCA-COLA SERVICES SA/NV"); a long one never prefixes a real name.
+  const prefix = brand && (!name || (brand.split(" ").length <= 2 && !name.toLowerCase().includes(brand.toLowerCase())));
+  return (prefix ? `${brand} ${name}` : name).trim().slice(0, 100).trim() || null;
 }
 
 export function messageAge(time: number, now = Date.now()): string {
