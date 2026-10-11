@@ -18,10 +18,10 @@ function GroupQr({ code }: { code: string }) {
         if (modules.get(y, x)) path += `M${x + 4} ${y + 4}h1v1h-1z`;
       }
       const size = modules.size + 8;
-      return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><rect width="100%" height="100%" fill="white"/><path d="${path}" fill="#101820"/></svg>`)}`;
+      return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><rect width="100%" height="100%" fill="white"/><path d="${path}" fill="#111111"/></svg>`)}`;
     } catch { return null; }
   }, [code]);
-  return uri ? <Image source={{ uri }} contentFit="contain" style={{ width: 180, height: 180, borderRadius: 18 }} accessibilityLabel="Group QR code" /> : <Copy>QR code could not be displayed.</Copy>;
+  return uri ? <Image source={{ uri }} contentFit="contain" style={{ width: 180, height: 180, borderRadius: 24 }} accessibilityLabel="Group QR code" /> : <Copy>QR code could not be displayed.</Copy>;
 }
 
 export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?: () => void }) {
@@ -31,12 +31,12 @@ export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?:
   return <View style={{ flex: 1, gap: 14 }}>
     <View style={{ alignItems: 'center', gap: 8, paddingVertical: 18 }}>
       <GroupQr code={group.venue.codes[0]} />
-      <View accessible accessibilityLabel={`${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, paddingHorizontal: 10, borderRadius: 16, backgroundColor: colors.soft }}><Copy style={{ color: colors.muted, fontSize: 14, fontWeight: '500' }}>{group.members.length}</Copy><Icon name="group" size={18} color={colors.muted} /></View>
+      <View accessible accessibilityLabel={`${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24, paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.secondary }}><Copy style={{ color: colors.onSecondary, fontSize: 12, lineHeight: 16, fontWeight: '700' }}>{group.members.length}</Copy><Icon name="group" size={14} color={colors.onSecondary} /></View>
     </View>
     <ErrorNotice message={action.error || chat.error} />
     {group.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => { onNavigate?.(); router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } }); }} style={[styles.row, { minHeight: 60, paddingVertical: 8 }]}>
       <Avatar name={member.name} url={member.avatarUrl} size={44} /><Copy style={{ flex: 1, fontSize: 16 }}>{member.id === userId ? 'You' : member.name}</Copy><Icon name="chevron" size={18} />
     </Pressable>)}
-    <View style={{ marginTop: 'auto', paddingTop: 24 }}><Pressable accessibilityRole="button" accessibilityLabel="Leave group" accessibilityState={{ disabled: action.busy }} disabled={action.busy} style={({ pressed }) => [styles.row, { justifyContent: 'center', minHeight: 50, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.8)', opacity: action.busy ? 0.5 : pressed ? 0.7 : 1 }]} onPress={() => Alert.alert('Leave this group?', 'You can join again by scanning its QR code.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(); await chat.refresh(); router.dismissTo('/'); }); } }])}><Icon name="exit" color={colors.danger} size={20} /><Copy style={{ color: colors.danger }}>Leave group</Copy></Pressable></View>
+    <View style={{ marginTop: 'auto', paddingTop: 24 }}><Pressable accessibilityRole="button" accessibilityLabel="Leave group" accessibilityState={{ disabled: action.busy }} disabled={action.busy} style={({ pressed }) => [styles.row, { justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: 26, backgroundColor: colors.dangerTint, opacity: action.busy ? 0.4 : 1, transform: [{ scale: pressed ? 1.02 : 1 }] }]} onPress={() => Alert.alert('Leave this group?', 'You can join again by scanning its QR code.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(); await chat.refresh(); router.dismissTo('/'); }); } }])}><Icon name="exit" color={colors.danger} size={20} /><Copy style={{ color: colors.danger, fontWeight: '700' }}>Leave group</Copy></Pressable></View>
   </View>;
 }

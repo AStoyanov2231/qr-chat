@@ -56,7 +56,7 @@ for (const platform of ['ios', 'android']) {
     const declineAction = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === "Decline Sam's friend request");
     assert.ok(acceptAction && declineAction);
     assert.equal(acceptAction.props.style({ pressed: false })[0].minHeight, 44);
-    assert.equal(acceptAction.props.style({ pressed: false })[1].backgroundColor, '#3488ff');
+    assert.equal(acceptAction.props.style({ pressed: false })[1].backgroundColor, '#ffc629');
     assert.equal(declineAction.props.style({ pressed: false })[0].minWidth, 44);
     assert.equal(screen.root.findAllByType('Pressable').some(node => node.props.accessibilityLabel === "View Sam's profile"), false, 'Request cards do not open profile popups');
     await screen.press("Accept Sam's friend request");

@@ -11,7 +11,7 @@ export function GroupSidebar({ group, userId, busy, onClose, onProfile, onLeave 
   const code = group.venue.codes[0];
   useEffect(() => {
     if (!canvas.current) return;
-    void QRCode.toCanvas(canvas.current, code, { width: 200, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#101820', light: '#ffffff' } }).then(() => setQrError(false), () => setQrError(true));
+    void QRCode.toCanvas(canvas.current, code, { width: 200, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#111111', light: '#ffffff' } }).then(() => setQrError(false), () => setQrError(true));
   }, [code]);
   return <SettingsSidebar label="Group settings" onClose={onClose}>{(closeSidebar) => <>
       <div className="group-sidebar-identity">

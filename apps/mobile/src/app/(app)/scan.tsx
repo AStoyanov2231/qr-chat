@@ -73,10 +73,10 @@ export default function ScanScreen() {
     <View pointerEvents="none" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: insets.top + 48 }}>
       {cameraVisible && <View style={{ width: targetSize, height: targetSize, borderWidth: 2, borderColor: '#ffffffeb', borderRadius: 28, boxShadow: '0 0 0 2000px #03050770' }} />}
     </View>
-    <View style={{ gap: 14, paddingHorizontal: 30, paddingTop: 26, paddingBottom: Math.max(insets.bottom, 20), backgroundColor: '#07090be6' }}>
-      <Copy accessibilityRole="header" style={{ color: '#fff', fontSize: 32, lineHeight: 38, fontWeight: '600', letterSpacing: -1 }}>Find the code.</Copy>
-      <Copy style={{ color: '#d5d8df', fontSize: 15 }}>{cameraError || (joining ? `Joining ${joining}…` : permission?.granted ? 'Hold the QR inside the frame.' : 'Allow camera access to scan a QR code.')}</Copy>
-      {cameraError ? <Button label="Try camera again" subtle onPress={() => { setCameraError(''); setAttempt(attempt + 1); }} /> : !permission?.granted && <Button label={permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'} subtle onPress={permit} />}
+    <View style={{ gap: 16, paddingHorizontal: 24, paddingTop: 26, paddingBottom: Math.max(insets.bottom, 20), backgroundColor: '#07090be6' }}>
+      <Copy accessibilityRole="header" style={{ color: '#fff', fontSize: 32, lineHeight: 38, fontWeight: '800' }}>Find the code.</Copy>
+      <Copy style={{ color: '#d5d8df', fontSize: 14, lineHeight: 20 }}>{cameraError || (joining ? `Joining ${joining}…` : permission?.granted ? 'Hold the QR inside the frame.' : 'Allow camera access to scan a QR code.')}</Copy>
+      {cameraError ? <Button label="Try camera again" subtle onPress={() => { setCameraError(''); setAttempt(attempt + 1); }} /> : !permission?.granted && <Button label={permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'} onPress={permit} />}
       <ErrorNotice message={error || chat.error} retry={chat.error ? () => { void chat.refresh().catch(() => {}); } : undefined} />
     </View>
   </View>;

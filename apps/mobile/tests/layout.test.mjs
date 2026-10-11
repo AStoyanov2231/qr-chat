@@ -118,16 +118,16 @@ for (const platform of ['ios', 'android']) {
       assert.equal(scroll.props.overScrollMode ?? 'auto', 'auto');
       assert.notEqual(scroll.props.scrollEnabled, false);
       if (Page === Chats) {
-        const scan = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Scan a QR code');
+        const scan = screen.root.findAll(node => node.type === 'View' && node.props.accessibilityLabel === 'Scan a QR code').at(-1);
         assert.ok(scan);
-        assert.equal(scroll.findAllByType('Pressable').includes(scan), false, 'The scan control overlays the viewport outside the scrolling list');
-        const scanStyle = Object.assign({}, ...scan.props.style({ pressed: false }));
-        assert.ok(scroll.props.contentContainerStyle.paddingBottom >= scanStyle.height + scan.parent.props.style.bottom, 'The last row can scroll above the scan control');
+        assert.equal(scroll.findAll(node => node === scan).length, 0, 'The scan control overlays the viewport outside the scrolling list');
+        const overlay = screen.root.findAll(node => node.type === 'View' && node.props.pointerEvents === 'box-none' && node.findAll(child => child === scan).length > 0).at(-1);
+        assert.ok(scroll.props.contentContainerStyle.paddingBottom >= 64 + overlay.props.style.bottom, 'The last row can scroll above the 64pt scan control');
         await screen.press('Scan a QR code');
         assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
         state.chat.ready = false;
         await screen.update();
-        assert.equal(scan.props.disabled, true);
+        assert.equal(scan.props.accessibilityState.disabled, true);
         state.chat.ready = true;
       }
     }

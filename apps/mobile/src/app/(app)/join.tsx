@@ -59,8 +59,8 @@ export default function JoinScreen() {
   }
 
   return <Screen>
-    <View style={{ alignItems: 'center', gap: 14, paddingVertical: 24 }}>
-      <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' }}><Icon name="group" size={28} /></View>
+    <View style={{ alignItems: 'center', gap: 12, paddingVertical: 24 }}>
+      <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}><Icon name="group" size={24} color={colors.onPrimary} /></View>
       <Copy accessibilityRole="header" style={styles.subtitle}>{lookup?.kind === 'missing' ? 'Name this chat' : 'Joining…'}</Copy>
       {findingName
         ? <Copy accessibilityLiveRegion="polite" style={[styles.muted, { textAlign: 'center' }]}>Finding the chat name…</Copy>

@@ -20,8 +20,8 @@ export default function SignInScreen() {
   }
   return <Screen><View style={[styles.row, { paddingTop: 28 }]}><Icon name="qr" size={19} /><Copy style={{ fontSize: 18, fontWeight: '700' }}>QR Chat</Copy></View>
     <View style={{ flex: 1, justifyContent: 'center', gap: 20, paddingVertical: 50 }}>
-      <Copy style={{ fontSize: 49, lineHeight: 51, letterSpacing: -2, fontWeight: '400' }}>Find your people.</Copy>
-      <Copy style={[styles.muted, { fontSize: 18, lineHeight: 27 }]}>Sign in, scan the code, join the room.</Copy>
+      <Copy style={{ fontSize: 32, lineHeight: 38, fontWeight: '800' }}>Find your people.</Copy>
+      <Copy style={[styles.muted, { fontSize: 16, lineHeight: 22 }]}>Sign in, scan the code, join the room.</Copy>
       <View style={{ gap: 12, marginTop: 24 }}>
         {expoGo ? <Copy style={styles.muted}>Native sign-in requires an app build. Open QR Chat in its iOS or Android development build.</Copy> : <>
           {providers.google && <Button label="Continue with Google" subtle disabled={action.busy || !api} onPress={() => { void signIn(); }} />}
@@ -29,7 +29,7 @@ export default function SignInScreen() {
         </>}
       </View>
       <ErrorNotice message={action.error || error} />
-      <Copy style={[styles.muted, { fontSize: 12 }]}>By continuing, you agree to use QR Chat respectfully.</Copy>
+      <Copy style={[styles.muted, { fontSize: 12, lineHeight: 16 }]}>By continuing, you agree to use QR Chat respectfully.</Copy>
     </View>
   </Screen>;
 }

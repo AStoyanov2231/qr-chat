@@ -12,7 +12,7 @@ export function LandingPage() {
     let active = true;
     if (canvas.current) {
       void QRCode.toCanvas(canvas.current, new URL("/sign-in", window.location.origin).href, {
-        width: 180, margin: 4, errorCorrectionLevel: "M", color: { dark: "#142b40", light: "#ffffff" },
+        width: 180, margin: 4, errorCorrectionLevel: "M", color: { dark: "#111111", light: "#ffffff" },
       }).then(() => { if (active) setQrReady(true); }, () => { if (active) setQrReady(false); });
     }
     return () => { active = false; };

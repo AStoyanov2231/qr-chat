@@ -337,46 +337,48 @@ test('resuming the app retains direct-message pagination and reconciles before r
   assert.deepEqual(counts, [1, 2, 2]);
 });
 
-test('message composer retains a failed draft and clears it before a failed refresh', async (t) => {
+test('a failed message stays marked, retries, and hands off to the loaded message without a duplicate', async (t) => {
   reset();
   let failSend = true;
   const sent = [];
-  const screen = await render(t, Conversation, {
+  const props = {
     messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
     refresh: async () => { throw new Error('Offline'); }, loadOlder: async () => {},
-    send: async body => { if (failSend) throw new Error('Failed send'); sent.push(body); }, unavailable: 'Ended',
-  });
+    send: async body => { if (failSend) throw new Error('Failed send'); sent.push(body); return { id: 7 }; }, unavailable: 'Ended',
+  };
+  const screen = await render(t, Conversation, props);
   const sendButton = () => screen.root.findAllByType('Pressable').find(button => button.props.accessibilityLabel === 'Send message');
   assert.equal(sendButton().props.accessibilityState.disabled, true);
   await screen.type('Message', 'Hello');
   assert.equal(sendButton().props.accessibilityState.disabled, false);
   await screen.press('Send message');
-  assert.equal(screen.root.findByType('NativeTextInput').props.value, 'Hello');
+  assert.equal(screen.root.findByType('NativeTextInput').props.value, '', 'The draft clears at once');
+  assert.match(screen.text(), /"Hello"/);
+  assert.match(screen.text(), /Not sent\. Tap ! to retry/);
   failSend = false;
-  await screen.press('Send message');
+  await screen.press('Message not sent. Retry');
   assert.deepEqual(sent, ['Hello']);
-  assert.equal(screen.root.findByType('NativeTextInput').props.value, '');
+  assert.doesNotMatch(screen.text(), /Not sent/);
+  await screen.update({ ...props, messages: [{ id: '7', user: 'me', name: 'Andy', text: 'Hello', time: Date.now() }] });
+  assert.equal(screen.text().match(/"Hello"/g).length, 1, 'The placeholder hides once the real message loads');
 });
 
-test('message composer displays a pending spinner and prevents duplicate sends', async (t) => {
+test('a sent message shows instantly and the field stays editable for the next one', async (t) => {
   reset();
-  let finishSend;
   let sendCount = 0;
   const screen = await render(t, Conversation, {
     messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
     refresh: async () => {}, loadOlder: async () => {},
-    send: async () => { sendCount += 1; await new Promise(resolve => { finishSend = resolve; }); }, unavailable: 'Ended',
+    send: async () => { sendCount += 1; await new Promise(() => {}); }, unavailable: 'Ended',
   });
   await screen.type('Message', 'Hello');
   await screen.press('Send message');
-  assert.equal(screen.root.findAllByType('ActivityIndicator').length, 1);
-  assert.equal(screen.root.findAllByType('Pressable').some(button => button.props.accessibilityLabel === 'Sending message'), true);
-  assert.equal(screen.root.findAllByType('Pressable').find(button => button.props.accessibilityLabel === 'Sending message').props.accessibilityState.disabled, true);
-  assert.equal(sendCount, 1);
-  await assert.rejects(screen.press('Sending message'), /Disabled button/);
-  assert.equal(sendCount, 1, 'the disabled pending control cannot trigger another send');
-  await act(async () => { finishSend(); await Promise.resolve(); });
-  assert.equal(screen.root.findByType('NativeTextInput').props.value, '');
+  assert.match(screen.text(), /"Hello"/, 'The message shows before the server answers');
+  assert.notEqual(screen.root.findByType('NativeTextInput').props.editable, false, 'The field never locks, so the keyboard stays open');
+  await screen.type('Message', 'Again');
+  await screen.press('Send message');
+  assert.equal(sendCount, 2);
+  assert.match(screen.text(), /"Again"/);
 });
 
 test('retrying a direct conversation after a backend failure reconciles the friendship snapshot', async (t) => {

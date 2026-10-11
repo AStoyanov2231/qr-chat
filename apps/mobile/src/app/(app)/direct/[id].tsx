@@ -30,8 +30,8 @@ export default function DirectScreen() {
   });
   const emptyState = direct.loading || (!chat.ready && !chat.error) ? undefined : direct.error || chat.error || !friend ? null : direct.messages.length === 0
     ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20 }}>
-      <Copy style={{ fontSize: 24, lineHeight: 30, fontWeight: '600', textAlign: 'center' }}>{`Say hello to ${peerName}`}</Copy>
-      <Copy style={[styles.muted, { fontSize: 18, textAlign: 'center' }]}>Send your first message.</Copy>
+      <Copy style={{ fontSize: 20, lineHeight: 26, fontWeight: '700', textAlign: 'center' }}>{`Say hello to ${peerName}`}</Copy>
+      <Copy style={[styles.muted, { textAlign: 'center' }]}>Send your first message.</Copy>
     </View>
     : undefined;
   async function refresh() {

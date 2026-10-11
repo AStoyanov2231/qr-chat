@@ -2,9 +2,10 @@
 
 import type { ChatSnapshot } from "@qr-chat/api";
 import { directConversationTime, directMessagePreview, groupAccessIndicator, groupInitials, messageAge } from "@qr-chat/domain";
-import { Check, MagnifyingGlass, Prohibit, UserMinus, UserPlus, Users, X } from "@phosphor-icons/react";
+import { CaretRight, MagnifyingGlass, Prohibit, UserMinus, UserPlus, Users, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Avatar } from "./avatar";
+import { ConversationHeader } from "./conversation-header";
 
 type FriendConnection = ChatSnapshot["friends"][number];
 type AcceptedFriend = FriendConnection & { accepted_at: string };
@@ -31,7 +32,7 @@ type ReadyProps = HeaderProps & {
   onScan: (event: MouseEvent<HTMLButtonElement>) => void;
   onOpenGroup: (groupId: string) => void;
   onOpenDirect: (friendId: string) => void;
-  onAcceptRequest: (friendId: string) => Promise<void>;
+  onOpenRequests: () => void;
   onRemoveRequest: (friendId: string) => Promise<void>;
   onUnfriend: (friendId: string) => Promise<void>;
   onBlock: (friendId: string) => Promise<void>;
@@ -111,49 +112,83 @@ export function chatNameMatches(name: string, query: string): boolean {
   return !normalizedQuery || name.toLocaleLowerCase().includes(normalizedQuery);
 }
 
-function RequestRow({ friend, peer, incoming, busy, onAccept, onRemove, onNotice }: {
+const isIncoming = (friend: FriendConnection, sessionId: string | null) => friend.accepted_at === null && friend.requested_by_id !== sessionId;
+
+function RequestRow({ friend, peer, busy, onRemove, onNotice }: {
   friend: FriendConnection;
   peer: Peer;
-  incoming: boolean;
   busy: boolean;
-  onAccept: (friendId: string) => Promise<void>;
   onRemove: (friendId: string) => Promise<void>;
   onNotice: (message: string) => void;
 }) {
   const lock = useRef(false);
-  const [pending, setPending] = useState<"accept" | "remove" | null>(null);
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  async function respond(kind: "accept" | "remove") {
+  async function cancel() {
     if (lock.current || busy) return;
     lock.current = true;
-    setPending(kind);
+    setPending(true);
     setError("");
     try {
-      await (kind === "accept" ? onAccept : onRemove)(friend.id);
-      onNotice(kind === "accept" ? `You and ${peer.name} are now friends.` : incoming ? `Declined ${peer.name}'s friend request.` : `Cancelled friend request to ${peer.name}.`);
+      await onRemove(friend.id);
+      onNotice(`Cancelled friend request to ${peer.name}.`);
     } catch {
       setError("Couldn’t update this request. Try again.");
     } finally {
       lock.current = false;
-      setPending(null);
+      setPending(false);
     }
   }
-  return <li className="friend-request-row" aria-busy={pending !== null}>
+  return <li className="friend-request-row" aria-busy={pending}>
     <div className="request-person">
       <span className="request-identity"><Avatar name={peer.name} url={peer.avatarUrl} size={44} /><span className="request-marker" aria-hidden="true"><UserPlus size={13} weight="fill" /></span></span>
       <span className="request-copy">
         <strong>{peer.name}</strong>
-        <small>{incoming ? "Sent you a friend request" : "Friend request sent"}</small>
+        <small>Friend request sent</small>
       </span>
     </div>
-    <div className="request-actions" role="group" aria-label={pending ? pending === "accept" ? "Accepting…" : incoming ? "Declining…" : "Cancelling…" : "Friend request actions"}>
-      {incoming && <button type="button" className="request-action" disabled={busy || !!pending} onClick={() => void respond("accept")} aria-label={pending === "accept" ? `Accepting ${peer.name}'s friend request` : `Accept ${peer.name}'s friend request`}><Check size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending === "accept" ? "Accepting…" : "Accept"}</span></button>}
-      <button type="button" className="request-action quiet" disabled={busy || !!pending} onClick={() => void respond("remove")} aria-label={incoming ? `Decline ${peer.name}'s friend request` : `Cancel friend request to ${peer.name}`}>
-        <X size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending === "remove" ? incoming ? "Declining…" : "Cancelling…" : incoming ? "Decline" : "Cancel"}</span>
+    <div className="request-actions" role="group" aria-label={pending ? "Cancelling…" : "Friend request actions"}>
+      <button type="button" className="request-action quiet" disabled={busy || pending} onClick={() => void cancel()} aria-label={`Cancel friend request to ${peer.name}`}>
+        <X size={18} weight="bold" aria-hidden="true" /><span className="request-action-label">{pending ? "Cancelling…" : "Cancel"}</span>
       </button>
     </div>
     {error && <p className="request-error" role="alert">{error}</p>}
   </li>;
+}
+
+function IncomingRequestRow({ peer, sentAt, onOpen }: { peer: Peer; sentAt: string; onOpen: () => void }) {
+  return <button type="button" className="dm-row-open" onClick={onOpen} aria-label={`Open friend request from ${peer.name}`}>
+    <span className="request-identity"><Avatar name={peer.name} url={peer.avatarUrl} size={52} /><span className="request-marker" aria-hidden="true"><UserPlus size={13} weight="fill" /></span></span>
+    <span className="dm-copy"><strong>{peer.name}</strong><span className="dm-preview request-unread">Wants to be friends</span></span>
+    <time dateTime={sentAt}>{messageAge(Date.parse(sentAt))}</time>
+  </button>;
+}
+
+function RequestsSummary({ peers, onOpen }: { peers: Peer[]; onOpen: () => void }) {
+  return <button type="button" className="request-summary" onClick={onOpen} aria-label={`Review ${peers.length} friend requests`}>
+    <span className="request-stack" aria-hidden="true">{peers.slice(0, 3).map((peer) => <Avatar key={peer.id} name={peer.name} url={peer.avatarUrl} size={40} />)}</span>
+    <span className="dm-copy"><strong>{peers.length} friend requests</strong><span className="dm-preview">{peers.map((peer) => peer.name).join(", ")}</span></span>
+    <span className="request-count" aria-hidden="true">{peers.length}</span>
+    <CaretRight size={18} aria-hidden="true" />
+  </button>;
+}
+
+export function RequestsView({ friends, sessionId, onBack, onOpen }: {
+  friends: ChatSnapshot["friends"];
+  sessionId: string | null;
+  onBack: () => void;
+  onOpen: (friendId: string) => void;
+}) {
+  const requests = friends.filter((friend) => isIncoming(friend, sessionId))
+    .sort((left, right) => Date.parse(right.requested_at) - Date.parse(left.requested_at));
+  return <section className="conversation-view">
+    <ConversationHeader title="Friend requests" onBack={onBack} />
+    <div className="chat-conversation-surface">
+      <ul className="chat-list requests-list" aria-label="Friend requests">
+        {requests.map((friend) => <li key={friend.id}><IncomingRequestRow peer={getPeer(friend, sessionId)} sentAt={friend.requested_at} onOpen={() => onOpen(friend.id)} /></li>)}
+      </ul>
+    </div>
+  </section>;
 }
 
 function DirectRow({ peer, id, children, open, onReveal, onOpen, busy, onUnfriend, onBlock, onNotice }: {
@@ -264,7 +299,7 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
     onScan,
     onOpenGroup,
     onOpenDirect,
-    onAcceptRequest,
+    onOpenRequests,
     onRemoveRequest,
     onUnfriend,
     onBlock,
@@ -286,9 +321,11 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
   const requestPeers = requests.map((friend) => ({
     friend,
     peer: getPeer(friend, sessionId),
-    incoming: friend.requested_by_id !== sessionId,
+    incoming: isIncoming(friend, sessionId),
   })).filter(({ peer }) => chatNameMatches(peer.name, query))
     .sort((left, right) => Date.parse(right.friend.requested_at) - Date.parse(left.friend.requested_at));
+  const incomingPeers = requestPeers.filter(({ incoming }) => incoming);
+  const outgoingPeers = requestPeers.filter(({ incoming }) => !incoming);
   const hasSearchMatches = groupMatches || requestPeers.length > 0 || visibleFriends.length > 0;
   const latestGroupMessage = group?.messages.at(-1);
   const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
@@ -354,7 +391,9 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                 </span>
               </button>
             </li>}
-            {requestPeers.map(({ friend, peer, incoming }) => <RequestRow key={friend.id} friend={friend} peer={peer} incoming={incoming} busy={busy} onAccept={onAcceptRequest} onRemove={onRemoveRequest} onNotice={setNotice} />)}
+            {incomingPeers.length === 1 && <li><IncomingRequestRow peer={incomingPeers[0].peer} sentAt={incomingPeers[0].friend.requested_at} onOpen={() => onOpenDirect(incomingPeers[0].friend.id)} /></li>}
+            {incomingPeers.length > 1 && <li><RequestsSummary peers={incomingPeers.map(({ peer }) => peer)} onOpen={onOpenRequests} /></li>}
+            {outgoingPeers.map(({ friend, peer }) => <RequestRow key={friend.id} friend={friend} peer={peer} busy={busy} onRemove={onRemoveRequest} onNotice={setNotice} />)}
               {visibleFriends.map(({ id, peer }) => {
                 const preview = directPreviews[id];
                 const failed = !preview || preview.status === "error";

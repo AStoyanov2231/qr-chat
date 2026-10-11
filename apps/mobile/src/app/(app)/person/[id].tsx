@@ -19,7 +19,7 @@ export default function PersonScreen() {
   const disabled = action.busy || !chat.ready;
   const change = (mutation: () => Promise<unknown>) => { void action.run(async () => { await mutation(); await chat.refresh(); }); };
 
-  return <View style={{ flex: 1, backgroundColor: colors.paper }}>
+  return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
     <ConversationHeader title={person?.name ?? 'Profile'} subtitle={person ? relationship === 'accepted' ? 'Friend' : 'QR Chat member' : undefined} imageUrl={person?.avatarUrl} onBack={() => router.back()} />
     <View style={styles.profileSurface}>
     <ErrorNotice message={action.error || chat.error} retry={() => { void action.run(chat.refresh); }} />

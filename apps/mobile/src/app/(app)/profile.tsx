@@ -13,15 +13,15 @@ const actions: { label: string; accessibilityLabel: string; icon: IconName; onPr
 ];
 export default function ProfileScreen() {
   const chat = useChat();
-  return <View style={{ flex: 1, backgroundColor: colors.paper }}>
+  return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
     <ConversationHeader title={chat.session?.name || 'Your profile'} imageUrl={chat.session?.avatarUrl} belowSafeArea onBack={() => router.back()} />
     <View style={styles.profileSurface}>
       <ErrorNotice message={chat.error} retry={() => { void chat.refresh().catch(() => {}); }} />
       {!chat.ready && !chat.error ? <Skeleton profile /> : <View style={{ flexDirection: 'row', justifyContent: 'space-evenly' }}>
         {actions.map((action) => <Pressable key={action.label} accessibilityRole="button" accessibilityLabel={action.accessibilityLabel} onPress={action.onPress}
-          style={({ pressed }) => ({ alignItems: 'center', gap: 8, minWidth: 64, opacity: pressed ? 0.7 : 1 })}>
-          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.soft, alignItems: 'center', justifyContent: 'center' }}><Icon name={action.icon} size={24} /></View>
-          <Copy selectable={false} style={{ fontSize: 13 }}>{action.label}</Copy>
+          style={({ pressed }) => ({ alignItems: 'center', gap: 8, minWidth: 64, transform: [{ scale: pressed ? 1.08 : 1 }] })}>
+          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.fill, alignItems: 'center', justifyContent: 'center' }}><Icon name={action.icon} size={24} /></View>
+          <Copy selectable={false} style={{ fontSize: 12, lineHeight: 16, fontWeight: '700' }}>{action.label}</Copy>
         </Pressable>)}
       </View>}
     </View>

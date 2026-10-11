@@ -56,7 +56,8 @@ const mocks = {
     import React from 'react';
     export {useNativeState} from '@expo/ui';
     export const Image=props=>React.createElement('SwiftUIImage',props);
-    export const Button=props=>React.createElement('SwiftUIButton',props);`,
+    export const Button=props=>React.createElement('SwiftUIButton',props);
+    export const Text=props=>React.createElement('SwiftUIText',props);`,
   '@expo/ui/swift-ui/modifiers': `
     export const buttonBorderShape=shape=>({$type:'buttonBorderShape',shape});
     export const buttonStyle=style=>({$type:'buttonStyle',style});
@@ -65,10 +66,18 @@ const mocks = {
     export const accessibilityLabel=label=>({$type:'accessibilityLabel',label});
     export const disabled=value=>({$type:'disabled',value});
     export const tint=color=>({$type:'tint',color});
-    export const ignoreSafeArea=params=>({$type:'ignoreSafeArea',...params});`,
+    export const ignoreSafeArea=params=>({$type:'ignoreSafeArea',...params});
+    export const foregroundStyle=style=>({$type:'foregroundStyle',style});
+    export const font=params=>({$type:'font',...params});`,
   '@expo/ui/jetpack-compose': `
     import React from 'react';
-    export const FilledIconButton=props=>React.createElement('FilledIconButton',props);`,
+    export const FilledIconButton=props=>React.createElement('FilledIconButton',props);
+    export const Button=props=>React.createElement('ComposeButton',props);
+    export const Text=props=>React.createElement('ComposeText',props);`,
+  '@expo/ui/jetpack-compose/modifiers': `
+    export const fillMaxWidth=fraction=>({$type:'fillMaxWidth',fraction});
+    export const height=value=>({$type:'height',value});
+    export const size=(width,height)=>({$type:'size',width,height});`,
   'expo-router': `
     import React, {useEffect} from 'react';
     export const router=Object.fromEntries(['push','replace','dismissTo','back'].map(method => [method,(...args) => globalThis.__qrChatNativeTest.navigation.push([method,...args])]));
@@ -193,10 +202,14 @@ export async function render(t, Component, props = {}) {
     async unmount() { if (mounted) await act(async () => { tree.unmount(); mounted = false; }); },
     async update(nextProps = props) { await act(async () => { tree.update(element(nextProps)); }); },
     async press(label, occurrence = 0) {
-      const control = tree.root.findAll(node => node.type === 'Pressable' || node.type === 'Button').filter(node => node.props.accessibilityLabel === label || node.props.title === label || node.findAllByType('Text').some(text => text.props.children === label))[occurrence];
+      // Native SwiftUI/Compose buttons label themselves with a text child; NativeAction wraps them in an accessible View.
+      const wrapper = node => node.type === 'View' && node.props.accessibilityRole === 'button' && !!node.props.onAccessibilityTap;
+      const control = tree.root.findAll(node => ['Pressable', 'Button', 'SwiftUIButton', 'ComposeButton'].includes(node.type) || wrapper(node))
+        .filter(node => node.props.accessibilityLabel === label || node.props.title === label || node.findAll(text => ['Text', 'SwiftUIText', 'ComposeText'].includes(text.type)).some(text => text.props.children === label))[occurrence];
       if (!control) throw new Error(`Missing button: ${label}`);
-      if (control.props.disabled) throw new Error(`Disabled button: ${label}`);
-      await act(async () => { await control.props.onPress(); });
+      const disabled = control.props.disabled || control.props.enabled === false || control.props.accessibilityState?.disabled || control.props.modifiers?.some(modifier => modifier.$type === 'disabled' && modifier.value);
+      if (disabled) throw new Error(`Disabled button: ${label}`);
+      await act(async () => { await (control.props.onPress ?? control.props.onClick ?? control.props.onAccessibilityTap)(); });
     },
     async type(label, value) {
       const control = tree.root.findAllByType('NativeTextInput').find(node => node.props.accessibilityLabel === label);
