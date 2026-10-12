@@ -372,6 +372,7 @@ export type Database = {
         Returns: {
           expires_at: string
           group_id: string
+          name: string | null
         }[]
       }
       leave_qr_group: { Args: { p_group_id: string }; Returns: string }

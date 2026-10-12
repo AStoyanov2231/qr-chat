@@ -1,63 +1,53 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { test } from "node:test";
-import { runInThisContext } from "node:vm";
+import { safeAuthDestination, signInPath } from "../src/lib/auth/redirect.ts";
 
 const require = createRequire(import.meta.url);
-const { unstable_doesMiddlewareMatch } = require("next/experimental/testing/server");
-const typescript = require("typescript");
-const sourceUrl = new URL("../src/proxy.ts", import.meta.url);
-const source = await readFile(sourceUrl, "utf8");
-const output = typescript.transpileModule(source, {
-  compilerOptions: {
-    module: typescript.ModuleKind.CommonJS,
-    target: typescript.ScriptTarget.ES2022,
-  },
-}).outputText;
-const fixtureModule = { exports: {} };
-const evaluate = runInThisContext(`(function (require, module, exports) { ${output}\n})`, {
-  filename: sourceUrl.pathname,
-});
-evaluate((specifier) => specifier.startsWith("@/") ? {} : require(specifier), fixtureModule, fixtureModule.exports);
-const { config } = fixtureModule.exports;
+const { unstable_getResponseFromNextConfig, getRedirectUrl, getRewrittenUrl } = require("next/experimental/testing/server");
+const configUrl = new URL("../next.config.ts", import.meta.url);
+const { default: productionConfig } = await import(`${configUrl}?production`);
+process.env.NODE_ENV = "development";
+const { default: developmentConfig } = await import(`${configUrl}?development`);
+const route = (nextConfig, url, host = "qr-chat.example") =>
+  unstable_getResponseFromNextConfig({ url, nextConfig, headers: { host } });
 
-test("Vercel Analytics requests bypass the authentication proxy", () => {
-  for (const url of ["/_vercel/insights/script.js", "/_vercel/insights/view", "/_vercel/insights/event"]) {
-    assert.equal(unstable_doesMiddlewareMatch({ config, url }), false, url);
-  }
+test("no proxy runs, so page views and Analytics never invoke a function", () => {
+  assert.equal(existsSync(new URL("../src/proxy.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../src/middleware.ts", import.meta.url)), false);
 });
 
-test("application pages and APIs still pass through the authentication proxy", () => {
-  for (const url of ["/", "/profile", "/chats", "/api/chat", "/sign-in", "/auth/callback"]) {
-    assert.equal(unstable_doesMiddlewareMatch({ config, url }), true, url);
-  }
+test("legacy /chats links redirect at the routing layer and keep the QR code", async () => {
+  const response = await route(productionConfig, "https://qr-chat.example/chats?code=Room%2B1");
+  assert.equal(response.status, 307);
+  assert.equal(getRedirectUrl(response), "https://qr-chat.example/?code=Room%2B1");
+  assert.equal(getRedirectUrl(await route(productionConfig, "https://qr-chat.example/chats")), "https://qr-chat.example/");
 });
 
-test("the public landing needs no session while application routes still enforce sign-in", async () => {
-  let authCalls = 0;
-  const { NextRequest, NextResponse } = require("next/server");
-  const mockedModule = { exports: {} };
-  evaluate((specifier) => {
-    if (specifier === "@/lib/local-design-preview") return { isLocalDesignPreviewHost: () => false };
-    if (specifier === "@/lib/qr-name-route") return { isRouteAuthenticatedApiPath: () => false };
-    if (specifier === "@/lib/supabase/proxy") return { updateSession: async () => {
-      authCalls++;
-      return { response: NextResponse.next(), userId: null };
-    } };
-    if (specifier === "@/lib/auth/redirect") return { safeAuthDestination: () => "/" };
-    return require(specifier);
-  }, mockedModule, mockedModule.exports);
-
-  const landing = await mockedModule.exports.proxy(new NextRequest("https://qr-chat.example/welcome"));
-  assert.equal(landing.status, 200);
-  assert.equal(authCalls, 0, "a backend outage must not prevent the public landing from loading");
+test("signed-out visitors are sent to sign-in with their destination; signed-in visitors return safely", async () => {
+  const source = await readFile(new URL("../src/hooks/use-chat-backend.tsx", import.meta.url), "utf8");
+  assert.match(source, /signInPath\(window\.location\.pathname, window\.location\.search\)/);
   for (const path of ["/", "/profile", "/?code=Room%2B1"]) {
-    const protectedPage = await mockedModule.exports.proxy(new NextRequest(`https://qr-chat.example${path}`));
-    assert.equal(protectedPage.status, 307);
-    const destination = new URL(protectedPage.headers.get("location"));
-    assert.equal(destination.pathname, "/sign-in");
-    assert.equal(destination.searchParams.get("next"), path);
+    const url = new URL(signInPath(...path.split(/(?=\?)/)), "https://qr-chat.example");
+    assert.equal(url.pathname, "/sign-in");
+    assert.equal(url.searchParams.get("next"), path);
   }
-  assert.equal(authCalls, 3);
+  assert.equal(safeAuthDestination(new URL(signInPath("/profile"), "https://x.example").searchParams.get("next")), "/profile");
+  assert.equal(safeAuthDestination("https://evil.example"), "/");
+});
+
+test("the design preview is rewritten only on a local development host", async () => {
+  for (const [path, view] of [["/", "chats"], ["/profile", "profile"], ["/sign-in", "chats"]]) {
+    const local = await route(developmentConfig, `http://localhost:3000${path}`, "localhost:3000");
+    assert.equal(getRewrittenUrl(local), `http://localhost:3000/design-preview?view=${view}`, path);
+    assert.equal(getRewrittenUrl(await route(developmentConfig, `https://qr-chat.example${path}`)), null, path);
+    assert.equal(getRewrittenUrl(await route(developmentConfig, `http://localhost.evil.example${path}`, "localhost.evil.example")), null, path);
+    assert.equal(getRewrittenUrl(await route(productionConfig, `http://localhost:3000${path}`, "localhost:3000")), null, path);
+  }
+  const page = await readFile(new URL("../src/app/design-preview/page.dev.tsx", import.meta.url), "utf8");
+  assert.match(page, /if \(!isLocalDesignPreviewHost\(host\)\) notFound\(\);/);
+  assert.ok(developmentConfig.pageExtensions.includes("dev.tsx"), "the preview page builds on the dev server");
+  assert.ok(!productionConfig.pageExtensions.some((extension) => extension.startsWith("dev")), "production has no preview route, so it is a static 404");
 });

@@ -102,7 +102,7 @@ test('web session host pauses on hidden/offline, resumes once and removes lifecy
   Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener:listen,removeEventListener:remove},configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
   Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener:remove,location:{replace(path){assert.equal(revoked,true,"Access must be revoked before redirect");assert.equal(path,"/sign-in");}}},configurable:true});
-  const api={client:{auth:{onAuthStateChange:fn=>{authListener=fn;return {data:{subscription:{unsubscribe(){authCleaned=true;}}}};}}}};
+  const api={client:{auth:{getSession:async()=>({data:{session:{}}}),onAuthStateChange:fn=>{authListener=fn;return {data:{subscription:{unsubscribe(){authCleaned=true;}}}};}}}};
   const store={async start(){if(!active){active=true;starts++;}},pause(){if(active){active=false;pauses++;}},dispose(){disposed=true;}};
   const { ChatSessionProvider }=await load('../src/hooks/use-chat-backend.tsx',{
     react:{createContext:()=>({}),useState:fn=>typeof fn === "function" ? [fn()] : [revoked, value=>{revoked=value;}],useEffect:fn=>effects.push(fn)},
@@ -110,8 +110,10 @@ test('web session host pauses on hidden/offline, resumes once and removes lifecy
     'react-dom':{flushSync:fn=>fn()},
     '@qr-chat/api':{createChatApi:()=>api,getChatStore:()=>store},
     '@/lib/supabase/client':{createClient:()=>api.client},
+    '@/lib/auth/redirect':await import('../src/lib/auth/redirect.ts'),
   });
-  ChatSessionProvider({children:null});const cleanup=effects[0]();assert.equal(starts,1);
+  ChatSessionProvider({children:null});const cleanup=effects[0]();assert.equal(starts,0,'nothing starts before the session check');
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(starts,1);
   document.hidden=true;events.get('visibilitychange')();assert.equal(pauses,1);
   navigator.onLine=false;events.get('offline')();assert.equal(pauses,1);
   document.hidden=false;events.get('visibilitychange')();assert.equal(starts,1);
@@ -120,12 +122,34 @@ test('web session host pauses on hidden/offline, resumes once and removes lifecy
   cleanup();assert.equal(events.size,0);assert.ok(disposed&&authCleaned);
 });
 
+test('the static app shell sends a signed-out visitor to sign-in with their destination and starts nothing', async t => {
+  const effects=[];let starts=0;let revoked=false;let destination;
+  const previous = Object.fromEntries(['document','navigator','window'].map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
+  t.after(()=>{for(const [name,descriptor] of Object.entries(previous)) {if(descriptor) Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
+  Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener(){},removeEventListener(){}},configurable:true});
+  Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
+  Object.defineProperty(globalThis,'window',{value:{addEventListener(){},removeEventListener(){},location:{pathname:'/',search:'?code=Room%2B1',replace(path){assert.equal(revoked,true);destination=path;}}},configurable:true});
+  const api={client:{auth:{getSession:async()=>({data:{session:null}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})}}};
+  const { ChatSessionProvider }=await load('../src/hooks/use-chat-backend.tsx',{
+    react:{createContext:()=>({}),useState:fn=>typeof fn === "function" ? [fn()] : [revoked, value=>{revoked=value;}],useEffect:fn=>effects.push(fn)},
+    'react/jsx-runtime':{jsx:()=>({protected:true})},
+    'react-dom':{flushSync:fn=>fn()},
+    '@qr-chat/api':{createChatApi:()=>api,getChatStore:()=>({async start(){starts++;},pause(){},dispose(){}})},
+    '@/lib/supabase/client':{createClient:()=>api.client},
+    '@/lib/auth/redirect':await import('../src/lib/auth/redirect.ts'),
+  });
+  ChatSessionProvider({children:null});effects[0]();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(starts,0);
+  assert.equal(new URL(destination,'https://qr-chat.example').searchParams.get('next'),'/?code=Room%2B1');
+});
+
 
 test('transport failures show connection guidance while actionable API and validation errors stay useful', async () => {
   const { errorMessage } = await load('../src/hooks/use-chat-backend.tsx', {
     react: { createContext: () => ({}) },
     '@qr-chat/api': {},
     '@/lib/supabase/client': {},
+    '@/lib/auth/redirect': {},
   });
   for (const message of ['TypeError: Failed to fetch', 'fetch failed', 'Load failed', 'NetworkError when attempting to fetch resource.', 'Network request failed', 'The Internet connection appears to be offline.']) {
     assert.equal(errorMessage(new Error(message)), 'Could not connect. Check your internet connection and try again.');

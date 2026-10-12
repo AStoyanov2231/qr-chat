@@ -48,6 +48,17 @@ test('resolveGroup sends only the code with the bearer token and never throws', 
   assert.equal(await api.resolveGroup('gtin:5449000006271'), null, 'an invalid server name is rejected');
 });
 
+test('resolveGroup skips the server function for a group that already has a name', async () => {
+  const requests = [];
+  const client = { auth: { getSession: async () => ({ data: { session: { access_token: 'native-token', user: { id } } }, error: null }) } };
+  const api = createChatApi(client, { fetcher: async (url) => { requests.push(url); return Response.json({ name: 'Looked up' }); } });
+  assert.equal(await api.resolveGroup('gtin:5449000006271', 'Fanta Orange'), 'Fanta Orange');
+  assert.equal(requests.length, 0, 'a named group never calls /api/qr-name');
+  assert.equal(await api.resolveGroup('gtin:5449000006271', null), 'Looked up');
+  assert.equal(await api.resolveGroup('gtin:5449000006271', undefined), 'Looked up');
+  assert.equal(requests.length, 2, 'unnamed groups still ask the server');
+});
+
 test('writes derive the sender from auth and exclude arbitrary write fields', async () => {
   let inserted;
   const api = createChatApi({

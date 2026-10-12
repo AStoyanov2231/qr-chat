@@ -123,8 +123,10 @@ export function createChatApi(
       if (!data[0]) throw new ChatApiError("Unable to join this room.");
       return data[0];
     },
-    /** Asks the server to fill a joined group's missing name and photo. Never throws; null means no name yet. */
-    async resolveGroup(code: unknown): Promise<string | null> {
+    /** Asks the server to fill a joined group's missing name and photo. Never throws; null means no name yet.
+     * A name the caller already knows is returned as is, so named groups never call the endpoint. */
+    async resolveGroup(code: unknown, knownName?: string | null): Promise<string | null> {
+      if (knownName) return knownName;
       try {
         const { data } = await client.auth.getSession();
         if (!qrNameEndpoint || !data.session) return null;

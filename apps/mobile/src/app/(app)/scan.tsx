@@ -44,8 +44,9 @@ export default function ScanScreen() {
     // Join first, then let the server fill the name and photo; the room opens either way.
     const joined = await join.run(async () => {
       if (!api) throw new Error('Please sign in again.');
-      const groupId = current?.id ?? (await api.joinGroup(code)).group_id;
-      const name = await api.resolveGroup(code);
+      const joined = current ? null : await api.joinGroup(code);
+      const groupId = current?.id ?? joined!.group_id;
+      const name = await api.resolveGroup(code, joined?.name);
       await chat.refresh();
       router.replace(roomRoute({ id: groupId, venue: { id: groupId, name: name ?? groupFallbackName(code), codes: [code], kind: 'place', label: '' } }));
     });

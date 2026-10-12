@@ -117,7 +117,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
       const id = crypto.randomUUID();
       const expires_at = new Date(Date.now() + 24 * 3600000).toISOString();
       setSnapshot((current) => ({ ...current, groups: [...current.groups, { ...group, id, venue: { ...group.venue, id, name: groupFallbackName(code), nameMissing: true, codes: [code] }, messages: [], expiresAt: expires_at }] }));
-      return { group_id: id, expires_at };
+      return { group_id: id, expires_at, name: null };
     },
     async resolveGroup() { return null; },
     async signOut() { setSnapshot(sampleSnapshot(initialTime)); setDirectRows(sampleDirectMessages(initialTime)); },

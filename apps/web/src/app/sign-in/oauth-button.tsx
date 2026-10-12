@@ -1,17 +1,36 @@
 "use client";
 
 import { GoogleLogo } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { safeAuthDestination } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
-export function OAuthButton({
-  next,
-}: {
-  next: string;
-}) {
+const authErrors: Record<string, string> = {
+  missing_code: "Google did not return a sign-in code. Please try again.",
+  callback_failed: "We could not finish signing you in. Please try again.",
+};
+const noop = () => () => {};
+function useSearchParam(name: string) {
+  return useSyncExternalStore(noop, () => new URLSearchParams(window.location.search).get(name), () => null);
+}
+
+export function SignInError() {
+  const message = authErrors[useSearchParam("error") ?? ""];
+  return message ? <p className="auth-page-error" role="alert">{message}</p> : null;
+}
+
+export function OAuthButton() {
+  const next = safeAuthDestination(useSearchParam("next"));
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    let stopped = false;
+    void createClient().auth.getSession().then(({ data }) => {
+      if (!stopped && data.session) window.location.replace(next);
+    });
+    return () => { stopped = true; };
+  }, [next]);
 
   async function signIn() {
     setError("");

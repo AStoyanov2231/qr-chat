@@ -414,8 +414,9 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     void perform(async () => {
       setError("");
       try {
-        const groupId = member ? venue.id : (await api.joinGroup(venue.codes[0])).group_id;
-        const name = await api.resolveGroup(venue.codes[0]);
+        const joined = member ? null : await api.joinGroup(venue.codes[0]);
+        const groupId = joined?.group_id ?? venue.id;
+        const name = await api.resolveGroup(venue.codes[0], joined ? joined.name : venue.nameMissing ? null : venue.name);
         await backend.refresh();
         const destination = { ...venue, id: groupId, name: name ?? groupFallbackName(venue.codes[0]), nameMissing: !name };
         dismissEntry(() => openConversation(destination));

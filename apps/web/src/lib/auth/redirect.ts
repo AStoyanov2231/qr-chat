@@ -21,3 +21,8 @@ export function safeAuthDestination(value: string | null | undefined) {
 
   return `${destination.pathname}${destination.search}${destination.hash}`;
 }
+
+/** Sign-in URL that returns the visitor to where they were. */
+export function signInPath(pathname: string, search = "") {
+  return `/sign-in?${new URLSearchParams({ next: `${pathname}${search}` })}`;
+}

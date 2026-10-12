@@ -53,6 +53,19 @@ for (const platform of ['ios', 'android']) {
     assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'Cafe' } }]]);
   });
 
+  test(`${platform}: joining a group the server already named hands its name to the lookup, which then skips the request`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    const calls = [];
+    state.auth.api = {
+      joinGroup: async (code) => { calls.push(['join', code]); return { group_id: 'room-two', name: 'Fanta Orange' }; },
+      resolveGroup: async (code, knownName) => { calls.push(['resolve', code, knownName]); return knownName; },
+    };
+    const screen = await render(t, Scan);
+    await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data: 'New-Room' }); });
+    assert.deepEqual(calls, [['join', 'New-Room'], ['resolve', 'New-Room', 'Fanta Orange']]);
+    assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'Fanta Orange' } }]]);
+  });
+
   test(`${platform}: a join failure is shown and the next scan retries`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     let attempts = 0;

@@ -5,10 +5,7 @@ import {
   isPublicIpAddress,
   lookupQrPageName,
 } from '../src/lib/qr-name-metadata.ts';
-import {
-  handleQrNamePost,
-  isRouteAuthenticatedApiPath,
-} from '../src/lib/qr-name-route.ts';
+import { handleQrNamePost } from '../src/lib/qr-name-route.ts';
 
 const publicAddress = { address: '93.184.216.34', family: 4 };
 const page = (overrides = {}) => ({
@@ -108,10 +105,7 @@ test('lookup rejects DNS rebinding, redirect loops, oversized pages, and hung re
   assert.equal(timedOut, true);
 });
 
-test('the name API route enforces bearer or cookie authentication after proxy bypass', async () => {
-  assert.equal(isRouteAuthenticatedApiPath('/api/qr-name'), true);
-  assert.equal(isRouteAuthenticatedApiPath('/api/qr-name/extra'), false);
-
+test('the name API route enforces bearer or cookie authentication without a proxy', async () => {
   let lookups = 0;
   let cookieSession = false;
   const dependencies = {

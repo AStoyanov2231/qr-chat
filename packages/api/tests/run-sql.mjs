@@ -23,7 +23,7 @@ let testFailure;
 let stopFailure;
 
 try {
-  run('initdb', ['-D', data, '-U', 'postgres', '--auth-local=trust', '--auth-host=trust', '--no-instructions', '-c', 'dynamic_shared_memory_type=mmap', '-c', 'shared_memory_type=mmap']);
+  run('initdb', ['-D', data, '-U', 'postgres', '--auth-local=trust', '--auth-host=trust', '--no-instructions', '--locale=C', '-c', 'dynamic_shared_memory_type=mmap', '-c', 'shared_memory_type=mmap']);
   run('pg_ctl', ['-D', data, '-l', `${work}/postgres.log`, '-o', `-h '' -p ${port} -k ${socket}`, '-w', 'start']);
   started = true;
   run('psql', ['--no-psqlrc', '-h', socket, '-p', String(port), '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', fixture]);

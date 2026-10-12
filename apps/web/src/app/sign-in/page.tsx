@@ -1,30 +1,9 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
-import { safeAuthDestination } from "@/lib/auth/redirect";
-import { createClient } from "@/lib/supabase/server";
-import { OAuthButton } from "./oauth-button";
+import { OAuthButton, SignInError } from "./oauth-button";
 
-const authErrors: Record<string, string> = {
-  missing_code: "Google did not return a sign-in code. Please try again.",
-  callback_failed: "We could not finish signing you in. Please try again.",
-};
-
-export default async function SignInPage({
-  searchParams,
-}: PageProps<"/sign-in">) {
-  const params = await searchParams;
-  const next = safeAuthDestination(
-    typeof params.next === "string" ? params.next : undefined,
-  );
-  const errorCode = typeof params.error === "string" ? params.error : "";
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-
-  if (data?.claims.sub) {
-    redirect(next);
-  }
-
+// Static: query parameters and the signed-in redirect are handled in the browser.
+export default function SignInPage() {
   return (
     <main className="auth-page">
       <header className="auth-header">
@@ -40,14 +19,10 @@ export default async function SignInPage({
           <p>Sign in, scan the code, join the room.</p>
 
           <div className="auth-actions">
-            <OAuthButton next={next} />
+            <OAuthButton />
           </div>
 
-          {authErrors[errorCode] && (
-            <p className="auth-page-error" role="alert">
-              {authErrors[errorCode]}
-            </p>
-          )}
+          <SignInError />
 
           <p className="auth-terms">
             By continuing, you agree to use QR Chat respectfully.

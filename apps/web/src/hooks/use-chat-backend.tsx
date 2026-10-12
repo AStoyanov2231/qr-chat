@@ -2,6 +2,7 @@
 import { createContext, use, useEffect, useState, useSyncExternalStore, type PropsWithChildren } from "react";
 import { flushSync } from "react-dom";
 import { createChatApi, getChatStore } from "@qr-chat/api";
+import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 import { z } from "@qr-chat/validation";
 
@@ -24,11 +25,24 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
     return { api, store: getChatStore(api) };
   });
   useEffect(() => {
+    let checked = false;
+    let stopped = false;
     const activity = () => {
+      if (!checked || stopped) return;
       if (document.hidden || !navigator.onLine) value.store.pause();
       else void value.store.start();
     };
-    activity();
+    // The app shell is static, so the signed-out guard runs here from the stored session.
+    void value.api.client.auth.getSession().then(({ data }) => {
+      if (stopped) return;
+      if (!data.session) {
+        flushSync(() => setSignedOut(true));
+        window.location.replace(signInPath(window.location.pathname, window.location.search));
+        return;
+      }
+      checked = true;
+      activity();
+    });
     window.addEventListener("online", activity);
     window.addEventListener("offline", activity);
     document.addEventListener("visibilitychange", activity);
@@ -39,6 +53,7 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
       }
     });
     return () => {
+      stopped = true;
       value.store.dispose(); data.subscription.unsubscribe();
       window.removeEventListener("online", activity); window.removeEventListener("offline", activity);
       document.removeEventListener("visibilitychange", activity);

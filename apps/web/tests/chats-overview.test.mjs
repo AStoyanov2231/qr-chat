@@ -332,19 +332,12 @@ test('direct-message bubbles keep sent messages compact and show received sender
 
 
 test('legacy chats links reach the single home page without changing the QR key', async () => {
-  const { default: ChatsPage } = await loadTsxModule('../src/app/(protected)/chats/page.tsx');
-  const { getURLFromRedirectError } = requireFromTest('next/dist/client/components/redirect');
+  const { unstable_getResponseFromNextConfig, getRedirectUrl } = requireFromTest('next/experimental/testing/server');
+  const { default: nextConfig } = await import('../next.config.ts');
   const code = 'Room%2Fα +&';
-  await assert.rejects(ChatsPage({ searchParams: Promise.resolve({ code }) }), (error) => {
-    const destination = getURLFromRedirectError(error);
-    assert.equal(destination, `/?code=${encodeURIComponent(code)}`);
-    assert.equal(new URL(destination, 'https://chat.example').searchParams.get('code'), code);
-    return true;
-  });
-  await assert.rejects(ChatsPage({ searchParams: Promise.resolve({}) }), (error) => {
-    assert.equal(getURLFromRedirectError(error), '/');
-    return true;
-  });
+  const response = await unstable_getResponseFromNextConfig({ url: `https://chat.example/chats?code=${encodeURIComponent(code)}`, nextConfig });
+  assert.equal(new URL(getRedirectUrl(response)).pathname, '/');
+  assert.equal(new URL(getRedirectUrl(response)).searchParams.get('code'), code);
 });
 
 test('the profile route leaves rendering to the persistent protected layout', async () => {

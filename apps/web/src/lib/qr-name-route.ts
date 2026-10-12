@@ -2,12 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@qr-chat/types";
 import { qrNameLookupRequestSchema, qrNameLookupResponseSchema } from "@qr-chat/validation";
 
-export const QR_NAME_API_PATH = "/api/qr-name";
-
-export function isRouteAuthenticatedApiPath(pathname: string): boolean {
-  return pathname === QR_NAME_API_PATH;
-}
-
 type Dependencies = {
   createClient: () => Promise<Pick<SupabaseClient<Database>, "auth">>;
   /** Fills a missing name and photo for a group the user is an active member of. */
