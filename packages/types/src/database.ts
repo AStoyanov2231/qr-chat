@@ -188,6 +188,30 @@ export type Database = {
         }
         Relationships: []
       }
+      products: {
+        Row: {
+          fetched_at: string
+          gtin: string
+          image_path: string | null
+          name: string | null
+          not_found: boolean
+        }
+        Insert: {
+          fetched_at?: string
+          gtin: string
+          image_path?: string | null
+          name?: string | null
+          not_found?: boolean
+        }
+        Update: {
+          fetched_at?: string
+          gtin?: string
+          image_path?: string | null
+          name?: string | null
+          not_found?: boolean
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_path: string | null

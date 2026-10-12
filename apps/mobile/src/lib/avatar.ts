@@ -4,6 +4,9 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import type { AvatarUpload } from '@qr-chat/api';
 
+// The largest avatar on screen is 130 pt, about 390 px at 3x.
+const AVATAR_PX = 400;
+
 export type SelectedAvatar = { uri: string; upload: AvatarUpload };
 
 export async function pickAvatar(): Promise<SelectedAvatar | null> {
@@ -12,7 +15,7 @@ export async function pickAvatar(): Promise<SelectedAvatar | null> {
   const asset = picked.assets[0];
   const size = Math.min(asset.width, asset.height);
   const context = ImageManipulator.manipulate(asset.uri);
-  context.crop({ originX: (asset.width - size) / 2, originY: (asset.height - size) / 2, width: size, height: size }).resize({ width: 512, height: 512 });
+  context.crop({ originX: (asset.width - size) / 2, originY: (asset.height - size) / 2, width: size, height: size }).resize({ width: AVATAR_PX, height: AVATAR_PX });
   const image = await context.renderAsync();
   try {
     const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });

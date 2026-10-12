@@ -195,7 +195,7 @@ for (const platform of ['ios', 'android']) {
     const screen=await render(t,EditProfile);
     await screen.press('Choose photo');
     assert.deepEqual(state.pickerOptions.mediaTypes,['images']);
-    assert.ok(state.imageActions.some(([op,size])=>op==='resize'&&size.width===512&&size.height===512));
+    assert.ok(state.imageActions.some(([op,size])=>op==='resize'&&size.width===400&&size.height===400));
     await screen.press('Save profile');
     assert.match(screen.text(),/file:\/\/\/prepared.jpg/);
     assert.equal(state.navigation.length,0);

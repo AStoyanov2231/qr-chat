@@ -107,3 +107,30 @@ Decisions:
 
   Phase 2 added `messages_sender_id_created_at_idx` (rate limits) and `qr_join_log_user_id_joined_at_idx`. The daily retention delete scans `messages` by `created_at` with no index, which is acceptable once a day. Add an index only if it shows up in slow queries.
 - **Deploy order matters.** Apply the SQL before deploying clients. Until the policy exists, private joins are refused and new clients run on 5s polling, so they keep working, just less live.
+
+## Phase 4: External lookups, images and monitoring
+
+| Acceptance item | Status | Evidence |
+| --- | --- | --- |
+| Cache hit makes no Open Food Facts call | PASS | `apps/web/tests/networking.test.mjs` "a cached product names the group…": no fetch, no hourly claim, no upload. |
+| Miss calls once and stores the result | PASS | Same file, "a cache miss calls Open Food Facts once…": one call, then one `products` upsert with name and photo path. |
+| 429 or timeout caches nothing and keeps the retry path | PASS | Same file, "rate limits, server errors and timeouts…" (429, 503 and timeout): no upsert, no group write, and the hourly `metadata_checked_at` claim is recorded. |
+| Not-found cached, expires after 30 days | PASS | Same file: a 404 is stored as `not_found`. After 29 days there is no call and no claim; after 31 days it is fetched again. |
+| Two groups with the same GTIN share one photo path | PASS | Same file: both groups get `p/5449000006271.jpg`, uploaded once. |
+| Clients cannot write `products` | PASS | `scaling-assertions.sql`: authenticated users cannot select, insert or update, and anon cannot select. The service role can write. |
+| Small upload sizes; long `cacheControl` only on immutable paths | PASS | Avatars are 400 px on web and mobile (`apps/web/tests/avatar.test.mjs`, `apps/mobile/tests/screens.test.mjs`). The avatar path `<user>/<upload uuid>.jpg` is never overwritten, so it gets `31536000` (`packages/api/tests/avatar.test.mjs`). The product photo `p/<gtin>.jpg` gets `31536000`. |
+| `RUNBOOK.md` with metrics, thresholds and upgrade triggers | PASS | `docs/scaling/RUNBOOK.md` |
+| Benchmark extended (overflow polling, large-room fan-out, rate limits) | PASS (written) / BLOCKED (run) | `traffic-benchmark.mjs`: new `overflow` and `ratelimit` modes, pacing that respects slow mode, and connection-state counts. `node --check` passes. Running it needs a test project with the SQL applied (RUNBOOK → Load test). |
+| `pnpm check`, `test:sql`, `web build`, mobile test and typecheck | PASS | `pnpm check` exit 0 (tooling 12, domain 11, api 65, web 60, mobile 103), "All scaling assertions passed", static routes unchanged, `tsc --noEmit` clean for mobile. |
+
+Decisions:
+- **Group photos stay at Open Food Facts' 400 px.** The mobile room header shows the photo full-width (about 390 pt), so 400 px is already the display size. No Supabase image transformations.
+- **Avatars go from 512 px to 400 px.** The largest avatar shown is 130 px (about 390 px at 3x).
+- **Long caching only on immutable paths.**
+  - Avatars use a fresh upload id per change (`upsert: false`).
+  - Product photos are written once per GTIN.
+  - Older group photos (`<group id>.jpg`) were uploaded before this change and keep their headers.
+- **`products` lives in `public`**, so the server's service-role client can reach it through the Data API. It has RLS with no policies and no grants for `anon` or `authenticated`.
+- **`groups_image_path_check` widened** to accept `p/<gtin>.jpg`. Apply file 5 before deploying, or naming a product group fails the check and `/api/qr-name` returns 503 until it is applied.
+- **Transient Open Food Facts failures now return no name instead of a 503.** The client shows the fallback name either way.
+- **The benchmark was already broken against the multi-group store** (`snapshot.group`, `openGroup()` without an id). It is fixed minimally so the new modes can run.

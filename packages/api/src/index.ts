@@ -106,7 +106,8 @@ export function createChatApi(
       let avatar_path: string | null = null;
       if (upload) {
         avatar_path = `${id}/${upload.uploadId}.jpg`;
-        await result(bucket.upload(avatar_path, upload.data, { contentType: "image/jpeg", cacheControl: "3600", upsert: false }));
+        // Each upload gets a new path and is never overwritten, so it can be cached for a year.
+        await result(bucket.upload(avatar_path, upload.data, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));
       }
       // A failed response can follow a committed write. Retain the upload on failure
       // rather than deleting an image the profile may now reference.

@@ -53,10 +53,11 @@ async function loadResolver(db, fetches, pageName = null) {
   return { resolveGroup: resolver.resolveGroup, restore: () => { globalThis.fetch = previous; } };
 }
 const groupId = '33333333-3333-4333-8333-333333333333';
+const cacheMiss = () => ({ data: null, error: null });
 const activeMember = (name = null) => ({ data: { expires_at: new Date(Date.now() + 60_000).toISOString(), groups: { id: groupId, name } }, error: null });
 
 test('product lookup names and photographs only an unnamed group the caller is an active member of', async (t) => {
-  const db = fakeDb([activeMember(), { data: [{ id: groupId }], error: null }, { data: null, error: null }]);
+  const db = fakeDb([activeMember(), cacheMiss(), { data: [{ id: groupId }], error: null }, { data: null, error: null }, { data: null, error: null }]);
   const seen = [];
   const { resolveGroup, restore } = await loadResolver(db, [
     (url) => { seen.push(url); return Response.json({ product: { product_name: 'Fanta Orange', brands: 'Fanta, Coca-Cola', image_front_url: 'https://images.openfoodfacts.org/images/products/544/front_en.400.jpg' } }); },
@@ -66,9 +67,11 @@ test('product lookup names and photographs only an unnamed group the caller is a
   assert.equal(await resolveGroup('user-1', 'gtin:5449000006271'), 'Fanta Orange');
   assert.match(seen[0], /\/api\/v2\/product\/5449000006271\?/);
   assert.ok(db.log.some(([table, method, ...args]) => table === 'group_members' && method === 'eq' && args[0] === 'user_id' && args[1] === 'user-1'));
-  assert.ok(db.log.some(([bucket, method, path]) => bucket === 'group-images' && method === 'upload' && path === `${groupId}.jpg`));
+  const upload = db.log.find(([bucket, method]) => bucket === 'group-images' && method === 'upload');
+  assert.equal(upload[2], 'p/5449000006271.jpg', 'the photo is stored once per product');
+  assert.equal(upload[4].cacheControl, '31536000', 'the per-product photo path is immutable, so it caches for a year');
   const write = db.log.filter(([table, method]) => table === 'groups' && method === 'update').at(-1);
-  assert.deepEqual(write[2], { name: 'Fanta Orange', image_path: `${groupId}.jpg` });
+  assert.deepEqual(write[2], { name: 'Fanta Orange', image_path: 'p/5449000006271.jpg' });
 });
 
 test('non-members, named groups and throttled groups never trigger a lookup', async (t) => {
@@ -78,7 +81,7 @@ test('non-members, named groups and throttled groups never trigger a lookup', as
     const name = await resolveGroup('user-1', 'gtin:5449000006271');
     assert.equal(name, first.data?.groups.name && Date.parse(first.data.expires_at) > Date.now() ? 'Fanta Orange' : null);
   }
-  const throttled = fakeDb([activeMember(), { data: [], error: null }]);
+  const throttled = fakeDb([activeMember(), cacheMiss(), { data: [], error: null }]);
   const { resolveGroup, restore } = await loadResolver(throttled, []);
   t.after(restore);
   assert.equal(await resolveGroup('user-1', 'gtin:5449000006271'), null);
@@ -86,12 +89,87 @@ test('non-members, named groups and throttled groups never trigger a lookup', as
 });
 
 test('EAN-8 codes are looked up unpadded and a product missing from Open Food Facts stays unnamed', async (t) => {
-  const db = fakeDb([activeMember(), { data: [{ id: groupId }], error: null }]);
+  const db = fakeDb([activeMember(), cacheMiss(), { data: [{ id: groupId }], error: null }]);
   const seen = [];
   const { resolveGroup, restore } = await loadResolver(db, [(url) => { seen.push(url); return new Response('{}', { status: 404 }); }]);
   t.after(restore);
   assert.equal(await resolveGroup('user-1', 'gtin:0000096385074'), null);
   assert.match(seen[0], /\/product\/96385074\?/);
+});
+
+const upserts = (db) => db.log.filter(([table, method]) => table === 'products' && method === 'upsert').map((entry) => entry[2]);
+const groupWrites = (db) => db.log.filter(([table, method, change]) => table === 'groups' && method === 'update' && 'name' in change).map((entry) => entry[2]);
+const offProduct = () => Response.json({ product: { product_name: 'Fanta Orange', brands: 'Fanta', image_front_url: 'https://images.openfoodfacts.org/images/products/544/front_en.400.jpg' } });
+const offPhoto = () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { headers: { 'content-type': 'image/jpeg' } });
+
+test('a cached product names the group with no Open Food Facts call and no hourly claim', async (t) => {
+  const db = fakeDb([activeMember(), { data: { name: 'Fanta Orange', image_path: 'p/5449000006271.jpg', not_found: false, fetched_at: new Date().toISOString() }, error: null }, { data: null, error: null }]);
+  const { resolveGroup, restore } = await loadResolver(db, []);
+  t.after(restore);
+  assert.equal(await resolveGroup('user-1', 'gtin:5449000006271'), 'Fanta Orange');
+  assert.deepEqual(groupWrites(db), [{ name: 'Fanta Orange', image_path: 'p/5449000006271.jpg' }]);
+  assert.ok(!db.log.some(([table, method, change]) => table === 'groups' && method === 'update' && 'metadata_checked_at' in change), 'no claim on a cache hit');
+  assert.ok(!db.log.some(([, method]) => method === 'upload'), 'the shared photo is not uploaded again');
+});
+
+test('a cache miss calls Open Food Facts once and stores the product', async (t) => {
+  const db = fakeDb([activeMember(), cacheMiss(), { data: [{ id: groupId }], error: null }, { data: null, error: null }, { data: null, error: null }]);
+  let calls = 0;
+  const { resolveGroup, restore } = await loadResolver(db, [() => { calls++; return offProduct(); }, offPhoto]);
+  t.after(restore);
+  assert.equal(await resolveGroup('user-1', 'gtin:5449000006271'), 'Fanta Orange');
+  assert.equal(calls, 1);
+  const [stored] = upserts(db);
+  assert.deepEqual({ ...stored, fetched_at: typeof stored.fetched_at }, { gtin: '5449000006271', name: 'Fanta Orange', image_path: 'p/5449000006271.jpg', not_found: false, fetched_at: 'string' });
+});
+
+test('rate limits, server errors and timeouts cache nothing and leave the hourly retry in place', async (t) => {
+  for (const failure of [() => new Response('slow down', { status: 429 }), () => new Response('down', { status: 503 }), () => { throw new DOMException('The operation timed out.', 'TimeoutError'); }]) {
+    const db = fakeDb([activeMember(), cacheMiss(), { data: [{ id: groupId }], error: null }]);
+    const { resolveGroup, restore } = await loadResolver(db, [failure]);
+    assert.equal(await resolveGroup('user-1', 'gtin:5449000006271'), null);
+    restore();
+    assert.deepEqual(upserts(db), [], 'nothing is cached');
+    assert.deepEqual(groupWrites(db), [], 'the group keeps its fallback name');
+    assert.ok(db.log.some(([table, method, change]) => table === 'groups' && method === 'update' && 'metadata_checked_at' in change), 'the claim records the attempt so the next try is an hour later');
+  }
+});
+
+test('a product Open Food Facts does not know is cached for 30 days, then looked up again', async (t) => {
+  const missing = fakeDb([activeMember(), cacheMiss(), { data: [{ id: groupId }], error: null }, { data: null, error: null }]);
+  let lookup = await loadResolver(missing, [() => new Response('{}', { status: 404 })]);
+  assert.equal(await lookup.resolveGroup('user-1', 'gtin:5449000006271'), null);
+  lookup.restore();
+  assert.deepEqual(upserts(missing).map(({ gtin, name, not_found }) => ({ gtin, name, not_found })), [{ gtin: '5449000006271', name: null, not_found: true }]);
+
+  const fresh = fakeDb([activeMember(), { data: { name: null, image_path: null, not_found: true, fetched_at: new Date(Date.now() - 29 * 86400000).toISOString() }, error: null }]);
+  lookup = await loadResolver(fresh, []);
+  assert.equal(await lookup.resolveGroup('user-1', 'gtin:5449000006271'), null, 'a recent miss makes no call and no claim');
+  lookup.restore();
+  assert.equal(fresh.log.filter(([table, method]) => table === 'groups' && method === 'update').length, 0);
+
+  const stale = fakeDb([activeMember(), { data: { name: null, image_path: null, not_found: true, fetched_at: new Date(Date.now() - 31 * 86400000).toISOString() }, error: null }, { data: [{ id: groupId }], error: null }, { data: null, error: null }, { data: null, error: null }]);
+  let calls = 0;
+  lookup = await loadResolver(stale, [() => { calls++; return offProduct(); }, offPhoto]);
+  t.after(lookup.restore);
+  assert.equal(await lookup.resolveGroup('user-1', 'gtin:5449000006271'), 'Fanta Orange', 'after 30 days the product is fetched again');
+  assert.equal(calls, 1);
+});
+
+test('two groups from the same barcode share one stored photo', async (t) => {
+  const first = fakeDb([activeMember(), cacheMiss(), { data: [{ id: groupId }], error: null }, { data: null, error: null }, { data: null, error: null }]);
+  let lookup = await loadResolver(first, [offProduct, offPhoto]);
+  await lookup.resolveGroup('user-1', 'gtin:5449000006271');
+  lookup.restore();
+  const [cached] = upserts(first);
+  const otherGroup = '55555555-5555-4555-8555-555555555555';
+  const second = fakeDb([{ data: { expires_at: new Date(Date.now() + 60_000).toISOString(), groups: { id: otherGroup, name: null } }, error: null }, { data: cached, error: null }, { data: null, error: null }]);
+  lookup = await loadResolver(second, []);
+  t.after(lookup.restore);
+  await lookup.resolveGroup('user-2', 'gtin:5449000006271');
+  assert.equal(groupWrites(first)[0].image_path, 'p/5449000006271.jpg');
+  assert.equal(groupWrites(second)[0].image_path, 'p/5449000006271.jpg', 'the second group reuses the first photo');
+  assert.equal(second.log.filter(([, method]) => method === 'upload').length, 0);
 });
 
 test('web session host pauses on hidden/offline, resumes once and removes lifecycle listeners', async t => {

@@ -21,7 +21,9 @@ assert.ok(Number.isSafeInteger(roomSize) && roomSize >= 1 && roomSize <= count);
 assert.ok(Number.isSafeInteger(messageCount) && messageCount >= 1 && messageCount <= 100);
 assert.ok(Number.isSafeInteger(friendCount) && friendCount >= 0 && friendCount < count && friendCount <= 100);
 assert.equal((count*friendCount)%2,0,'An equal accepted-friend count requires an even total degree.');
-assert.ok(['idle', 'messages', 'resume'].includes(mode));
+// overflow: more clients than the plan's Realtime connection limit; refused clients must poll and still deliver.
+// ratelimit: checks the database limits (30 messages/min; slow mode when ROOM_SIZE > 300).
+assert.ok(['idle', 'messages', 'resume', 'overflow', 'ratelimit'].includes(mode));
 const users = JSON.parse(readFileSync(process.env.QR_CHAT_TEST_USERS_FILE, 'utf8'));
 assert.ok(users.length >= count && new Set(users.slice(0,count).map(user=>user.id)).size === count, 'Provide one distinct disposable account per client.');
 const actors = [];
@@ -38,7 +40,7 @@ const fetcher = async (...args) => {
   return response;
 };
 function delivered(actor) {
-  for (const message of actor.store.getState().snapshot.group?.messages ?? []) {
+  for (const message of actor.store.getState().snapshot.groups.flatMap(group=>group.messages)) {
     const entry = pending.get(message.text);
     if (entry && entry.room === actor.room && !entry.seen.has(actor)) {
       entry.seen.add(actor);deliveries.push(Date.now()-entry.started);
@@ -74,13 +76,27 @@ try {
     const connection=await actors[i].api.requestFriend(actors[j].user.id);await actors[j].api.acceptFriend(connection);
   }
   if(friendCount) for(const actor of actors) await actor.api.joinGroup(`benchmark-${runId}-${actor.room}`);
-  for(const actor of actors) {actor.store.openGroup();actor.unsubscribe=actor.store.subscribe(()=>delivered(actor));await actor.store.start();actor.groupId=actor.store.getState().snapshot.group.id;}
-  // Allow both channel-join and PostgreSQL readiness reconciliations to finish.
+  for(const actor of actors) {
+    actor.unsubscribe=actor.store.subscribe(()=>delivered(actor));await actor.store.start();
+    actor.groupId=actor.store.getState().snapshot.groups.find(group=>group.venue.codes[0]===`benchmark-${runId}-${actor.room}`).id;
+    actor.store.openGroup(actor.groupId);
+  }
+  // Allow every private topic to join and its startup reconciliation to finish.
   await sleep(5000);
-  assert.ok(actors.every(actor=>actor.store.getState().connection==='connected'),'All test clients must be connected before measurement.');
+  const ready=mode==='overflow'?['connected','polling']:['connected'];
+  assert.ok(actors.every(actor=>ready.includes(actor.store.getState().connection)),`All test clients must be ${ready.join(' or ')} before measurement.`);
+  const connectionStates=Object.fromEntries(['connected','polling','reconnecting','connecting'].map(state=>[state,actors.filter(actor=>actor.store.getState().connection===state).length]));
+  const rejections={messages:0,slowMode:0,other:0};
   phase=mode;
   const measuredAt=Date.now();
   if(mode==='idle') await sleep(durationMs);
+  else if(mode==='ratelimit') {
+    const [actor]=actors;
+    for(let sequence=0;sequence<31;sequence++) {
+      try {await actor.api.sendGroupMessage(actor.groupId,`benchmark-${runId}-limit-${sequence}`);}
+      catch(error) {if(error.code!=='RATE_LIMITED') throw error;rejections[/slow mode/i.test(error.message)?'slowMode':'messages']++;}
+    }
+  }
   else {
     if(mode==='resume') for(const actor of actors) {actor.store.pause();await actor.client.auth.stopAutoRefresh();}
     for(let sequence=0;sequence<messageCount;sequence++) {
@@ -89,7 +105,8 @@ try {
         pending.set(body,{room:actor.room,started:Date.now(),seen:new Set()});
         await actor.api.sendGroupMessage(actor.groupId,body);
       }
-      await sleep(2000);
+      // Slow mode allows one message per 5s per sender in rooms above 300 members.
+      await sleep(roomSize>300?5500:2000);
     }
     if(mode==='resume') for(const actor of actors) {await actor.client.auth.startAutoRefresh();await actor.store.start();}
     await sleep(5000);
@@ -99,7 +116,7 @@ try {
     const rows=observations.filter(row=>row.category===category);
     return [category,{requests:rows.length,failures:rows.filter(row=>row.status===null||row.status>=400).length,p95Ms:percentile(rows.map(row=>row.durationMs),.95)}];
   }));
-  const report={mode,clients:count,roomSize,friendSetupDegree:friendCount,elapsedSeconds,httpRequests:observations.length,requestsPerClientMinute:observations.length/count/(elapsedSeconds/60),decodedResponseBytes,knownWireBytes:observations.reduce((sum,row)=>sum+(row.responseBytes??0),0),unknownWireSizeRequests:observations.filter(row=>row.responseBytes===null).length,categories,deliveryP95Ms:percentile(deliveries,.95),deliveryMaxMs:deliveries.length?Math.max(...deliveries):null,expectedDeliveries:[...pending.values()].reduce((sum,entry)=>sum+actors.filter(actor=>actor.room===entry.room).length,0),receivedDeliveries:deliveries.length};
+  const report={mode,connectionStates,rejections,clients:count,roomSize,friendSetupDegree:friendCount,elapsedSeconds,httpRequests:observations.length,requestsPerClientMinute:observations.length/count/(elapsedSeconds/60),decodedResponseBytes,knownWireBytes:observations.reduce((sum,row)=>sum+(row.responseBytes??0),0),unknownWireSizeRequests:observations.filter(row=>row.responseBytes===null).length,categories,deliveryP95Ms:percentile(deliveries,.95),deliveryMaxMs:deliveries.length?Math.max(...deliveries):null,expectedDeliveries:[...pending.values()].reduce((sum,entry)=>sum+actors.filter(actor=>actor.room===entry.room).length,0),receivedDeliveries:deliveries.length};
   console.log(JSON.stringify(report,null,2));
   if(process.env.QR_CHAT_BENCHMARK_OUTPUT) writeFileSync(process.env.QR_CHAT_BENCHMARK_OUTPUT,JSON.stringify(report,null,2));
   if(process.env.QR_CHAT_BASELINE_FILE) {
@@ -111,6 +128,10 @@ try {
     if(mode==='idle') assert.ok(after/elapsedSeconds<=.2*before/baseline.elapsedSeconds,'Idle Auth/Data request reduction must reach 80%.');
   }
   if(mode==='messages') {assert.equal(report.receivedDeliveries,report.expectedDeliveries);assert.ok(report.deliveryMaxMs<=2000,'Healthy delivery must stay within two seconds.');}
+  // Polling clients refresh every ~5s (jitter up to 6s) plus one round trip.
+  if(mode==='overflow') {assert.equal(report.receivedDeliveries,report.expectedDeliveries);assert.ok(report.deliveryMaxMs<=8000,'Polling clients must deliver within eight seconds.');}
+  // Slow mode starts above 300 members, so the second message of a big room is rejected; otherwise the 31st.
+  if(mode==='ratelimit') assert.ok(roomSize>300?rejections.slowMode>=1:rejections.messages===1,'The database rate limits must reject the excess messages.');
   if(mode==='resume') assert.equal(report.receivedDeliveries,report.expectedDeliveries);
 } finally {
   phase='cleanup';

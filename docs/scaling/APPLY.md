@@ -11,8 +11,9 @@ Run the SQL files in the Supabase SQL editor **in this order**, each in one go. 
 | 2 | `20261012110000_group_message_retention.sql` | Adds `private.delete_old_group_messages()` and a daily pg_cron job, `delete-old-group-messages` (03:17 UTC), that deletes QR group messages older than 30 days. Direct messages are never touched. **Optional:** skip it to keep full history in active groups. | `select cron.unschedule('delete-old-group-messages'); drop function private.delete_old_group_messages();` |
 | 3 | `20261012120000_rate_limits.sql` | Message limit (30/min per user), slow mode (above 300 members, 1 message per 5s), join limit (60/hour, `private.qr_join_log`), and the index `messages_sender_id_created_at_idx` replacing `messages_sender_id_idx`. | `drop trigger limit_message_rate on public.messages; drop function private.limit_message_rate();` then re-run file 1 to restore `join_qr_group` without the limit, `drop table private.qr_join_log;`, `create index messages_sender_id_idx on public.messages(sender_id);` |
 | 4 | `20261012130000_realtime_broadcast.sql` | Private Broadcast: `private.can_receive_topic` plus the policy `qr_chat_receive_topics` on `realtime.messages`, and id-only broadcast triggers on `messages` (insert), `group_members`, `friendships` and `profiles`. The publication is left as is for installed apps. | `drop trigger broadcast_message on public.messages; drop trigger broadcast_membership on public.group_members; drop trigger broadcast_friendship on public.friendships; drop trigger broadcast_profile on public.profiles; drop policy qr_chat_receive_topics on realtime.messages;` then drop the `private.broadcast*` and `private.can_receive_topic` functions. Old clients keep working on Postgres Changes. |
+| 5 | `20261012150000_products_cache.sql` | Server-only `public.products` cache (GTIN, name, photo path, not-found flag, fetch time), and `groups_image_path_check` now also accepts shared product photos `p/<gtin>.jpg`. | `drop table public.products;` then restore the old check: `alter table public.groups drop constraint groups_image_path_check, add constraint groups_image_path_check check (image_path ~ '^[0-9a-f-]{36}\.jpg$');` (fails if any group already uses a `p/` photo; clear those first). |
 
-**Order:** apply files 1–4, *then* deploy the web app and ship the mobile release. Clients built from this branch fall back to 5s polling until file 4 exists, so a mismatch slows updates but breaks nothing.
+**Order:** apply files 1–5, *then* deploy the web app and ship the mobile release. Clients built from this branch fall back to 5s polling until file 4 exists, so a mismatch slows updates but breaks nothing.
 
 ### Deferred cleanup (not in the order above)
 
@@ -34,3 +35,29 @@ Run the SQL files in the Supabase SQL editor **in this order**, each in one go. 
   - Open `/chats?code=X`: you should get a 307 to `/?code=X`.
   - Open `/design-preview`: you should get a 404.
 - In Vercel Usage, Function Invocations should now come only from `/api/qr-name` and `/auth/callback`.
+
+## 4. Benchmark and e2e (after the SQL is applied)
+
+Use a **test** Supabase project with files 1–5 applied. The benchmark refuses the production project.
+
+- **Load tests:** `docs/scaling/RUNBOOK.md` → "Load test" lists the scenarios and their environment variables: `QR_CHAT_BENCHMARK_ENV=test`, `QR_CHAT_TEST_SUPABASE_URL`, `QR_CHAT_TEST_SUPABASE_PUBLISHABLE_KEY`, `QR_CHAT_TEST_USERS_FILE`, plus `QR_CHAT_BENCHMARK_CLIENTS`, `_ROOM_SIZE`, `_MODE` and `_SECONDS`.
+- **Backend integration** (private Broadcast delivery and reconnect):
+
+  ```bash
+  pnpm --filter @qr-chat/api test:integration
+  ```
+
+  This needs the same test-project variables the suite already reads (see `packages/api/tests/integration/backend.test.mjs`).
+- **Web e2e** against a deployed preview:
+
+  ```bash
+  pnpm --filter web test:e2e
+  ```
+
+  Check the sign-in redirect, the `/chats` redirect, and "Not sent. …" notices.
+
+## 5. Rollback
+
+Per-file rollback commands are in the table above. Code rollback means redeploying the previous Vercel deployment and the previous mobile build. Clients from this branch keep working against the old schema in reduced form:
+- without file 4 they poll every 5 seconds;
+- without file 1 they call `/api/qr-name` as before.

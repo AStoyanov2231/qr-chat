@@ -284,4 +284,42 @@ begin
 end;
 $test$;
 
+-- Phase 4: the products cache is server-only; groups can point at a shared product photo.
+do $test$
+declare
+  u uuid := pg_temp.new_user();
+  denied boolean;
+begin
+  execute 'set local role service_role';
+  insert into public.products(gtin, name, image_path) values ('5449000006271', 'Fanta Orange', 'p/5449000006271.jpg');
+  insert into public.products(gtin, not_found) values ('0000096385074', true);
+  execute 'reset role';
+  perform set_config('request.jwt.claim.sub', u::text, true);
+  execute 'set local role authenticated';
+  denied := false;
+  begin perform * from public.products; exception when insufficient_privilege then denied := true; end;
+  assert denied, 'clients cannot read the products cache';
+  denied := false;
+  begin insert into public.products(gtin, name) values ('4006381333931', 'Forged'); exception when insufficient_privilege then denied := true; end;
+  assert denied, 'clients cannot write the products cache';
+  denied := false;
+  begin update public.products set name = 'Forged' where gtin = '5449000006271'; exception when insufficient_privilege then denied := true; end;
+  assert denied, 'clients cannot change cached products';
+  execute 'reset role';
+  execute 'set local role anon';
+  denied := false;
+  begin perform * from public.products; exception when insufficient_privilege then denied := true; end;
+  assert denied, 'anonymous clients cannot read the products cache';
+  execute 'reset role';
+  denied := false;
+  begin insert into public.products(gtin, name, not_found) values ('4006381333932', 'Named', true); exception when check_violation then denied := true; end;
+  assert denied, 'a not-found row cannot carry a name';
+  insert into public.groups(code_key, name, image_path) values ('gtin:5449000006271', 'Fanta Orange', 'p/5449000006271.jpg'), ('gtin-copy', 'Fanta Orange', 'p/5449000006271.jpg');
+  insert into public.groups(code_key, image_path) values ('legacy-photo', gen_random_uuid() || '.jpg');
+  denied := false;
+  begin insert into public.groups(code_key, image_path) values ('bad-photo', '../avatars/x.jpg'); exception when check_violation then denied := true; end;
+  assert denied, 'group photos stay in the two allowed shapes';
+end;
+$test$;
+
 select 'All scaling assertions passed' as result;
