@@ -24,7 +24,8 @@ function fixture(options = {}) {
     onMutation(listener) { mutations.add(listener); return () => mutations.delete(listener); },
     client: {
       auth: { onAuthStateChange(listener) { authListener = listener; return { data: { subscription: { unsubscribe() {} } } }; } },
-      channel() { const channel = { callbacks: [], on(type, filter, handler) { if(type === 'system') this.system=handler;else this.callbacks.push({filter,handler});return this; }, subscribe(handler) {this.status=handler;return this;} };channels.push(channel);return channel; },
+      getChannels() { return channels.filter(channel=>!channel.removed); },
+      channel(name, params) { const channel = { name, topic:`realtime:${name}`, params, on(type, filter, handler) { this.filter=filter;this.handler=handler;return this; }, subscribe(handler) {this.status=handler;return this;} };channels.push(channel);return channel; },
       removeChannel: async channel => {channel.removed=true;},
     },
   };
@@ -32,7 +33,13 @@ function fixture(options = {}) {
   return { api, store, calls, overview, access, channels,
     auth(next) {id=next;authListener('SIGNED_IN', next ? {user:{id:next}} : null);},
     write(message, kind='group') {for(const listener of mutations) listener({kind,userId:self,message});},
-    event(kind, messageId) {const filter=`group_id=eq.${kind==='direct'?friend:room}`;for(const callback of channels.at(-1).callbacks) if(callback.filter.table==='messages'&&callback.filter.filter===filter) callback.handler({new:{id:messageId},eventType:'INSERT'});},
+    topics() {return channels.filter(channel=>!channel.removed).map(channel=>channel.name);},
+    live() {for(const channel of channels.filter(channel=>!channel.removed)) channel.status('SUBSCRIBED');},
+    broadcast(name, payload) {channels.find(channel=>!channel.removed&&channel.name===name).handler({payload});},
+    event(kind, messageId) {
+      if(kind==='profiles') this.broadcast(`user:${self}`,{table:'profiles',type:'UPDATE',user_id:self});
+      else this.broadcast(kind==='direct'?`user:${self}`:`group:${room}`,{table:'messages',type:'INSERT',id:messageId,group_id:kind==='direct'?friend:room});
+    },
     setGroup(rows) {groupRows=rows;overview.memberships[0].headIds=rows.slice(0,50).map(row=>row.id);},
     setDirect(rows) {directRows=rows;overview.directPreviews[friend]=rows[0]??null;},
   };
@@ -96,7 +103,7 @@ test('removed friendship clears messages, previews and subscriptions on the safe
   const f=fixture();t.after(()=>f.store.dispose());f.store.openDirect(friend);await f.store.start();
   f.overview.friends=[];f.overview.directPreviews={};f.access.acceptedConnectionIds=[];await f.store.refresh('safety');
   assert.equal(f.store.getState().directs[friend],undefined);assert.equal(f.store.getState().snapshot.directPreviews[friend],undefined);
-  assert.ok(f.channels.at(-1).callbacks.every(callback=>!(callback.filter.table==='messages'&&callback.filter.filter===`group_id=eq.${friend}`)));
+  assert.deepEqual(f.topics(),[`user:${self}`,`group:${room}`],'direct messages ride the user topic; no per-friend channel exists');
 });
 test('same-identity auth events do not trigger reads; sign-out invalidates in-flight data', async t => {
   const f=fixture();t.after(()=>f.store.dispose());await f.store.start();f.calls.length=0;f.auth(self);await tick();assert.equal(f.calls.length,0);
@@ -126,11 +133,14 @@ test('rapid lifecycle changes cannot publish a previous request or its failure',
   f.api.overview=async()=>structuredClone(f.overview);await f.store.start();reject(new Error('Previous connection failed'));await cancelled;await tick();
   assert.equal(f.store.getState().ready,true);assert.equal(f.store.getState().error,'');
 });
-test('replication readiness merges startup hints and reconciles the eventual startup gap', async t => {
+test('topic joins reconcile the startup gap once every channel is live', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();f.calls.length=0;
-  const channel=f.channels.at(-1);channel.status('SUBSCRIBED');channel.system({extension:'postgres_changes',status:'ok'});await tick();
-  assert.equal(f.calls.filter(call=>call==='overview').length,1);await tick();assert.equal(f.store.getState().connection,'connected');
-  f.setGroup([row(3),row(2),row(1)]);channel.system({extension:'postgres_changes',status:'ok'});await tick();
+  assert.deepEqual(f.topics(),[`user:${self}`,`group:${room}`]);
+  assert.ok(f.channels.every(channel=>channel.params.config.private===true),'topics are private channels');
+  // A message lands after the first read but before the channels join; no event arrives for it.
+  f.setGroup([row(3),row(2),row(1)]);
+  f.live();await tick();await tick();
+  assert.equal(f.calls.filter(call=>call==='overview').length,1);assert.equal(f.store.getState().connection,'connected');
   assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'3');
 });
 test('30-minute idle benchmark reduces Auth/Data API requests by over 80 percent', async t => {
@@ -207,11 +217,12 @@ test('profile events reconcile visible identities and dropped peers lose subscri
   const peer='44444444-4444-4444-8444-444444444444';
   f.overview.memberships[0].members=[{user_id:peer,profiles:{id:peer,display_name:'Peer',avatar_url:null}}];
   await f.store.start();
-  assert.deepEqual(f.channels.at(-1).callbacks.filter(entry=>entry.filter.table==='profiles').map(entry=>entry.filter.filter),[`id=eq.${self}`,`id=eq.${peer}`]);
+  assert.deepEqual(f.topics(),[`user:${self}`,`group:${room}`],'peers\' profile edits arrive on the shared group topic');
   f.overview.profile.display_name='Updated';f.calls.length=0;f.event('profiles',null);await tick();
   assert.deepEqual(f.calls,['overview']);assert.equal(f.store.getState().snapshot.session.name,'Updated');
+  const channelCount=f.channels.length;
   f.overview.memberships[0].members=[];await f.store.refresh();
-  assert.deepEqual(f.channels.at(-1).callbacks.filter(entry=>entry.filter.table==='profiles').map(entry=>entry.filter.filter),[`id=eq.${self}`]);
+  assert.equal(f.channels.length,channelCount,'a dropped peer changes no subscriptions');
 });
 
 test('a delayed older page cannot restore profile data superseded by an overview', async t => {
@@ -230,14 +241,11 @@ test('a delayed older page cannot restore profile data superseded by an overview
 test('a primary-key-only friendship deletion promptly drops cached direct access', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openDirect(friend);await f.store.start();
   assert.ok(f.store.getState().directs[friend].messages.length);
-  const deletion=f.channels.at(-1).callbacks.find(({filter})=>filter.table==='friendships'&&filter.event==='DELETE');
-  assert.equal(deletion.filter.filter,`group_id=eq.${friend}`);
   f.overview.friends=[];f.calls.length=0;
-  deletion.handler({eventType:'DELETE',old:{group_id:friend},new:{}});await tick();
+  f.broadcast(`user:${self}`,{table:'friendships',type:'DELETE',group_id:friend});await tick();
   assert.deepEqual(f.calls,['overview']);
   assert.deepEqual(f.store.getState().snapshot.friends,[]);
   assert.equal(f.store.getState().directs[friend],undefined);
-  assert.ok(f.channels.at(-1).callbacks.every(({filter})=>filter.filter!==`id=eq.${friend}`));
 });
 
 test('a peer expiry refreshes membership without waiting for the safety poll', async t => {
@@ -261,8 +269,7 @@ test('every joined group stays listed and receives its own message events', asyn
   f.access.memberships.push({ group_id: second, expires_at: '2030-01-02' });
   await f.store.start();
   assert.deepEqual(f.store.getState().snapshot.groups.map(group=>group.id),[room,second]);
-  const filters=f.channels.at(-1).callbacks.filter(({filter})=>filter.table==='messages').map(({filter})=>filter.filter);
-  assert.ok(filters.includes(`group_id=eq.${room}`)&&filters.includes(`group_id=eq.${second}`));
+  assert.deepEqual(f.topics(),[`user:${self}`,`group:${room}`,`group:${second}`]);
   f.access.memberships=f.access.memberships.filter(membership=>membership.group_id!==room);
   f.api.groupMessageIds=async()=>[row(3)];f.event('group',3);await tick();
   assert.deepEqual(f.store.getState().snapshot.groups.map(group=>group.id),[second]);
@@ -282,8 +289,22 @@ test('realtime refusal polls the overview until resubscribed; pause stops pollin
   const paused=f.calls.length;await new Promise(resolve=>setTimeout(resolve,70));
   assert.equal(f.calls.length,paused,'no polling while paused');
   await f.store.start();
-  const next=f.channels.at(-1);next.status('SUBSCRIBED');next.system({extension:'postgres_changes',status:'ok'});await tick();
+  await tick();f.live();await tick();
   assert.equal(f.store.getState().connection,'connected');
   f.calls.length=0;await new Promise(resolve=>setTimeout(resolve,70));
   assert.equal(f.calls.length,0,'a subscribed store does not poll');
+});
+test('joining a group adds its topic on the same socket without resubscribing the others', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());await f.store.start();f.live();await tick();
+  const before=f.channels.slice();
+  const second='66666666-6666-4666-8666-666666666666';
+  f.overview.memberships.push({ group_id: second, expires_at: '2030-01-02', groups: { id: second, code_key: 'Bar', name: 'Bar' }, members: [], preview: null, headIds: [] });
+  f.access.memberships.push({ group_id: second, expires_at: '2030-01-02' });
+  await f.store.refresh();
+  assert.deepEqual(f.topics(),[`user:${self}`,`group:${room}`,`group:${second}`]);
+  assert.ok(before.every(channel=>!channel.removed),'existing channels stay joined');
+  assert.equal(f.channels.length,before.length+1,'only the new topic is joined');
+  f.calls.length=0;f.live();await tick();await tick();
+  assert.deepEqual(f.calls.filter(call=>call==='overview'),['overview'],'the new topic closes its join gap with one refresh');
+  assert.equal(f.store.getState().connection,'connected');
 });

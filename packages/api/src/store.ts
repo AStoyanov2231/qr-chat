@@ -1,6 +1,6 @@
 import type { ChatApi } from './index.ts';
 import { createRefreshCoordinator } from './coordinator.ts';
-import { watchChanges, type ChangeEvent, type ChangeFilter, type ConnectionState } from './realtime.ts';
+import { topic, watchChanges, type ChangeEvent, type ConnectionState, type Topic } from './realtime.ts';
 import { emptySnapshot, snapshotFromOverview, groupMessageView, type ChatSnapshot } from './snapshot.ts';
 import type { ChatAccess, ChatOverview, GroupMessage, ChatMutation, DirectMessage } from './overview.ts';
 
@@ -109,27 +109,15 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   function stopWatcher() { watcher?.stop(); watcher = undefined; watcherKey = ''; }
   function updateWatcher() {
     if (!active || !identity || !state.ready) return;
-    const filters: ChangeFilter[] = [
-      { table: 'group_members', column: 'user_id', id: identity },
-      { table: 'friendships', column: 'user_a_id', id: identity },
-      { table: 'friendships', column: 'user_b_id', id: identity },
-    ];
-    for (const id of state.snapshot.groups.map((group) => group.id).sort()) filters.push({ table: 'group_members', column: 'group_id', id }, { table: 'messages', column: 'group_id', id });
-    // RLS-protected DELETE payloads expose only primary keys, not participant
-    // columns. Watch already authorized connections by id to retire them promptly.
-    for (const id of state.snapshot.friends.map(friend => friend.id).sort()) filters.push({ table: 'friendships', column: 'group_id', id, event: 'DELETE' });
-    for (const id of [...accepted()].sort()) filters.push({ table: 'messages', column: 'group_id', id });
-    const profiles = new Set([identity, ...state.snapshot.groups.flatMap((group) => group.members.map((member) => member.id))]);
-    for (const friend of state.snapshot.friends) {
-      if (friend.user_a) profiles.add(friend.user_a.id);
-      if (friend.user_b) profiles.add(friend.user_b.id);
-    }
-    for (const id of [...profiles].sort()) filters.push({ table: 'profiles', column: 'id', id });
-    const key = JSON.stringify(filters);
+    // One private channel for the user's own traffic (memberships, friendships, direct messages, friends'
+    // profiles) and one per QR group (its messages, members and member profiles), all on one socket.
+    const topics: Topic[] = [topic('user', identity), ...state.snapshot.groups.map((group) => group.id).sort().map((id) => topic('group', id))];
+    const key = topics.join(',');
     if (key === watcherKey) return;
-    stopWatcher(); watcherKey = key;
+    watcherKey = key;
+    if (watcher) { watcher.update(topics); return; }
     const ticket = generation;
-    watcher = watchChanges(api.client, filters, () => refresh('reconnect'), (connection) => { if (current(ticket)) publish({ connection }); }, {
+    watcher = watchChanges(api.client, topics, () => refresh('reconnect'), (connection) => { if (current(ticket)) publish({ connection }); }, {
       onChange: event, random, coordinated: true,
       // Overview polling compares head ids, so unchanged conversations download nothing.
       fallbackMs: options.fallbackMs ?? 5000, onPoll: () => refresh('poll'),

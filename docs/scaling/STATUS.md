@@ -67,3 +67,43 @@ Decisions:
 - **The polling state is `polling`.** Existing UI already treats anything other than `connected` as not live: muted dot and "Reconnecting…" subtitle. The full-width "Reconnecting…" banner shows only for `reconnecting`, so a refused client keeps working without a scary banner. No new screens.
 - **Design system.** The DesignSystem-v2 artifact was read. The only visible change is copy inside the existing failed-message line (`message-failed` and `colors.danger`); no new styles or tokens.
 - **What polling reads.** Polling calls the store's overview refresh, not the reconnect validation. Conversations whose head ids did not change download nothing (`store.test.mjs` asserts overview-only calls).
+
+## Phase 3: Realtime on private Broadcast
+
+| Acceptance item | Status | Evidence |
+| --- | --- | --- |
+| A message insert broadcasts to `group:<id>` | PASS | `scaling-assertions.sql`: one private `change` event with `{table, type, id, group_id}`. A check confirms the body is never in the payload. |
+| Direct and friendship changes reach `user:<id>` topics | PASS | Same file: a DM reaches only both users' topics, and friendship insert or update reaches both users. Joins reach `user:<joiner>` and `group:<id>`. Profile edits reach the user, their current groups and their friends. |
+| Expired members and non-members are denied | PASS | Same file (`pg_temp.can_join` simulates the Realtime join check: a SELECT on `realtime.messages` with `realtime.topic()` set). Denied: an expired member, even before the cron cleanup, and a non-member. A mutation check made it fail as expected. |
+| A user cannot subscribe to another user's topic | PASS | Same file. Malformed topics, unknown kinds, and client inserts (sending) are also denied. |
+| One socket carrying multiple private channels | PASS | `realtime.test.mjs` ("one private broadcast channel per topic…"): each topic is a `private: true` channel on the same Supabase client (supabase-js multiplexes channels over one WebSocket), capped at 100. `store.test.mjs`: joining a group adds one channel and the others stay joined. |
+| Events trigger the coalesced refresh | PASS | `store.test.mjs` "message bursts…" (two events lead to one `group:ids` read) and "topic joins reconcile the startup gap…". |
+| Fallback still works | PASS | `realtime.test.mjs` refusal and drop tests, and `store.test.mjs` "realtime refusal polls the overview…", now on Broadcast channels. |
+| Cleanup SQL exists outside the default apply order | PASS | `supabase/deferred/20261012140000_drop_postgres_changes_publication.sql` sits outside `supabase/migrations/`. The SQL test shows Phase 3 keeps the 4-table publication and the deferred file empties it (re-runnable). |
+| Index changes listed | PASS | See "Indexes" below. |
+| `pnpm check`, `test:sql`, `web build` | PASS | `pnpm check` exit 0 (api 65, web 55, mobile 103). "All scaling assertions passed". The route table is unchanged. |
+| Live Broadcast delivery | BLOCKED | Needs the owner to apply file 4. Then run `pnpm --filter @qr-chat/api test:integration` (its realtime test now uses `topic('group', …)`) and the benchmark. |
+
+Decisions:
+- **`realtime.send` with id-only payloads instead of `realtime.broadcast_changes`.**
+  - `broadcast_changes` ships the whole row (message bodies up to 4,000 characters) to every subscriber.
+  - Clients only use ids and refetch through RLS, so id-only payloads cut Realtime egress.
+  - They also mean an authorization cached at channel join can never leak content after membership ends. Realtime re-checks only on rejoin or token refresh.
+- **Fewer broadcasts.**
+  - Message deletes are not broadcast. Clients cannot delete; server deletes (empty group, retention, block) are reconciled by the next overview.
+  - Member-change broadcasts skip groups above 300 members (`c_busy_room_members`). Each one made every member refetch the overview, a thundering herd in big rooms. Member lists there update on the 120s safety refresh or the member's own actions.
+  - Own-membership events always go to `user:<id>`.
+- **Profiles** no longer need per-person subscriptions: edits reach `group:<id>` and `user:<friend>`.
+- **Channel reuse.** realtime-js returns an existing channel object for a topic that is still closing. The watcher diffs topics (`update()`) instead of recreating channels, and waits for a closing channel before rejoining the same topic.
+- **Indexes.** No new index was needed for Phase 3. Every hot lookup is covered by an existing index:
+
+  | Lookup | Index |
+  | --- | --- |
+  | Messages by group and id, including DMs (a DM is a group) | `messages_group_id_id_idx (group_id, id)` |
+  | Memberships by user, `can_receive_topic` | `group_members_pkey (user_id, group_id)` |
+  | Members by group, including the busy-room count | `group_members_group_id_idx` |
+  | Friendships by user | `unique (user_a_id, user_b_id)` and `friendships_user_b_id_idx` |
+  | Friendship by DM group | `friendships_pkey (group_id)` |
+
+  Phase 2 added `messages_sender_id_created_at_idx` (rate limits) and `qr_join_log_user_id_joined_at_idx`. The daily retention delete scans `messages` by `created_at` with no index, which is acceptable once a day. Add an index only if it shows up in slow queries.
+- **Deploy order matters.** Apply the SQL before deploying clients. Until the policy exists, private joins are refused and new clients run on 5s polling, so they keep working, just less live.

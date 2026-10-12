@@ -5,3 +5,5 @@
 \ir ../../../../supabase/migrations/20261012110000_group_message_retention.sql
 \ir ../../../../supabase/migrations/20261012120000_rate_limits.sql
 \ir ../../../../supabase/migrations/20261012120000_rate_limits.sql
+\ir ../../../../supabase/migrations/20261012130000_realtime_broadcast.sql
+\ir ../../../../supabase/migrations/20261012130000_realtime_broadcast.sql

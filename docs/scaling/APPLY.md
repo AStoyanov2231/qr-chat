@@ -10,10 +10,20 @@ Run the SQL files in the Supabase SQL editor **in this order**, each in one go. 
 | 1 | `20261012100000_join_returns_group_name.sql` | `join_qr_group(text)` also returns `name`, so clients skip `/api/qr-name` for named groups. | Re-run the `join_qr_group` part of `20261011150000_server_owned_group_metadata.sql` after `drop function public.join_qr_group(text); drop function private.join_qr_group(text);`. |
 | 2 | `20261012110000_group_message_retention.sql` | Adds `private.delete_old_group_messages()` and a daily pg_cron job, `delete-old-group-messages` (03:17 UTC), that deletes QR group messages older than 30 days. Direct messages are never touched. **Optional:** skip it to keep full history in active groups. | `select cron.unschedule('delete-old-group-messages'); drop function private.delete_old_group_messages();` |
 | 3 | `20261012120000_rate_limits.sql` | Message limit (30/min per user), slow mode (above 300 members, 1 message per 5s), join limit (60/hour, `private.qr_join_log`), and the index `messages_sender_id_created_at_idx` replacing `messages_sender_id_idx`. | `drop trigger limit_message_rate on public.messages; drop function private.limit_message_rate();` then re-run file 1 to restore `join_qr_group` without the limit, `drop table private.qr_join_log;`, `create index messages_sender_id_idx on public.messages(sender_id);` |
+| 4 | `20261012130000_realtime_broadcast.sql` | Private Broadcast: `private.can_receive_topic` plus the policy `qr_chat_receive_topics` on `realtime.messages`, and id-only broadcast triggers on `messages` (insert), `group_members`, `friendships` and `profiles`. The publication is left as is for installed apps. | `drop trigger broadcast_message on public.messages; drop trigger broadcast_membership on public.group_members; drop trigger broadcast_friendship on public.friendships; drop trigger broadcast_profile on public.profiles; drop policy qr_chat_receive_topics on realtime.messages;` then drop the `private.broadcast*` and `private.can_receive_topic` functions. Old clients keep working on Postgres Changes. |
+
+**Order:** apply files 1–4, *then* deploy the web app and ship the mobile release. Clients built from this branch fall back to 5s polling until file 4 exists, so a mismatch slows updates but breaks nothing.
+
+### Deferred cleanup (not in the order above)
+
+`supabase/deferred/20261012140000_drop_postgres_changes_publication.sql` removes `profiles`, `group_members`, `messages` and `friendships` from the `supabase_realtime` publication.
+- **When it's safe:** only after every installed mobile build includes Phase 3 (force-update or retire older versions). Older builds subscribe with Postgres Changes and stop receiving live updates once it runs; they still refresh every 120s.
+- **Rollback:** the command is in the file header.
 
 ## 2. Dashboard settings
 
 - **Vercel → Project → Settings → Deployment Retention**: keep about 30 days of deployments.
+- **Supabase → Realtime → Settings**: Broadcast authorization uses the RLS policy from file 4. Optionally turn **off** "Allow public access" so only private channels are accepted; clients from this branch only use private channels. Leave it on until the deferred cleanup if you're unsure. Old builds use Postgres Changes, which this setting does not govern, but check after flipping.
 - **Supabase → Database → Extensions**: confirm `pg_cron` is enabled. It already runs `expire-qr-memberships` every minute; file 2 adds one more job.
 
 ## 3. After applying: deploy and smoke test

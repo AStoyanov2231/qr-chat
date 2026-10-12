@@ -171,4 +171,117 @@ begin
 end;
 $test$;
 
+-- Phase 3: Broadcast triggers send id-only events to private topics.
+do $test$
+declare
+  a uuid := pg_temp.new_user();
+  b uuid := pg_temp.new_user();
+  room uuid;
+  busy uuid;
+  dm uuid;
+  message_id bigint;
+  sent jsonb;
+begin
+  delete from realtime.messages;
+  perform set_config('request.jwt.claim.sub', a::text, true);
+  execute 'set local role authenticated';
+  select group_id into room from public.join_qr_group('broadcast-room');
+  execute 'reset role';
+  assert (select count(*) = 1 from realtime.messages where topic = 'user:' || a and payload->>'table' = 'group_members'), 'a join reaches the joiner''s user topic';
+  assert (select count(*) = 1 from realtime.messages where topic = 'group:' || room and payload->>'table' = 'group_members'), 'a join reaches the group topic';
+
+  delete from realtime.messages;
+  perform set_config('request.jwt.claim.sub', a::text, true);
+  execute 'set local role authenticated';
+  insert into public.messages(group_id, sender_id, body) values (room, a, 'secret body') returning id into message_id;
+  execute 'reset role';
+  select payload into sent from realtime.messages where topic = 'group:' || room;
+  assert sent = jsonb_build_object('table', 'messages', 'type', 'INSERT', 'id', message_id, 'group_id', room), 'a group message broadcasts its ids to group:<id>';
+  assert (select count(*) = 1 from realtime.messages), 'a group message sends exactly one broadcast';
+  assert not exists (select 1 from realtime.messages where payload::text like '%secret body%'), 'payloads never carry message bodies';
+  assert (select bool_and(event = 'change' and private and extension = 'broadcast') from realtime.messages), 'broadcasts are private change events';
+
+  insert into public.groups(code_key) values (null) returning id into dm;
+  delete from realtime.messages;
+  insert into public.friendships(group_id, user_a_id, user_b_id, requested_by_id) select dm, least(a, b), greatest(a, b), a;
+  assert (select array_agg(topic order by topic) = array['user:' || least(a, b), 'user:' || greatest(a, b)] from realtime.messages), 'a friendship change reaches both users';
+  update public.friendships set accepted_at = now() where group_id = dm;
+  delete from realtime.messages;
+  perform set_config('request.jwt.claim.sub', b::text, true);
+  execute 'set local role authenticated';
+  insert into public.messages(group_id, sender_id, body) values (dm, b, 'direct');
+  execute 'reset role';
+  assert (select array_agg(topic order by topic) = array['user:' || least(a, b), 'user:' || greatest(a, b)] from realtime.messages), 'a direct message reaches both user topics only';
+
+  delete from realtime.messages;
+  update public.profiles set display_name = 'Alice' where id = a;
+  assert (select array_agg(topic order by topic) = array(select unnest(array['group:' || room, 'user:' || a, 'user:' || b]) order by 1) from realtime.messages), 'a profile edit reaches the user, their groups and their friends';
+  delete from realtime.messages;
+  update public.profiles set created_at = created_at where id = a;
+  assert (select count(*) = 0 from realtime.messages), 'a profile write that changes nothing visible is silent';
+
+  insert into public.groups(code_key) values ('busy-broadcast') returning id into busy;
+  insert into public.group_members(user_id, group_id) select pg_temp.new_user(), busy from generate_series(1, 301);
+  delete from realtime.messages;
+  insert into public.group_members(user_id, group_id) values (b, busy);
+  assert (select array_agg(topic) = array['user:' || b] from realtime.messages), 'busy rooms skip the member-change fan-out';
+end;
+$test$;
+
+-- Phase 3: topic authorization (the Realtime server checks SELECT on realtime.messages at channel join).
+create function pg_temp.can_join(p_user uuid, p_topic text) returns boolean language plpgsql as $$
+declare visible boolean;
+begin
+  insert into realtime.messages(topic, extension, event, payload) values (p_topic, 'broadcast', 'probe', '{}');
+  perform set_config('request.jwt.claim.sub', p_user::text, true);
+  perform set_config('realtime.topic', p_topic, true);
+  execute 'set local role authenticated';
+  select exists (select 1 from realtime.messages where topic = p_topic) into visible;
+  execute 'reset role';
+  delete from realtime.messages where event = 'probe';
+  return visible;
+end;
+$$;
+do $test$
+declare
+  member uuid := pg_temp.new_user();
+  expired uuid := pg_temp.new_user();
+  outsider uuid := pg_temp.new_user();
+  room uuid;
+  denied boolean := false;
+begin
+  insert into public.groups(code_key) values ('auth-room') returning id into room;
+  insert into public.group_members(user_id, group_id, joined_at) values (member, room, now()), (expired, room, now() - interval '25 hours');
+  assert pg_temp.can_join(member, 'group:' || room), 'a current member can join the group topic';
+  assert not pg_temp.can_join(expired, 'group:' || room), 'an expired member is denied before cleanup runs';
+  assert not pg_temp.can_join(outsider, 'group:' || room), 'a non-member is denied';
+  assert pg_temp.can_join(member, 'user:' || member), 'a user can join their own topic';
+  assert not pg_temp.can_join(outsider, 'user:' || member), 'a user cannot join another user''s topic';
+  assert not pg_temp.can_join(member, 'group:not-a-uuid'), 'malformed topics are denied';
+  assert not pg_temp.can_join(member, 'chat:' || room), 'unknown topic kinds are denied';
+  perform set_config('request.jwt.claim.sub', member::text, true);
+  perform set_config('realtime.topic', 'group:' || room, true);
+  execute 'set local role authenticated';
+  begin
+    insert into realtime.messages(topic, extension, event, payload) values ('group:' || room, 'broadcast', 'change', '{}');
+  exception when insufficient_privilege then denied := true;
+  end;
+  execute 'reset role';
+  assert denied, 'clients cannot send on chat topics';
+end;
+$test$;
+
+do $test$
+begin
+  assert (select count(*) = 4 from pg_publication_tables where pubname = 'supabase_realtime'), 'Phase 3 keeps the publication for installed apps';
+end;
+$test$;
+\ir ../../../../supabase/deferred/20261012140000_drop_postgres_changes_publication.sql
+\ir ../../../../supabase/deferred/20261012140000_drop_postgres_changes_publication.sql
+do $test$
+begin
+  assert (select count(*) = 0 from pg_publication_tables where pubname = 'supabase_realtime'), 'the deferred cleanup empties the publication and is re-runnable';
+end;
+$test$;
+
 select 'All scaling assertions passed' as result;

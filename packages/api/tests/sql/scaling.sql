@@ -27,7 +27,7 @@ create function cron.unschedule(job_name text) returns boolean language sql as $
 $$;
 insert into cron.job(jobname, schedule, command) values ('expire-qr-memberships', '* * * * *', 'select private.expire_qr_memberships()');
 
--- Supabase Realtime stand-in: broadcast_changes stores the message the Realtime server would deliver.
+-- Supabase Realtime stand-in: realtime.send stores the broadcast the Realtime server would deliver.
 -- realtime.topic() reads the topic the server sets while it authorizes a channel join.
 create schema realtime;
 create table realtime.messages(
@@ -35,13 +35,9 @@ create table realtime.messages(
   private boolean default true, inserted_at timestamptz not null default now()
 );
 create function realtime.topic() returns text language sql stable as $$ select nullif(current_setting('realtime.topic', true), ''); $$;
-create function realtime.broadcast_changes(topic_name text, event_name text, operation text, table_name text, table_schema text, new record, old record, level text default 'ROW')
-returns void language plpgsql security definer as $$
-begin
-  insert into realtime.messages(topic, extension, event, payload, private)
-  values (topic_name, 'broadcast', event_name, jsonb_build_object('operation', operation, 'table', table_name, 'schema', table_schema,
-    'record', case when new is null then null else to_jsonb(new) end, 'old_record', case when old is null then null else to_jsonb(old) end), true);
-end;
+create function realtime.send(payload jsonb, event text, topic text, private boolean default true)
+returns void language sql security definer as $$
+  insert into realtime.messages(topic, extension, event, payload, private) values (topic, 'broadcast', event, payload, private);
 $$;
 grant usage on schema realtime to authenticated, anon;
 grant select, insert on realtime.messages to authenticated;
