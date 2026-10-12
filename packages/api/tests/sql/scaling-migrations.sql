@@ -7,5 +7,7 @@
 \ir ../../../../supabase/migrations/20261012120000_rate_limits.sql
 \ir ../../../../supabase/migrations/20261012130000_realtime_broadcast.sql
 \ir ../../../../supabase/migrations/20261012130000_realtime_broadcast.sql
+\ir ../../../../supabase/migrations/20261013100000_membership_broadcast_expired_only.sql
+\ir ../../../../supabase/migrations/20261013100000_membership_broadcast_expired_only.sql
 \ir ../../../../supabase/migrations/20261012150000_products_cache.sql
 \ir ../../../../supabase/migrations/20261012150000_products_cache.sql

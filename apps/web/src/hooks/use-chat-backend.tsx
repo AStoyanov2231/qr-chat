@@ -27,32 +27,31 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let checked = false;
     let stopped = false;
+    const signIn = () => {
+      flushSync(() => setSignedOut(true));
+      window.location.replace(signInPath(window.location.pathname, window.location.search));
+    };
+    // The app shell is static, so the signed-out guard runs here from the stored session.
+    // An error means the session could not be refreshed yet (e.g. offline): nothing starts, and the
+    // next online/visibility event or auth event checks again. auth-js emits SIGNED_OUT if it is gone.
+    const check = () => value.api.client.auth.getSession().then(({ data, error }) => {
+      if (stopped || checked) return;
+      if (data.session) { checked = true; activity(); }
+      else if (!error) signIn();
+    });
     const activity = () => {
-      if (!checked || stopped) return;
+      if (stopped) return;
+      if (!checked) { void check(); return; }
       if (document.hidden || !navigator.onLine) value.store.pause();
       else void value.store.start();
     };
-    // The app shell is static, so the signed-out guard runs here from the stored session.
-    void value.api.client.auth.getSession().then(({ data, error }) => {
-      if (stopped) return;
-      // An error means the stored session could not be refreshed yet (e.g. offline); auth-js keeps it and
-      // emits SIGNED_OUT if it is really gone, so only a missing session redirects here.
-      if (!data.session && !error) {
-        flushSync(() => setSignedOut(true));
-        window.location.replace(signInPath(window.location.pathname, window.location.search));
-        return;
-      }
-      checked = true;
-      activity();
-    });
+    activity();
     window.addEventListener("online", activity);
     window.addEventListener("offline", activity);
     document.addEventListener("visibilitychange", activity);
-    const { data } = value.api.client.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") {
-        flushSync(() => setSignedOut(true));
-        window.location.replace("/sign-in");
-      }
+    const { data } = value.api.client.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") signIn();
+      else if (session && !checked && !stopped) { checked = true; activity(); }
     });
     return () => {
       stopped = true;
