@@ -2,7 +2,7 @@
 
 Everything here is for you (the owner) to run. The branch changed only code and local files.
 Run the SQL files in the Supabase SQL editor **in this order**, each in one go. Every file is safe to re-run.
-Shortcut: `supabase/APPLY_ALL.sql` is files 1–5 concatenated in order (tested end to end, twice in a row). It does **not** include the deferred cleanup.
+Shortcut: `supabase/APPLY_ALL.sql` is files 1–6 concatenated in order (tested end to end, twice in a row). It does **not** include the deferred cleanup.
 The `messages` index in file 3 is built without `CONCURRENTLY` (the editor runs a transaction), so it briefly blocks message inserts. That's fine at today's size.
 
 ## 1. Migrations (in order)
@@ -14,8 +14,9 @@ The `messages` index in file 3 is built without `CONCURRENTLY` (the editor runs 
 | 3 | `20261012120000_rate_limits.sql` | Message limit (30/min per user), slow mode (above 300 members, 1 message per 5s), join limit (60/hour, `private.qr_join_log`), and the index `messages_sender_id_created_at_idx` replacing `messages_sender_id_idx`. | `drop trigger limit_message_rate on public.messages; drop function private.limit_message_rate();` then re-run file 1 to restore `join_qr_group` without the limit, `drop table private.qr_join_log;`, `create index messages_sender_id_idx on public.messages(sender_id);` |
 | 4 | `20261012130000_realtime_broadcast.sql` | Private Broadcast: `private.can_receive_topic` plus the policy `qr_chat_receive_topics` on `realtime.messages`, and id-only broadcast triggers on `messages` (insert), `group_members`, `friendships` and `profiles`. The publication is left as is for installed apps. | `drop trigger broadcast_message on public.messages; drop trigger broadcast_membership on public.group_members; drop trigger broadcast_friendship on public.friendships; drop trigger broadcast_profile on public.profiles; drop policy qr_chat_receive_topics on realtime.messages;` then drop the `private.broadcast*` and `private.can_receive_topic` functions. Old clients keep working on Postgres Changes. |
 | 5 | `20261012150000_products_cache.sql` | Server-only `public.products` cache (GTIN, name, photo path, not-found flag, fetch time), and `groups_image_path_check` now also accepts shared product photos `p/<gtin>.jpg`. | `drop table public.products;` then restore the old check: `alter table public.groups drop constraint groups_image_path_check, add constraint groups_image_path_check check (image_path ~ '^[0-9a-f-]{36}\.jpg$');` (fails if any group already uses a `p/` photo; clear those first). |
+| 6 | `20261013100000_membership_broadcast_expired_only.sql` | Member-change broadcasts are skipped only for expired rows (the per-minute expiry job). Service-role deletes, such as account deletion, notify the group again. **If you already applied files 1–5, run just this file.** | Re-run the `broadcast_membership` function from file 4. |
 
-**Order:** apply files 1–5, *then* deploy the web app and ship the mobile release. Clients built from this branch fall back to 5s polling until file 4 exists, so a mismatch slows updates but breaks nothing.
+**Order:** apply files 1–6, *then* deploy the web app and ship the mobile release. Clients built from this branch fall back to 5s polling until file 4 exists, so a mismatch slows updates but breaks nothing.
 
 ### Deferred cleanup (not in the order above)
 

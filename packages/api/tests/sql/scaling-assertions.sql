@@ -234,6 +234,15 @@ begin
   perform public.leave_qr_group(room);
   execute 'reset role';
   assert (select count(*) = 2 from realtime.messages where payload->>'type' = 'DELETE'), 'a user leaving still reaches their topic and the group';
+  -- A delete without a user that is not an expiry (account deletion cascading to group_members) still notifies.
+  perform set_config('request.jwt.claim.sub', a::text, true);
+  execute 'set local role authenticated';
+  perform public.join_qr_group('broadcast-room');
+  execute 'reset role';
+  perform set_config('request.jwt.claim.sub', '', true);
+  delete from realtime.messages;
+  delete from public.group_members where user_id = a and group_id = room;
+  assert (select count(*) = 2 from realtime.messages where payload->>'type' = 'DELETE'), 'service-role deletes of live memberships still reach the group';
 
   insert into public.groups(code_key) values ('busy-broadcast') returning id into busy;
   insert into public.group_members(user_id, group_id) select pg_temp.new_user(), busy from generate_series(1, 301);

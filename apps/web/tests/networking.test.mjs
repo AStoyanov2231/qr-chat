@@ -179,7 +179,7 @@ test('web session host pauses on hidden/offline, resumes once and removes lifecy
   t.after(()=>{for(const [name,descriptor] of Object.entries(previous)) {if(descriptor) Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
   Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener:listen,removeEventListener:remove},configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
-  Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener:remove,location:{replace(path){assert.equal(revoked,true,"Access must be revoked before redirect");assert.equal(path,"/sign-in");}}},configurable:true});
+  Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener:remove,location:{pathname:'/profile',search:'',replace(path){assert.equal(revoked,true,"Access must be revoked before redirect");assert.equal(path,"/sign-in?next=%2Fprofile","sign-out keeps the destination");}}},configurable:true});
   const api={client:{auth:{getSession:async()=>({data:{session:{}}}),onAuthStateChange:fn=>{authListener=fn;return {data:{subscription:{unsubscribe(){authCleaned=true;}}}};}}}};
   const store={async start(){if(!active){active=true;starts++;}},pause(){if(active){active=false;pauses++;}},dispose(){disposed=true;}};
   const { ChatSessionProvider }=await load('../src/hooks/use-chat-backend.tsx',{
@@ -222,32 +222,47 @@ test('the static app shell sends a signed-out visitor to sign-in with their dest
 });
 
 
-test('a session that cannot refresh while offline keeps the user in the app instead of sending them to sign-in', async t => {
-  const effects=[];let starts=0;let redirected=false;
+test('a session that cannot refresh while offline waits, then starts once auth recovers, without sending the user to sign-in', async t => {
+  const effects=[];const events=new Map();let starts=0;let redirected=false;let authListener;
+  let session=async()=>({data:{session:null},error:new Error('AuthRetryableFetchError: Failed to fetch')});
+  const listen=(name,fn)=>events.set(name,fn);
   const previous = Object.fromEntries(['document','navigator','window'].map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
   t.after(()=>{for(const [name,descriptor] of Object.entries(previous)) {if(descriptor) Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
-  Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener(){},removeEventListener(){}},configurable:true});
+  Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener:listen,removeEventListener(){}},configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
-  Object.defineProperty(globalThis,'window',{value:{addEventListener(){},removeEventListener(){},location:{pathname:'/',search:'',replace(){redirected=true;}}},configurable:true});
-  const api={client:{auth:{getSession:async()=>({data:{session:null},error:new Error('AuthRetryableFetchError: Failed to fetch')}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})}}};
-  const { ChatSessionProvider }=await load('../src/hooks/use-chat-backend.tsx',{
+  Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener(){},location:{pathname:'/',search:'',replace(){redirected=true;}}},configurable:true});
+  const api={client:{auth:{getSession:()=>session(),onAuthStateChange:fn=>{authListener=fn;return {data:{subscription:{unsubscribe(){}}}};}}}};
+  const load2=async()=>(await load('../src/hooks/use-chat-backend.tsx',{
     react:{createContext:()=>({}),useState:fn=>typeof fn === "function" ? [fn()] : [false,()=>{}],useEffect:fn=>effects.push(fn)},
     'react/jsx-runtime':{jsx:()=>({protected:true})},
     'react-dom':{flushSync:fn=>fn()},
     '@qr-chat/api':{createChatApi:()=>api,getChatStore:()=>({async start(){starts++;},pause(){},dispose(){}})},
     '@/lib/supabase/client':{createClient:()=>api.client},
     '@/lib/auth/redirect':await import('../src/lib/auth/redirect.ts'),
-  });
-  ChatSessionProvider({children:null});effects[0]();await new Promise(resolve=>setImmediate(resolve));
+  })).ChatSessionProvider;
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  (await load2())({children:null});effects[0]();await flush();
   assert.equal(redirected,false,'a refresh failure is not a sign-out');
-  assert.equal(starts,1,'the store starts and shows its own connection error until auth recovers');
+  assert.equal(starts,0,'nothing starts without a session');
+  // Network back: the next online event checks again and starts the store.
+  session=async()=>({data:{session:{user:{id:'me'}}},error:null});
+  events.get('online')();await flush();
+  assert.equal(starts,1,'recovers on the next online event');
+  // An auth event can also recover a provider that is still waiting.
+  effects.length=0;starts=0;session=async()=>({data:{session:null},error:new Error('offline')});
+  (await load2())({children:null});effects[0]();await flush();
+  assert.equal(starts,0);
+  authListener('TOKEN_REFRESHED',{user:{id:'me'}});await flush();
+  assert.equal(starts,1,'recovers when auth-js refreshes the token');
+  assert.equal(redirected,false);
 });
 
 test('malformed barcodes never reach Open Food Facts, the cache or storage', async (t) => {
-  const db = fakeDb([activeMember()]);
+  const db = fakeDb([activeMember(), activeMember()]);
   const { resolveGroup, restore } = await loadResolver(db, []);
   t.after(restore);
   assert.equal(await resolveGroup('user-1', 'gtin:../../avatars/x'), null);
+  assert.equal(await resolveGroup('user-1', 'gtin:12345678'), null, 'only scanner-normalized GTIN-13 keys are looked up');
   assert.deepEqual(db.log.filter(([table]) => table !== 'group_members'), []);
 });
 
