@@ -67,7 +67,9 @@ test('update joins new topics and leaves dropped ones without touching the rest'
   const watcher = watchChanges(client, [topic('user', me), topic('group', id)], async () => { reads++; }, (state) => states.push(state), { coordinated: true });
   client.channels.forEach(live); await tick();
   const [user, group] = client.channels;
+  const before = states.length;
   watcher.update([topic('user', me), topic('group', other)]);
+  assert.ok(!states.slice(before).includes('connecting'), 'joining one more topic does not flash a reconnect');
   assert.equal(group.removed, true, 'the dropped group is left');
   assert.equal(user.removed, undefined, 'the user channel stays');
   const added = client.channels.at(-1);

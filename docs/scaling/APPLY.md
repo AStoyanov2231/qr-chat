@@ -2,6 +2,8 @@
 
 Everything here is for you (the owner) to run. The branch changed only code and local files.
 Run the SQL files in the Supabase SQL editor **in this order**, each in one go. Every file is safe to re-run.
+Shortcut: `supabase/APPLY_ALL.sql` is files 1–5 concatenated in order (tested end to end, twice in a row). It does **not** include the deferred cleanup.
+The `messages` index in file 3 is built without `CONCURRENTLY` (the editor runs a transaction), so it briefly blocks message inserts. That's fine at today's size.
 
 ## 1. Migrations (in order)
 

@@ -220,6 +220,21 @@ begin
   update public.profiles set created_at = created_at where id = a;
   assert (select count(*) = 0 from realtime.messages), 'a profile write that changes nothing visible is silent';
 
+  update public.group_members set joined_at = now() - interval '25 hours' where user_id = a and group_id = room;
+  delete from realtime.messages;
+  perform set_config('request.jwt.claim.sub', '', true);  -- pg_cron runs without a user
+  perform private.expire_qr_memberships();
+  assert (select count(*) = 0 from realtime.messages where payload->>'table' = 'group_members'), 'the cron expiry sends no per-row broadcasts';
+  perform set_config('request.jwt.claim.sub', a::text, true);
+  execute 'set local role authenticated';
+  perform public.join_qr_group('broadcast-room');
+  execute 'reset role';
+  delete from realtime.messages;
+  execute 'set local role authenticated';
+  perform public.leave_qr_group(room);
+  execute 'reset role';
+  assert (select count(*) = 2 from realtime.messages where payload->>'type' = 'DELETE'), 'a user leaving still reaches their topic and the group';
+
   insert into public.groups(code_key) values ('busy-broadcast') returning id into busy;
   insert into public.group_members(user_id, group_id) select pg_temp.new_user(), busy from generate_series(1, 301);
   delete from realtime.messages;

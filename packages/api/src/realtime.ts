@@ -125,7 +125,8 @@ export function watchChanges(
       retry = setTimeout(connect, 250);
       return;
     }
-    if (wanted.some((name) => !channels.has(name))) report(attempt ? "reconnecting" : "connecting");
+    // Joining one more topic next to live ones is not a reconnect; keep the current state.
+    if (!ready.size && wanted.some((name) => !channels.has(name))) report(attempt ? "reconnecting" : "connecting");
     for (const name of wanted) if (!channels.has(name)) open(name);
   }
   // Hosts own the safety scheduler; explicit polling remains for standalone callers.

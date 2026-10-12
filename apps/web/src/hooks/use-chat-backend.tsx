@@ -33,9 +33,11 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
       else void value.store.start();
     };
     // The app shell is static, so the signed-out guard runs here from the stored session.
-    void value.api.client.auth.getSession().then(({ data }) => {
+    void value.api.client.auth.getSession().then(({ data, error }) => {
       if (stopped) return;
-      if (!data.session) {
+      // An error means the stored session could not be refreshed yet (e.g. offline); auth-js keeps it and
+      // emits SIGNED_OUT if it is really gone, so only a missing session redirects here.
+      if (!data.session && !error) {
         flushSync(() => setSignedOut(true));
         window.location.replace(signInPath(window.location.pathname, window.location.search));
         return;

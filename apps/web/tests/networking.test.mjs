@@ -222,6 +222,35 @@ test('the static app shell sends a signed-out visitor to sign-in with their dest
 });
 
 
+test('a session that cannot refresh while offline keeps the user in the app instead of sending them to sign-in', async t => {
+  const effects=[];let starts=0;let redirected=false;
+  const previous = Object.fromEntries(['document','navigator','window'].map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
+  t.after(()=>{for(const [name,descriptor] of Object.entries(previous)) {if(descriptor) Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
+  Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener(){},removeEventListener(){}},configurable:true});
+  Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
+  Object.defineProperty(globalThis,'window',{value:{addEventListener(){},removeEventListener(){},location:{pathname:'/',search:'',replace(){redirected=true;}}},configurable:true});
+  const api={client:{auth:{getSession:async()=>({data:{session:null},error:new Error('AuthRetryableFetchError: Failed to fetch')}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})}}};
+  const { ChatSessionProvider }=await load('../src/hooks/use-chat-backend.tsx',{
+    react:{createContext:()=>({}),useState:fn=>typeof fn === "function" ? [fn()] : [false,()=>{}],useEffect:fn=>effects.push(fn)},
+    'react/jsx-runtime':{jsx:()=>({protected:true})},
+    'react-dom':{flushSync:fn=>fn()},
+    '@qr-chat/api':{createChatApi:()=>api,getChatStore:()=>({async start(){starts++;},pause(){},dispose(){}})},
+    '@/lib/supabase/client':{createClient:()=>api.client},
+    '@/lib/auth/redirect':await import('../src/lib/auth/redirect.ts'),
+  });
+  ChatSessionProvider({children:null});effects[0]();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(redirected,false,'a refresh failure is not a sign-out');
+  assert.equal(starts,1,'the store starts and shows its own connection error until auth recovers');
+});
+
+test('malformed barcodes never reach Open Food Facts, the cache or storage', async (t) => {
+  const db = fakeDb([activeMember()]);
+  const { resolveGroup, restore } = await loadResolver(db, []);
+  t.after(restore);
+  assert.equal(await resolveGroup('user-1', 'gtin:../../avatars/x'), null);
+  assert.deepEqual(db.log.filter(([table]) => table !== 'group_members'), []);
+});
+
 test('transport failures show connection guidance while actionable API and validation errors stay useful', async () => {
   const { errorMessage } = await load('../src/hooks/use-chat-backend.tsx', {
     react: { createContext: () => ({}) },

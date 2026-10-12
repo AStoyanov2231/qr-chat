@@ -134,3 +134,35 @@ Decisions:
 - **`groups_image_path_check` widened** to accept `p/<gtin>.jpg`. Apply file 5 before deploying, or naming a product group fails the check and `/api/qr-name` returns 503 until it is applied.
 - **Transient Open Food Facts failures now return no name instead of a 503.** The client shows the fallback name either way.
 - **The benchmark was already broken against the multi-group store** (`snapshot.group`, `openGroup()` without an id). It is fixed minimally so the new modes can run.
+
+## Independent review and final state
+
+A read-only reviewer subagent went over the full diff and the on-disk SQL. It found no high-severity defects. Fixes made:
+- **A failed token refresh no longer counts as a sign-out.** The web guard redirects only when there is no session *and* no error (`networking.test.mjs`, offline-refresh case).
+- **Joining one more topic no longer flashes "connecting"** (`realtime.test.mjs`).
+- **The per-minute expiry job no longer broadcasts one event per expired row.** Each `realtime.send` is a subtransaction, and clients already refresh at each expiry deadline. User-initiated leaves still broadcast (`scaling-assertions.sql`, with a mutation check).
+- **Malformed `gtin:` codes** never reach Open Food Facts, the cache or storage (`networking.test.mjs`).
+
+Accepted and recorded, not changed:
+- **Polling interval stays at about 5s.** If Realtime refuses everyone at very large scale, polling adds overview load. The RUNBOOK's upgrade trigger (150 peak connections) and quota raise come long before that. Escalating the interval would trade freshness for load; decide after the overflow benchmark.
+- **Polling mode keeps the existing "Reconnecting…" subtitle in conversations.** No new UI was added.
+- **`messages_sender_id_created_at_idx` is built without `CONCURRENTLY`,** because the SQL editor runs files in a transaction. `messages` is small today (72 rows), so the lock is momentary.
+- **The first retention run deletes all old QR history in one statement.** That is small today.
+- **A product cached with a name but no photo** (the photo fetch failed once) stays without a photo.
+
+Final checks (after the review fixes):
+- `pnpm check`: exit 0 (tooling 12, domain 11, api 65, web 62, mobile 103, typecheck, lint)
+- `pnpm --filter @qr-chat/api test:sql`: "All scaling assertions passed"
+  - Also passes with `supabase/APPLY_ALL.sql` applied twice in place of the separate files.
+- `pnpm --filter web build`: `/`, `/profile`, `/sign-in` and `/welcome` are static. Only `/api/qr-name` and `/auth/callback` are functions.
+- `pnpm --filter mobile test` 103 passing, and `pnpm --filter mobile typecheck` is clean.
+
+Not verified live (owner steps in APPLY.md):
+- Realtime capacity
+- Broadcast delivery under load
+- Polling under real quota refusals
+- Production redirects on Vercel
+- Supabase Storage cache headers
+- pg_cron registration on the real project
+
+Next action: the owner applies `supabase/APPLY_ALL.sql` (or files 1–5) to a test project and runs the RUNBOOK benchmarks, then repeats on production and deploys.

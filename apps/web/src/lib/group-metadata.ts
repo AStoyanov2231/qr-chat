@@ -62,6 +62,8 @@ export async function resolveGroup(userId: string, code: string): Promise<string
 
   // A cached product names the group without the hourly claim or an Open Food Facts call.
   const gtin = code.startsWith("gtin:") ? code.slice(5) : null;
+  // Join accepts any code; only real barcodes reach the OFF URL, the cache key and the storage path.
+  if (gtin !== null && !/^\d{8,14}$/u.test(gtin)) return null;
   if (gtin) {
     const { data: cached } = await db.from("products").select("name, image_path, not_found, fetched_at").eq("gtin", gtin).maybeSingle();
     if (cached?.name) return nameGroup(db, group.id, cached.name, cached.image_path);
