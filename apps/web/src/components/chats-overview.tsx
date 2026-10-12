@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { ChatSnapshot } from "@qr-chat/api";
 import { chatRows, directMessagePreview, groupAccessIndicator, groupInitials, messageAge, type Group } from "@qr-chat/domain";
 import { MagnifyingGlass, Prohibit, UserMinus, UserPlus, Users, X } from "@phosphor-icons/react";
@@ -112,7 +113,9 @@ function GroupCard({ group, sessionId, profileName, onOpen }: { group: Group; se
               strokeDashoffset={2 * Math.PI * 33 * (1 - (accessIndicator.progress ?? 0))}
             />
           </svg>
-          <span className="group-initials">{groupInitials(group.venue.name)}</span>
+          {group.venue.imageUrl
+            ? <Image className="group-initials" src={group.venue.imageUrl} alt="" width={52} height={52} unoptimized />
+            : <span className="group-initials">{groupInitials(group.venue.name)}</span>}
         </span>
         <span className={`group-expiry ${accessIndicator.state}`}>{accessIndicator.label}</span>
       </span>

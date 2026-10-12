@@ -9,7 +9,42 @@ import {
   directConversationTime,
   groupInitials,
   resolveQrPageName,
+  scannedCode,
+  groupFallbackName,
+  productGroupName,
 } from '../src/index.ts';
+
+test('retail barcodes normalize to one GTIN-13 key per product; QR codes stay opaque', () => {
+  assert.equal(scannedCode('ean13', '5449000006271'), 'gtin:5449000006271');
+  assert.equal(scannedCode('ean_13', '5449000006271'), 'gtin:5449000006271', 'web BarcodeDetector spelling');
+  assert.equal(scannedCode('upc_a', '049000006278'), 'gtin:0049000006278', 'Android UPC-A matches iOS EAN-13 with a leading 0');
+  assert.equal(scannedCode('ean13', '0049000006278'), 'gtin:0049000006278');
+  assert.equal(scannedCode('ean8', '96385074'), 'gtin:0000096385074');
+  assert.equal(scannedCode('upc_e', '01234565'), 'gtin:0012345000065', 'UPC-E expands to its UPC-A');
+  assert.equal(scannedCode('qr', '5449000006271'), '5449000006271', 'a digits-only QR is not a product');
+  assert.equal(scannedCode('qr_code', 'https://cafe.example/menu'), 'https://cafe.example/menu');
+});
+
+test('unnamed groups get a readable fallback label', () => {
+  assert.equal(groupFallbackName('gtin:5449000006271'), 'Product 5449000006271');
+  assert.equal(groupFallbackName('https://menu.cafe.example/table/4'), 'menu.cafe.example');
+  assert.equal(groupFallbackName('Table 4'), 'Table 4');
+  assert.equal(groupFallbackName('x'.repeat(60)), `${'x'.repeat(39)}…`);
+});
+
+test('product names prefer English and add the brand only when missing', () => {
+  assert.equal(productGroupName({ product_name: 'Fanta Orange', brands: 'Fanta, Coca-Cola' }), 'Fanta Orange');
+  assert.equal(productGroupName({ product_name_en: 'Orange juice', product_name: 'Портокалов сок', brands: 'Cappy' }), 'Cappy Orange juice');
+  assert.equal(productGroupName({ product_name_en: '', product_name: 'Chips', brands: '' }), 'Chips');
+  assert.equal(productGroupName({ brands: 'Fanta' }), 'Fanta');
+  assert.equal(productGroupName({}), null);
+  assert.equal(productGroupName({ product_name: 'x'.repeat(120) }).length, 100);
+  // Real Open Food Facts rows: the brand is the manufacturer and the size sits in the name.
+  assert.equal(productGroupName({ product_name_en: 'fanta Orange 0,33', product_name: 'fanta Orange 0,33', brands: 'COCA-COLA SERVICES SA/NV' }), 'fanta Orange');
+  assert.equal(productGroupName({ product_name_en: '', product_name: 'Fanta orange', brands: 'Fanta' }), 'Fanta orange');
+  assert.equal(productGroupName({ product_name: 'Coca-Cola Zero 1.5 L', brands: 'Coca-Cola' }), 'Coca-Cola Zero');
+  assert.equal(productGroupName({ product_name: 'Water 500ml', brands: 'Devin' }), 'Devin Water');
+});
 
 test('QR handoffs preserve case, unicode, and URL-like opaque keys across clients', () => {
   assert.equal(unwrapQrCode('https://chat.example/chats?code=Room%26A', 'https://chat.example'), 'Room&A');

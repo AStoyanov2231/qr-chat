@@ -1,9 +1,8 @@
 "use client";
 
-import { messageAge, messageDayLabel } from "@qr-chat/domain";
-import type { ChatApi, ChatNameResolution } from "@qr-chat/api";
+import { groupFallbackName, messageAge, messageDayLabel, scannedCode } from "@qr-chat/domain";
+import type { ChatApi } from "@qr-chat/api";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import QrScanner from "qr-scanner";
 import {
   Fragment,
   useEffect,
@@ -55,7 +54,7 @@ function MessageSkeleton() {
 }
 
 type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "blockFriend" | "signOut";
-export type ChatViewApi = Pick<ChatApi, "joinNamedGroup" | "nameCurrentQrChatIfEmpty" | "resolveQrChatName" | "resolveQrChatImage"> & {
+export type ChatViewApi = Pick<ChatApi, "joinGroup" | "resolveGroup"> & {
   [K in PreviewCommands]: (...args: Parameters<ChatApi[K]>) => Promise<unknown>;
 };
 export type ChatViewBackend = Omit<ReturnType<typeof useChatBackend>, "api"> & { api: ChatViewApi };
@@ -95,8 +94,6 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const [sidebar, setSidebar] = useState(false);
   const [active, setActive] = useState<Venue | null>(null);
   const [pending, setPending] = useState<Venue | null>(null);
-  const [chatNameDraftState, setChatNameDraftState] = useState<{ code: string; value: string } | null>(null);
-  const [nameLookup, setNameLookup] = useState<{ code: string; result: ChatNameResolution | null } | null>(null);
   const [entry, setEntry] = useState(false);
   const [draft, setDraft] = useState("");
   const outbox = useOutbox();
@@ -157,30 +154,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const latestDirectMessageId = direct.messages.at(-1)?.id;
   const groupOutbox = active ? outbox.visible(`g:${active.id}`, group?.messages.map((message) => message.id) ?? []) : [];
   const directOutbox = directId ? outbox.visible(`d:${directId}`, direct.messages.map((message) => message.id)) : [];
-  const pendingCode = pending?.codes[0] ?? null;
-  const chatNameDraft = chatNameDraftState?.code === pendingCode ? chatNameDraftState.value : "";
-  const pendingNameResult = nameLookup?.code === pendingCode ? nameLookup.result : null;
-  const findingChatName = pendingCode !== null && pendingNameResult === null;
-  const suggestedChatName = pendingNameResult?.kind === "saved" || pendingNameResult?.kind === "suggested"
-    ? pendingNameResult.name
-    : null;
-  const chosenChatName = pendingNameResult?.kind === "missing" ? chatNameDraft.trim() : suggestedChatName;
-  // Named chats join straight from the camera; the form only appears when a name is needed or joining failed.
-  const joinForm = !!pending && (pendingNameResult?.kind === "missing" || !!error);
-
-  const hasSession = !!session;
-  const autoJoin = useEffectEvent((name: string) => join(name));
-
-  useEffect(() => {
-    if (!pendingCode || !hasSession || !ready) return;
-    const controller = new AbortController();
-    void api.resolveQrChatName(pendingCode, controller.signal).then((result) => {
-      if (controller.signal.aborted) return;
-      setNameLookup({ code: pendingCode, result });
-      if (result.kind !== "missing") autoJoin(result.name);
-    }, () => { if (!controller.signal.aborted) setNameLookup({ code: pendingCode, result: { kind: "missing" } }); });
-    return () => controller.abort();
-  }, [api, pendingCode, hasSession, ready]);
+  const groupTitle = group?.venue.name ?? active?.name ?? "";
 
   async function perform(action: () => Promise<void>) {
     if (busyRef.current) return;
@@ -201,17 +175,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       accepted = true;
 
       const current = groups.find((item) => item.venue.codes[0] === venue.codes[0]);
-      if (current) {
-        if (current.venue.nameMissing) {
-          setPending(current.venue);
-          setChatNameDraftState({ code: venue.codes[0], value: "" });
-        } else {
-          dismissEntry(() => openConversation(current.venue));
-        }
-      } else {
-        setPending(venue);
-        setChatNameDraftState({ code: venue.codes[0], value: "" });
-      }
+      if (current && !current.venue.nameMissing) dismissEntry(() => openConversation(current.venue));
+      else join(current?.venue ?? venue, !!current);
     } catch {
       setNotice("Could not complete this action. Please try again.");
     }
@@ -280,36 +245,40 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
     let disposed = false;
     let paintFrame = 0;
+    let scanTimer = 0;
     let videoFrame: number | undefined;
+    let stream: MediaStream | null = null;
     const previewVideo = video.current;
-    const scanner = new QrScanner(
-      previewVideo,
-      (result) => {
-        if (disposed || !entryRequested.current || scanLocked.current) return;
-        scanLocked.current = true;
-        const accepted = openScannedCode(result.data);
-        if (!accepted) {
-          window.setTimeout(() => {
-            if (!disposed && entryRequested.current) scanLocked.current = false;
-          }, 1200);
+    // The first code in view wins, QR or retail barcode alike; there is no scan mode.
+    const scan = async (detector: { detect(source: HTMLVideoElement): Promise<{ format: string; rawValue: string }[]> }) => {
+      if (previewVideo.readyState >= 2 && entryRequested.current && !scanLocked.current) {
+        const [found] = await detector.detect(previewVideo).catch(() => []);
+        if (found && !disposed && entryRequested.current && !scanLocked.current) {
+          scanLocked.current = true;
+          if (!openScannedCode(scannedCode(found.format, found.rawValue))) {
+            window.setTimeout(() => {
+              if (!disposed && entryRequested.current) scanLocked.current = false;
+            }, 1200);
+          }
         }
-      },
-      {
-        preferredCamera: "environment",
-        maxScansPerSecond: 12,
-        highlightScanRegion: false,
-        highlightCodeOutline: false,
-        returnDetailedScanResult: true,
-      },
-    );
+      }
+      if (!disposed) scanTimer = window.setTimeout(() => void scan(detector), 1000 / 12);
+    };
 
     setCameraState("starting");
     setCameraError("");
     scanLocked.current = false;
-    scanner
-      .start()
-      .then(() => {
+    Promise.all([
+      Promise.resolve().then(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })),
+      import("barcode-detector/ponyfill"),
+    ])
+      .then(async ([media, { BarcodeDetector }]) => {
+        stream = media;
+        if (disposed) { media.getTracks().forEach((track) => track.stop()); return; }
+        previewVideo.srcObject = media;
+        await previewVideo.play();
         if (disposed) return;
+        void scan(new BarcodeDetector({ formats: ["qr_code", "ean_13", "ean_8", "upc_a", "upc_e"] }));
         // Let WebKit commit the first camera frame at its final cover size.
         const reveal = () => {
           if (disposed) return;
@@ -333,9 +302,10 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     const stop = () => {
       disposed = true;
       window.cancelAnimationFrame(paintFrame);
+      window.clearTimeout(scanTimer);
       if (videoFrame !== undefined) previewVideo.cancelVideoFrameCallback(videoFrame);
-      void scanner.pause(true);
-      scanner.destroy();
+      stream?.getTracks().forEach((track) => track.stop());
+      previewVideo.srcObject = null;
     };
     stopCamera.current = stop;
     return () => {
@@ -437,21 +407,18 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     });
   }
 
-  function join(chatName = chosenChatName) {
-    if (!pending || !session || !ready || !chatName) return;
+  /** Joins (unless already a member), then lets the server fill the name and photo before the room opens. */
+  function join(venue: Venue, member: boolean) {
+    if (!session || !ready) return;
+    setPending(venue);
     void perform(async () => {
       setError("");
       try {
-        const current = groups.find((item) => item.venue.codes[0] === pending.codes[0]);
-        let destination: Venue;
-        if (current) {
-          const canonicalName = await api.nameCurrentQrChatIfEmpty(pending.codes[0], chatName);
-          destination = { ...current.venue, name: canonicalName, nameMissing: false };
-        } else {
-          const membership = await api.joinNamedGroup(pending.codes[0], chatName);
-          destination = { ...pending, id: membership.group_id, name: membership.display_name, nameMissing: false };
-        }
+        const joined = member ? null : await api.joinGroup(venue.codes[0]);
+        const groupId = joined?.group_id ?? venue.id;
+        const name = await api.resolveGroup(venue.codes[0], joined ? joined.name : venue.nameMissing ? null : venue.name);
         await backend.refresh();
+        const destination = { ...venue, id: groupId, name: name ?? groupFallbackName(venue.codes[0]), nameMissing: !name };
         dismissEntry(() => openConversation(destination));
       } catch (reason) { setError(errorMessage(reason)); throw reason; }
     });
@@ -591,7 +558,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={active.name} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
+            <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(() => backend.loadOlder(active.id))}>Load older messages</button>}
@@ -624,7 +591,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                       disabled={busy}
                       maxLength={4000}
                       onChange={(event) => setDraft(event.target.value)}
-                      placeholder={`Message ${active.name}…`}
+                      placeholder={`Message ${groupTitle}…`}
                       autoComplete="off"
                     />
                     <button
@@ -701,7 +668,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
         onMessage={() => { if (!personFriend?.accepted_at) return; setPersonId(null); openDirectMessage(personFriend.id); }} />}
 
       <dialog
-        className={joinForm ? "join-dialog" : "camera-dialog"}
+        className="camera-dialog"
         ref={dialog}
         aria-label="Join a conversation"
         onCancel={(event) => { event.preventDefault(); if (!busy) dismissEntry(); }}
@@ -709,11 +676,9 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           if (event.target === dialog.current && !busy) dismissEntry();
         }}
       >
-        {!joinForm && <>
-          <span className="browser-edge-tint browser-edge-top" data-camera-edge="top" aria-hidden="true" />
-          <span className="browser-edge-tint browser-edge-bottom" data-camera-edge="bottom" aria-hidden="true" />
-        </>}
-        <div className={joinForm ? "entry-panel" : "camera-panel"}>
+        <span className="browser-edge-tint browser-edge-top" data-camera-edge="top" aria-hidden="true" />
+        <span className="browser-edge-tint browser-edge-bottom" data-camera-edge="bottom" aria-hidden="true" />
+        <div className="camera-panel">
           <button
             type="button"
             className="modal-close"
@@ -723,76 +688,38 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           >
             <Icon name="close" size={20} />
           </button>
-          {joinForm && pending ? (
-            <>
-              <span className="entry-icon">
-                <Icon name="chat" size={28} />
-              </span>
-              <h2>{pendingNameResult?.kind === "missing" ? "Name this chat" : "Joining…"}</h2>
-              {findingChatName
-                ? <p role="status">Finding the chat name…</p>
-                : suggestedChatName
-                  ? <p>{suggestedChatName}</p>
-                  : <p>Unnamed chat</p>}
-              <form onSubmit={(event) => { event.preventDefault(); join(); }}>
-                {pendingNameResult?.kind === "missing" && <>
-                  <label htmlFor="chat-name">Chat name</label>
-                  <input
-                    id="chat-name"
-                    disabled={busy}
-                    value={chatNameDraft}
-                    onChange={(event) => setChatNameDraftState({ code: pending.codes[0], value: event.target.value })}
-                    placeholder="Cafe name"
-                    maxLength={100}
-                    required
-                    autoFocus
-                  />
-                  <p>We couldn’t identify this place. Give this chat a name for everyone.</p>
-                </>}
-                {(pendingNameResult?.kind === "missing" || error) && <button type="submit" className="scan-primary" disabled={busy || !ready || findingChatName || !chosenChatName}>
-                  {busy ? "Joining…" : error ? "Try again" : "Join chat"} <Icon name="arrow" size={18} />
-                </button>}
-                {error && <p className="form-error" role="alert">{error}</p>}
-              </form>
-              <button type="button" className="text-button" disabled={busy} onClick={() => { setPending(null); setError(""); }}>
-                Scan another code
+          <div className="camera-frame" data-ready={cameraState === "active"}>
+            <video key={cameraAttempt} ref={video} muted playsInline aria-label="Camera preview" />
+            <span className="camera-shade camera-shade-top" />
+            <span className="camera-shade camera-shade-right" />
+            <span className="camera-shade camera-shade-bottom" />
+            <span className="camera-shade camera-shade-left" />
+            <span className="camera-target"><i /></span>
+            {cameraState === "starting" && (
+              <span className="camera-loading">Starting camera…</span>
+            )}
+          </div>
+          <div className="camera-copy">
+            <h2>Find the code.</h2>
+            <p>
+              {cameraState === "error"
+                ? cameraError
+                : error || (pending ? "Joining…" : "Hold a QR code or barcode inside the frame.")}
+            </p>
+            {(cameraState === "error" || error) && (
+              <button
+                type="button"
+                className="camera-retry"
+                onClick={() => {
+                  setError("");
+                  setPending(null);
+                  setCameraAttempt((attempt) => attempt + 1);
+                }}
+              >
+                Try camera again
               </button>
-            </>
-          ) : (
-            <>
-              <div className="camera-frame" data-ready={cameraState === "active"}>
-                <video key={cameraAttempt} ref={video} muted playsInline aria-label="Camera preview" />
-                <span className="camera-shade camera-shade-top" />
-                <span className="camera-shade camera-shade-right" />
-                <span className="camera-shade camera-shade-bottom" />
-                <span className="camera-shade camera-shade-left" />
-                <span className="camera-target"><i /></span>
-                {cameraState === "starting" && (
-                  <span className="camera-loading">Starting camera…</span>
-                )}
-              </div>
-              <div className="camera-copy">
-                <h2>Find the code.</h2>
-                <p>
-                  {cameraState === "error"
-                    ? cameraError
-                    : error || (pending ? `Joining ${suggestedChatName || "chat"}…` : "Hold the QR inside the frame.")}
-                </p>
-                {(cameraState === "error" || error) && (
-                  <button
-                    type="button"
-                    className="camera-retry"
-                    onClick={() => {
-                      setError("");
-                      setCameraAttempt((attempt) => attempt + 1);
-                    }}
-                  >
-                    Try camera again
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </dialog>
 

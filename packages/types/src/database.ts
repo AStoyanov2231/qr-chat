@@ -109,18 +109,24 @@ export type Database = {
           code_key: string | null
           created_at: string
           id: string
+          image_path: string | null
+          metadata_checked_at: string | null
           name: string | null
         }
         Insert: {
           code_key?: string | null
           created_at?: string
           id?: string
+          image_path?: string | null
+          metadata_checked_at?: string | null
           name?: string | null
         }
         Update: {
           code_key?: string | null
           created_at?: string
           id?: string
+          image_path?: string | null
+          metadata_checked_at?: string | null
           name?: string | null
         }
         Relationships: []
@@ -179,6 +185,30 @@ export type Database = {
           description?: string
           id?: never
           key?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          fetched_at: string
+          gtin: string
+          image_path: string | null
+          name: string | null
+          not_found: boolean
+        }
+        Insert: {
+          fetched_at?: string
+          gtin: string
+          image_path?: string | null
+          name?: string | null
+          not_found?: boolean
+        }
+        Update: {
+          fetched_at?: string
+          gtin?: string
+          image_path?: string | null
+          name?: string | null
+          not_found?: boolean
         }
         Relationships: []
       }
@@ -361,28 +391,16 @@ export type Database = {
       }
       get_chat_access: { Args: never; Returns: Json }
       get_chat_overview: { Args: never; Returns: Json }
-      get_qr_chat_name: { Args: { p_code_key: string }; Returns: string }
-      join_named_qr_group: {
-        Args: { p_code_key: string; p_display_name: string }
-        Returns: {
-          display_name: string
-          expires_at: string
-          group_id: string
-        }[]
-      }
       join_qr_group: {
-        Args: { p_code_key: string; p_display_name?: string }
+        Args: { p_code_key: string }
         Returns: {
           expires_at: string
           group_id: string
+          name: string | null
         }[]
       }
       leave_qr_group: { Args: { p_group_id: string }; Returns: string }
       my_permissions: { Args: { p_group_id?: string }; Returns: string[] }
-      name_current_qr_chat_if_empty: {
-        Args: { p_code_key: string; p_display_name: string }
-        Returns: string
-      }
       remove_friend_connection: {
         Args: { p_connection_id: string }
         Returns: boolean

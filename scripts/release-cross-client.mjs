@@ -22,7 +22,7 @@ assert.equal(auth.error, null, auth.error?.message);
 const api = createChatApi(client);
 await api.saveProfile({ display_name: 'Web Pair QA' });
 const code = 'qrchat-release-cross-client-20261003';
-const membership = await api.joinNamedGroup(code, 'Release Cross Client');
+const membership = await api.joinGroup(code);
 const browser = await chromium.connectOverCDP(process.env.QR_CHAT_BROWSER_URL || 'http://127.0.0.1:9222');
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 await context.addCookies([...jar].map(([name, value]) => ({ name, value, url: origin, sameSite: 'Lax' })));

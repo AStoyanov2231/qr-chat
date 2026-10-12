@@ -30,61 +30,33 @@ test('join and leave each call only the authoritative transactional RPC', async 
   assert.deepEqual(calls, [['join_qr_group', { p_code_key: 'Room-a' }], ['leave_qr_group', { p_group_id: '22222222-2222-4222-8222-222222222222' }]]);
 });
 
-test('named joins use the required-name RPC and return the database winner', async () => {
-  const calls = [];
-  const api = createChatApi({ rpc: async (...args) => {
-    calls.push(args);
-    return { data: [{ group_id: id, display_name: 'Cafe' }], error: null };
-  } });
-  const membership = await api.joinNamedGroup(' Room-a ', ' Cafe ');
-  assert.equal(membership.display_name, 'Cafe');
-  assert.deepEqual(calls, [['join_named_qr_group', { p_code_key: 'Room-a', p_display_name: 'Cafe' }]]);
-  await assert.rejects(api.joinNamedGroup('Room-a', '\u0085'));
+test('resolveGroup sends only the code with the bearer token and never throws', async () => {
+  const requests = [];
+  const client = { auth: { getSession: async () => ({ data: { session: { access_token: 'native-token', user: { id } } }, error: null }) } };
+  let reply = () => Response.json({ name: 'Fanta Orange' });
+  const api = createChatApi(client, { fetcher: async (url, options) => { requests.push([url, options]); return reply(); } });
+  assert.equal(await api.resolveGroup(' gtin:5449000006271 '), 'Fanta Orange');
+  const [url, options] = requests[0];
+  assert.equal(url, '/api/qr-name');
+  assert.equal(options.headers.authorization, 'Bearer native-token');
+  assert.deepEqual(JSON.parse(options.body), { code: 'gtin:5449000006271' });
+  reply = () => new Response('down', { status: 503 });
+  assert.equal(await api.resolveGroup('gtin:5449000006271'), null);
+  reply = () => { throw new TypeError('offline'); };
+  assert.equal(await api.resolveGroup('gtin:5449000006271'), null);
+  reply = () => Response.json({ name: 'x'.repeat(101) });
+  assert.equal(await api.resolveGroup('gtin:5449000006271'), null, 'an invalid server name is rejected');
 });
 
-test('name resolution prefers a shared saved name, otherwise returns only a bounded authenticated server suggestion', async () => {
-  const calls = [];
-  let savedName = 'Cafe';
-  let fetched = false;
-  let rpcSignal;
-  const client = {
-    rpc: (name, args) => {
-      calls.push([name, args]);
-      return { abortSignal(signal) { rpcSignal = signal; return Promise.resolve({ data: savedName, error: null }); } };
-    },
-    auth: { getSession: async () => ({ data: { session: { access_token: 'native-token', user: { id } } }, error: null }) },
-  };
-  const api = createChatApi(client, { fetcher: async (url, options) => {
-    fetched = true;
-    assert.equal(url, '/api/qr-name');
-    assert.equal(options.credentials, 'same-origin');
-    assert.equal(options.headers.authorization, 'Bearer native-token');
-    assert.deepEqual(JSON.parse(options.body), { code: 'Room-a' });
-    assert.ok(options.signal instanceof AbortSignal);
-    return Response.json({ name: 'Happy Cafe' });
-  } });
-
-  assert.deepEqual(await api.resolveQrChatName('Room-a'), { kind: 'saved', name: 'Cafe' });
-  assert.equal(fetched, false);
-  assert.ok(rpcSignal instanceof AbortSignal);
-  savedName = null;
-  assert.deepEqual(await api.resolveQrChatName('Room-a'), { kind: 'suggested', name: 'Happy Cafe' });
-  assert.equal(fetched, true);
-  assert.deepEqual(calls.map(([name]) => name), ['get_qr_chat_name', 'get_qr_chat_name']);
-});
-
-test('name lookup caller cancellation bounds an unresolved saved-name RPC', async () => {
-  let rpcSignal;
-  const client = {
-    rpc: () => ({ abortSignal(signal) { rpcSignal = signal; return new Promise(() => {}); } }),
-  };
-  const api = createChatApi(client, { fetcher: async () => assert.fail('Cancellation must stop before HTTP lookup') });
-  const controller = new AbortController();
-  const pending = api.resolveQrChatName('Room-a', controller.signal);
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  controller.abort();
-  assert.deepEqual(await pending, { kind: 'missing' });
-  assert.equal(rpcSignal.aborted, true);
+test('resolveGroup skips the server function for a group that already has a name', async () => {
+  const requests = [];
+  const client = { auth: { getSession: async () => ({ data: { session: { access_token: 'native-token', user: { id } } }, error: null }) } };
+  const api = createChatApi(client, { fetcher: async (url) => { requests.push(url); return Response.json({ name: 'Looked up' }); } });
+  assert.equal(await api.resolveGroup('gtin:5449000006271', 'Fanta Orange'), 'Fanta Orange');
+  assert.equal(requests.length, 0, 'a named group never calls /api/qr-name');
+  assert.equal(await api.resolveGroup('gtin:5449000006271', null), 'Looked up');
+  assert.equal(await api.resolveGroup('gtin:5449000006271', undefined), 'Looked up');
+  assert.equal(requests.length, 2, 'unnamed groups still ask the server');
 });
 
 test('writes derive the sender from auth and exclude arbitrary write fields', async () => {
@@ -119,45 +91,6 @@ test('failed sign-out surfaces the error; success removes channels', async () =>
   assert.equal(removed, true);
 });
 
-test('QR name and image share concurrent metadata and successful session cache; failures are retried', async () => {
-  let requests = 0;
-  let succeeds = true;
-  const client = {
-    auth: { getSession: async () => ({ data: { session: { user: { id }, access_token: 'test-token' } }, error: null }) },
-    rpc: () => ({ abortSignal: async () => ({ data: null, error: null }) }),
-  };
-  const api = createChatApi(client, { fetcher: async () => {
-    requests++;
-    await new Promise(resolve => setTimeout(resolve, 5));
-    return Response.json(succeeds ? { name: 'Cafe', imageUrl: 'https://public.example/cafe.jpg' } : { name: null, imageUrl: null });
-  } });
-  const [name, image] = await Promise.all([api.resolveQrChatName('https://public.example/menu'), api.resolveQrChatImage('https://public.example/menu')]);
-  assert.equal(requests, 1);
-  assert.deepEqual(name, { kind: 'suggested', name: 'Cafe' });
-  assert.equal(image, 'https://public.example/cafe.jpg');
-  await api.resolveQrChatImage('https://public.example/menu');
-  assert.equal(requests, 1);
-  api.clearSessionCache();
-  succeeds = false;
-  await api.resolveQrChatImage('https://public.example/menu');
-  succeeds = true;
-  await api.resolveQrChatImage('https://public.example/menu');
-  assert.equal(requests, 3);
-});
-
-test('previous-session metadata cannot be returned or cached after invalidation', async () => {
-  let finish;
-  const api = createChatApi({ auth: { getSession: async () => ({ data: { session: { user: { id }, access_token: 'test-token' } }, error: null }) } }, {
-    fetcher: () => new Promise(resolve => { finish = resolve; }),
-  });
-  const request = api.resolveQrChatImage('https://public.example/menu');
-  await new Promise(resolve => setTimeout(resolve, 1));
-  api.clearSessionCache();
-  finish(Response.json({ name: 'Old session', imageUrl: 'https://public.example/old.jpg' }));
-  assert.equal(await request, null);
-});
-
-
 test('blocking validates the connection and uses the authoritative RPC', async () => {
   const calls = [];
   const client = { rpc: async (...args) => { calls.push(args); return { data: true, error: null }; } };
@@ -170,4 +103,15 @@ test('blocking validates the connection and uses the authoritative RPC', async (
   await assert.rejects(api.blockFriend(id), /no longer available/);
   client.rpc = async () => ({ data: null, error: { message: 'Offline' } });
   await assert.rejects(api.blockFriend(id), /Offline/);
+});
+
+test('database rate limits surface as RATE_LIMITED with the server notice', async () => {
+  const notice = 'You are sending messages too fast. Wait a moment and try again.';
+  const api = createChatApi({
+    auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
+    from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { code: 'PT429', message: notice } }) }) }) }),
+    rpc: async () => ({ data: null, error: { code: 'PT429', message: 'You have joined a lot of chats this hour. Try again later.' } }),
+  });
+  await assert.rejects(api.sendGroupMessage(id, 'hello'), (error) => error.code === 'RATE_LIMITED' && error.message === notice);
+  await assert.rejects(api.joinGroup('Room-a'), (error) => error.code === 'RATE_LIMITED' && /joined a lot of chats/.test(error.message));
 });

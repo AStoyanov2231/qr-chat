@@ -86,14 +86,8 @@ try {
       await actor.page.getByRole('button', { name: 'Try camera again', exact: true }).click();
       pass('Camera denial explains recovery and retry works after granting permission');
     }
-    // Unidentified QR codes need a chat name; named rooms join automatically.
-    await eventually(async () => (await actor.page.getByLabel('Chat name', { exact: true }).count()) || (await actor.page.getByLabel('Message', { exact: true }).count()), 'The scan must resolve to naming or the conversation');
+    // Every scan joins straight away; the server names the group.
     assert.equal(await actor.page.getByLabel('Your name', { exact: true }).count(), 0);
-    if (await actor.page.getByLabel('Chat name', { exact: true }).count()) {
-      await actor.page.getByLabel('Chat name', { exact: true }).fill('Release Cafe');
-      await screenshot(actor.page, 'web-qr-chat-name');
-      await actor.page.getByRole('button', { name: 'Join chat', exact: false }).click();
-    }
     await actor.page.getByLabel('Message', { exact: true }).waitFor({ timeout });
   }
   const [membership] = await alice.api.memberships();

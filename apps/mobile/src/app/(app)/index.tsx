@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { ActivityIndicator, Alert, Animated, Easing, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -28,7 +29,7 @@ function useGroupAccessCountdown(expiresAt: string | null) {
   return countdown;
 }
 
-function GroupAccessRing({ name, indicator }: { name: string; indicator: ReturnType<typeof groupAccessIndicator> }) {
+function GroupAccessRing({ name, imageUrl, indicator }: { name: string; imageUrl?: string | null; indicator: ReturnType<typeof groupAccessIndicator> }) {
   const segmentCount = 120;
   const center = 32;
   const radius = 33 * 64 / 72;
@@ -42,7 +43,9 @@ function GroupAccessRing({ name, indicator }: { name: string; indicator: ReturnT
         return <View key={index} style={{ position: 'absolute', left: center + radius * Math.cos(angle) - segmentSize / 2, top: center + radius * Math.sin(angle) - segmentSize / 2, width: segmentSize, height: segmentSize, borderRadius: segmentSize / 2, backgroundColor: active ? colors.online : colors.line }} />;
       })}
     </View>
-    <View style={homeStyles.groupInitials}><Copy style={[homeStyles.name, { fontSize: 20, lineHeight: 26, color: colors.onPrimaryTint }]}>{groupInitials(name)}</Copy></View>
+    {imageUrl
+      ? <Image source={{ uri: imageUrl }} contentFit="cover" style={homeStyles.groupInitials} />
+      : <View style={homeStyles.groupInitials}><Copy style={[homeStyles.name, { fontSize: 20, lineHeight: 26, color: colors.onPrimaryTint }]}>{groupInitials(name)}</Copy></View>}
   </View>;
 }
 
@@ -54,7 +57,7 @@ function GroupCard({ group, userId, profileName }: { group: Group; userId: strin
   const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
   return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}. ${accessIndicator.accessibilityLabel}`} onPress={() => router.push(roomRoute(group))} style={({ pressed }) => [homeStyles.groupCard, { opacity: pressed ? 0.85 : 1 }]}>
     <View style={homeStyles.groupAvatar}>
-      <GroupAccessRing name={group.venue.name} indicator={accessIndicator} />
+      <GroupAccessRing name={group.venue.name} imageUrl={group.venue.imageUrl} indicator={accessIndicator} />
       <Copy style={homeStyles.expiry}>{accessIndicator.label}</Copy>
     </View>
     <View style={[homeStyles.copy, { alignSelf: 'flex-start' }]}>

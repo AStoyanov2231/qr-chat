@@ -12,6 +12,12 @@ test('network failures explain recovery without exposing transport implementatio
   assert.equal(errorMessage(new Error('Group access ended')), 'Group access ended');
 });
 
+test('database rate-limit notices reach the user unchanged', () => {
+  for (const notice of ['You are sending messages too fast. Wait a moment and try again.', 'Slow mode is on in this busy chat. Wait a few seconds between messages.', 'You have joined a lot of chats this hour. Try again later.']) {
+    assert.equal(errorMessage(Object.assign(new Error(notice), { name: 'ChatApiError', code: 'RATE_LIMITED' })), notice);
+  }
+});
+
 test('group access is ended only after a successful snapshot observes active-to-none', async (t) => {
   reset();
   state.auth.api = { client: {}, userId: async () => 'me' };

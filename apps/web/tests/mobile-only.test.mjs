@@ -14,14 +14,15 @@ function gate({ pathname, mobile, preview = false }) {
   const LandingPage = () => null;
   const children = { product: 'content' };
   runInNewContext(`(function(require, module, exports) { ${output}\n})`, {
-    window: { matchMedia: () => ({ matches: mobile }) },
+    window: { matchMedia: () => ({ matches: mobile }), location: { host: preview ? 'localhost:3000' : 'qr-chat.example' } },
   })((specifier) => {
     if (specifier === 'react') return { useSyncExternalStore: (_subscribe, snapshot) => snapshot() };
     if (specifier === 'next/navigation') return { usePathname: () => pathname };
     if (specifier === './landing-page') return { LandingPage };
+    if (specifier === '@/lib/local-design-preview') return { isLocalDesignPreviewHost: (host) => host.startsWith('localhost') };
     return require(specifier);
   }, fixtureModule, fixtureModule.exports);
-  return { result: fixtureModule.exports.MobileOnly({ children, preview }), children, LandingPage };
+  return { result: fixtureModule.exports.MobileOnly({ children }), children, LandingPage };
 }
 
 test('public landing never receives the development phone frame', () => {

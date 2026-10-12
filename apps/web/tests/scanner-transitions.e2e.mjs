@@ -110,17 +110,11 @@ await joiningPage.addInitScript(() => {
 });
 try {
   await joiningPage.goto(`${origin}/design-preview?code=qrchat-transition-fixture-new-room`);
-  await joiningPage.getByLabel('Chat name', { exact: true }).waitFor();
+  await joiningPage.getByLabel('Message', { exact: true }).waitFor();
   const fallback = await joiningPage.evaluate(() => window.transitions[0]);
   assert.deepEqual(fallback, { frames: [{ opacity: 0 }, { opacity: 1 }], duration: 160 });
-  const join = joiningPage.getByRole('button', { name: /Join chat/ });
-  assert.equal(await join.isDisabled(), true);
-  await joiningPage.getByLabel('Chat name', { exact: true }).fill('Transition fixture room');
-  await joiningPage.getByLabel('Your name', { exact: true }).fill('Transition fixture participant');
-  await join.click();
-  await joiningPage.getByLabel('Message', { exact: true }).waitFor();
-  writeFileSync(`${output}/scanner-joining.json`, JSON.stringify({ pass: true, previewOnly: true, fallback, requiredNameValidation: true, joining: true }, null, 2));
-  console.log('PASS preview QR join/validation and triggerless fade');
+  writeFileSync(`${output}/scanner-joining.json`, JSON.stringify({ pass: true, previewOnly: true, fallback, joining: true }, null, 2));
+  console.log('PASS preview QR join and triggerless fade');
 } finally {
   await joiningContext.close();
   await joiningBrowser.close();

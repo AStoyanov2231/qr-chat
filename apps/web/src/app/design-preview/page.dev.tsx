@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { DesignPreview } from "@/components/design-preview";
 import { isLocalDesignPreviewHost } from "@/lib/local-design-preview";
 
-export default async function DesignPreviewPage({ searchParams }: PageProps<"/design-preview">) {
+export default async function DesignPreviewPage({ searchParams }: { searchParams: Promise<{ view?: string | string[] }> }) {
   const host = (await headers()).get("host") ?? "";
   if (!isLocalDesignPreviewHost(host)) notFound();
   const params = await searchParams;

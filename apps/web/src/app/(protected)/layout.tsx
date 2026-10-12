@@ -1,15 +1,8 @@
+import { Suspense } from "react";
 import QrChatApp from "@/components/mobile-chat";
 import { ChatSessionProvider } from "@/hooks/use-chat-backend";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 
-export default async function ProtectedLayout({ children }: LayoutProps<"/">) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
-
-  if (error || !data?.claims.sub) {
-    redirect("/sign-in");
-  }
-
-  return <ChatSessionProvider><QrChatApp />{children}</ChatSessionProvider>;
+// Static shell: the session provider redirects signed-out visitors and RLS guards every read.
+export default function ProtectedLayout({ children }: LayoutProps<"/">) {
+  return <ChatSessionProvider><Suspense><QrChatApp /></Suspense>{children}</ChatSessionProvider>;
 }

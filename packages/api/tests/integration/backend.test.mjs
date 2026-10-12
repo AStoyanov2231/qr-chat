@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { createChatApi, createChatStore, createObservedFetch, watchChanges } from '../../src/index.ts';
+import { createChatApi, createChatStore, createObservedFetch, topic, watchChanges } from '../../src/index.ts';
 
 // Supply three disposable, confirmed test users. No admin key or fixture creation here.
 // The SQL authorization suite separately tests expiration and hostile direct writes.
@@ -108,10 +108,10 @@ test('Supabase clients share authorized data, serialize joins, paginate, and rec
       assert.ok((await anonymous.storage.from('avatars').upload(`${alice.id}/${randomUUID()}.jpg`, bytes, { contentType: 'image/jpeg' })).error);
     } finally { assert.equal((await bucket.remove([path])).error, null); }
   });
-  await t.test('filtered Realtime delivers changes and refetches missed messages after reconnect', async () => {
+  await t.test('private Broadcast delivers changes and refetches missed messages after reconnect', async () => {
     let bodies = []; let connected = false;
     // Long polling interval ensures live delivery actually comes from Realtime.
-    const watcher = watchChanges(bob.client, [{ table: 'messages', column: 'group_id', id: group }], async () => {
+    const watcher = watchChanges(bob.client, [topic('group', group)], async () => {
       bodies = (await bob.api.groupMessages(group)).items.map((row) => row.body);
     }, (state) => { connected = state === 'connected'; }, { pollMs: 60000, retryMs: 200 });
     try {

@@ -344,6 +344,9 @@ importers:
       '@vercel/analytics':
         specifier: ^2.0.1
         version: 2.0.1(next@16.3.4(@babel/core@7.29.7(supports-color@8.1.1))(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      barcode-detector:
+        specifier: ^3.2.2
+        version: 3.2.2(@types/emscripten@1.41.6)
       gsap:
         specifier: ^3.15.0
         version: 3.15.0
@@ -356,9 +359,6 @@ importers:
       parse5:
         specifier: ^8.0.1
         version: 8.0.1
-      qr-scanner:
-        specifier: ^1.4.2
-        version: 1.4.2
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -390,6 +390,9 @@ importers:
       eslint-config-next:
         specifier: 16.3.4
         version: 16.3.4(@typescript-eslint/parser@8.70.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+      qr-scanner:
+        specifier: ^1.4.2
+        version: 1.4.2
       tailwindcss:
         specifier: ^4
         version: 4.3.3

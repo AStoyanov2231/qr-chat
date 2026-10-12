@@ -13,8 +13,8 @@ test('photo normalization crops centrally, resizes, encodes JPEG, and releases t
   globalThis.document={createElement:()=>canvas};
   const photo=await prepareAvatar({type:'image/png',size:100});
   assert.equal(photo.type,'image/jpeg');
-  assert.equal(canvas.width,512);assert.equal(canvas.height,512);
-  assert.deepEqual(calls.find(([op])=>op==='draw').slice(2),[200,0,800,800,0,0,512,512]);
+  assert.equal(canvas.width,400);assert.equal(canvas.height,400);
+  assert.deepEqual(calls.find(([op])=>op==='draw').slice(2),[200,0,800,800,0,0,400,400]);
   assert.deepEqual(calls.at(-1),['close']);
 });
 

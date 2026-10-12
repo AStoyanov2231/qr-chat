@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { reset, render, state, act, navigate } from './support/native-harness.mjs';
 
 const { default: Scan } = await import('../src/app/(app)/scan.tsx');
-const { default: Join } = await import('../src/app/(app)/join.tsx');
 const { default: Room } = await import('../src/app/(app)/room.tsx');
 const { roomRoute } = await import('../src/lib/room-route.ts');
 const { venueUrl } = await import('../src/lib/qr-link.ts');
@@ -24,14 +23,9 @@ for (const platform of ['ios', 'android']) {
   test(`${platform}: a scanned venue URL reaches the room and opens unmodified next to settings`, async (t) => {
     process.env.EXPO_OS = platform;
     reset();
-    state.auth.api = { saveProfile: async () => {}, resolveQrChatName: async () => ({ kind: 'missing' }), resolveQrChatImage: async () => null,
-      joinNamedGroup: async (_code, name) => ({ group_id: groupId, display_name: name }) };
+    state.auth.api = { joinGroup: async () => ({ group_id: groupId }), resolveGroup: async () => 'Cafe' };
     const scanner = await render(t, Scan);
-    await act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ data: venue }); });
-    navigate(state.navigation.at(-1)[1]);
-    const join = await render(t, Join);
-    await join.type('Chat name', 'Cafe');
-    await join.press('Join chat');
+    await act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data: venue }); });
     navigate(state.navigation.at(-1)[1]);
     state.chat.groups = [{ id: groupId, venue: { id: groupId, name: 'Cafe', codes: [venue] }, members: [], messages: [], nextCursor: null }];
     const room = await render(t, Room);

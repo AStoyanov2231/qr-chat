@@ -35,7 +35,7 @@ test('avatar uploads use the authenticated folder and save before cleaning up th
   const f=fixture();await f.api.saveProfileWithAvatar(' New name ',photo);
   assert.deepEqual(f.calls.map(([op])=>op),['upload','save','remove']);
   assert.equal(f.calls[0][2],`${id}/${uploadId}.jpg`);
-  assert.deepEqual(f.calls[0][4],{contentType:'image/jpeg',cacheControl:'3600',upsert:false});
+  assert.deepEqual(f.calls[0][4],{contentType:'image/jpeg',cacheControl:'31536000',upsert:false});
   assert.deepEqual(f.calls[1][1],{display_name:'New name',avatar_path:`${id}/${uploadId}.jpg`});
   assert.deepEqual(f.calls[2][1],[`${id}/${oldId}.jpg`]);
 });

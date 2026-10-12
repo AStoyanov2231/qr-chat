@@ -49,7 +49,7 @@ export function OutboxBubble({ item, onRetry }: { item: OutboxItem; onRetry: () 
       {item.failed && <button type="button" className="message-retry" aria-label="Message not sent. Retry" onClick={onRetry}><span aria-hidden="true">!</span></button>}
       <div>
         <p>{item.text}</p>
-        {item.failed && <small className="message-failed">Not sent. Tap ! to retry</small>}
+        {item.failed && <small className="message-failed">{item.notice ? `Not sent. ${item.notice}` : "Not sent. Tap ! to retry"}</small>}
       </div>
     </article>
   );
