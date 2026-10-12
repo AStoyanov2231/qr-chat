@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: 'utf8', ...options });
+  // PostgreSQL refuses to start without a valid locale; shells with LANG unset have none.
+  const result = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' }, ...options });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.error) throw result.error;
@@ -16,14 +17,15 @@ const data = `${work}/data`;
 const socket = `${work}/socket`;
 mkdirSync(socket);
 const port = 20_000 + (process.pid % 40_000);
-const fixture = fileURLToPath(new URL('./sql/schema-regression.sql', import.meta.url));
+// scaling.sql is self-contained; schema-regression.sql needs the private base migrations in supabase/migrations.
+const fixture = fileURLToPath(new URL(`./sql/${process.argv[2] ?? 'scaling.sql'}`, import.meta.url));
 let started = false;
 let stopped = false;
 let testFailure;
 let stopFailure;
 
 try {
-  run('initdb', ['-D', data, '-U', 'postgres', '--auth-local=trust', '--auth-host=trust', '--no-instructions', '--locale=C', '-c', 'dynamic_shared_memory_type=mmap', '-c', 'shared_memory_type=mmap']);
+  run('initdb', ['-D', data, '-U', 'postgres', '--auth-local=trust', '--auth-host=trust', '--no-instructions', '-c', 'dynamic_shared_memory_type=mmap', '-c', 'shared_memory_type=mmap']);
   run('pg_ctl', ['-D', data, '-l', `${work}/postgres.log`, '-o', `-h '' -p ${port} -k ${socket}`, '-w', 'start']);
   started = true;
   run('psql', ['--no-psqlrc', '-h', socket, '-p', String(port), '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', fixture]);

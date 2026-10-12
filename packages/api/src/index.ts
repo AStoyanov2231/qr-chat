@@ -24,7 +24,8 @@ export class ChatApiError extends Error {
 
 async function nullableResult<T>(request: PromiseLike<{ data: T; error: { message: string; code?: string } | null }>): Promise<T> {
   const { data, error } = await request;
-  if (error) throw new ChatApiError(error.message, error.code);
+  // PT429 is the database rate limit (HTTP 429); its message is already a short user-facing notice.
+  if (error) throw new ChatApiError(error.message, error.code === "PT429" ? "RATE_LIMITED" : error.code);
   return data;
 }
 

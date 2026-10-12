@@ -155,6 +155,10 @@ test('transport failures show connection guidance while actionable API and valid
     assert.equal(errorMessage(new Error(message)), 'Could not connect. Check your internet connection and try again.');
   }
   assert.equal(errorMessage(new Error('Please sign in again.')), 'Please sign in again.');
+  const { ChatApiError } = await import('@qr-chat/api');
+  for (const notice of ['You are sending messages too fast. Wait a moment and try again.', 'Slow mode is on in this busy chat. Wait a few seconds between messages.', 'You have joined a lot of chats this hour. Try again later.']) {
+    assert.equal(errorMessage(new ChatApiError(notice, 'RATE_LIMITED')), notice, 'rate-limit notices are shown as is');
+  }
   const { z } = require('@qr-chat/validation');
   const invalid = z.string().min(1).safeParse('');
   assert.equal(errorMessage(invalid.error), 'Check your input and try again.');

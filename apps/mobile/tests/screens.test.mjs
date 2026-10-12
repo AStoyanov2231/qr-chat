@@ -66,6 +66,16 @@ for (const platform of ['ios', 'android']) {
     assert.deepEqual(state.navigation, [['replace', { pathname: '/room', params: { groupId: 'room-two', code: 'New-Room', name: 'Fanta Orange' } }]]);
   });
 
+  test(`${platform}: the join rate limit shows its notice on the scanner`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    const notice = 'You have joined a lot of chats this hour. Try again later.';
+    state.auth.api = { joinGroup: async () => { throw Object.assign(new Error(notice), { name: 'ChatApiError', code: 'RATE_LIMITED' }); }, resolveGroup: async () => null };
+    const screen = await render(t, Scan);
+    await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data: 'New-Room' }); });
+    assert.match(screen.text(), /joined a lot of chats this hour/);
+    assert.equal(state.navigation.length, 0);
+  });
+
   test(`${platform}: a join failure is shown and the next scan retries`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     let attempts = 0;
@@ -305,6 +315,19 @@ test('a failed message stays marked, retries, and hands off to the loaded messag
   assert.doesNotMatch(screen.text(), /Not sent/);
   await screen.update({ ...props, messages: [{ id: '7', user: 'me', name: 'Andy', text: 'Hello', time: Date.now() }] });
   assert.equal(screen.text().match(/"Hello"/g).length, 1, 'The placeholder hides once the real message loads');
+});
+
+test('a rate-limited send shows the database notice on the failed message', async (t) => {
+  reset();
+  const notice = 'Slow mode is on in this busy chat. Wait a few seconds between messages.';
+  const screen = await render(t, Conversation, {
+    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    refresh: async () => {}, loadOlder: async () => {}, unavailable: 'Ended',
+    send: async () => { throw Object.assign(new Error(notice), { name: 'ChatApiError', code: 'RATE_LIMITED' }); },
+  });
+  await screen.type('Message', 'Hello');
+  await screen.press('Send message');
+  assert.match(screen.text(), /Not sent\. Slow mode is on in this busy chat/);
 });
 
 test('a sent message shows instantly and the field stays editable for the next one', async (t) => {

@@ -282,6 +282,9 @@ test('first-DM copy, composer, and outbox bubbles show sent and failed messages'
   assert.match(failed, /Lost note/);
   assert.match(failed, /aria-label="Message not sent. Retry"/);
   assert.match(failed, /Not sent/);
+
+  const limited = renderToStaticMarkup(React.createElement(directParts.OutboxBubble, { item: { key: 'c', conversation: 'd:x', text: 'Spam', failed: true, notice: 'You are sending messages too fast. Wait a moment and try again.' }, onRetry: noOp }));
+  assert.match(limited, /Not sent\. You are sending messages too fast\. Wait a moment and try again\./, 'a rate limit explains itself');
 });
 
 test('direct-message bubbles keep sent messages compact and show received sender avatars and profile actions', () => {

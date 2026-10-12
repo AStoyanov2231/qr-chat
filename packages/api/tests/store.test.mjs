@@ -267,3 +267,23 @@ test('every joined group stays listed and receives its own message events', asyn
   f.api.groupMessageIds=async()=>[row(3)];f.event('group',3);await tick();
   assert.deepEqual(f.store.getState().snapshot.groups.map(group=>group.id),[second]);
 });
+test('realtime refusal polls the overview until resubscribed; pause stops polling and the socket', async t => {
+  const f=fixture({fallbackMs:20,safetyMs:100000});t.after(()=>f.store.dispose());
+  await f.store.start();
+  const channel=f.channels.at(-1);
+  channel.status('CHANNEL_ERROR',new Error('too_many_connections'));
+  assert.equal(f.store.getState().connection,'polling');
+  f.calls.length=0;await new Promise(resolve=>setTimeout(resolve,70));
+  const polls=f.calls.filter(call=>call==='overview').length;
+  assert.ok(polls>=2,`polled ${polls} times`);
+  assert.ok(f.calls.every(call=>call==='overview'),'polling reads only the overview while nothing changed');
+  f.store.pause();
+  assert.ok(f.channels.every(channel=>channel.removed),'pause removes every channel');
+  const paused=f.calls.length;await new Promise(resolve=>setTimeout(resolve,70));
+  assert.equal(f.calls.length,paused,'no polling while paused');
+  await f.store.start();
+  const next=f.channels.at(-1);next.status('SUBSCRIBED');next.system({extension:'postgres_changes',status:'ok'});await tick();
+  assert.equal(f.store.getState().connection,'connected');
+  f.calls.length=0;await new Promise(resolve=>setTimeout(resolve,70));
+  assert.equal(f.calls.length,0,'a subscribed store does not poll');
+});

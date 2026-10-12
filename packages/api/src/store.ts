@@ -12,7 +12,7 @@ const initialState: ChatStoreState = { snapshot: emptySnapshot, ready: false, er
 const emptyDirect: DirectState = { messages: [], nextCursor: null, loading: true, error: '' };
 
 /** One session store per injected API. Hosts provide activity; the store owns networking. */
-export function createChatStore(api: ChatApi, options: { random?: () => number; safetyMs?: number; coalesceMs?: number } = {}) {
+export function createChatStore(api: ChatApi, options: { random?: () => number; safetyMs?: number; coalesceMs?: number; fallbackMs?: number } = {}) {
   const random = options.random ?? Math.random;
   const coordinator = createRefreshCoordinator(options.coalesceMs ?? 100);
   const listeners = new Set<() => void>();
@@ -129,7 +129,11 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (key === watcherKey) return;
     stopWatcher(); watcherKey = key;
     const ticket = generation;
-    watcher = watchChanges(api.client, filters, () => refresh('reconnect'), (connection) => { if (current(ticket)) publish({ connection }); }, { onChange: event, random, coordinated: true });
+    watcher = watchChanges(api.client, filters, () => refresh('reconnect'), (connection) => { if (current(ticket)) publish({ connection }); }, {
+      onChange: event, random, coordinated: true,
+      // Overview polling compares head ids, so unchanged conversations download nothing.
+      fallbackMs: options.fallbackMs ?? 5000, onPoll: () => refresh('poll'),
+    });
   }
   function scheduleSafety() {
     clearTimeout(safety);

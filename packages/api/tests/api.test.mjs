@@ -104,3 +104,14 @@ test('blocking validates the connection and uses the authoritative RPC', async (
   client.rpc = async () => ({ data: null, error: { message: 'Offline' } });
   await assert.rejects(api.blockFriend(id), /Offline/);
 });
+
+test('database rate limits surface as RATE_LIMITED with the server notice', async () => {
+  const notice = 'You are sending messages too fast. Wait a moment and try again.';
+  const api = createChatApi({
+    auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
+    from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { code: 'PT429', message: notice } }) }) }) }),
+    rpc: async () => ({ data: null, error: { code: 'PT429', message: 'You have joined a lot of chats this hour. Try again later.' } }),
+  });
+  await assert.rejects(api.sendGroupMessage(id, 'hello'), (error) => error.code === 'RATE_LIMITED' && error.message === notice);
+  await assert.rejects(api.joinGroup('Room-a'), (error) => error.code === 'RATE_LIMITED' && /joined a lot of chats/.test(error.message));
+});
