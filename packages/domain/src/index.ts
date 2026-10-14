@@ -16,85 +16,18 @@ export function messageDayLabel(time: number, previousTime?: number): string | n
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
 }
 
-export type QrPageNameMetadata = {
-  structuredData: { types: string[]; names: string[] }[];
-  openGraphTitles: string[];
-  pageTitles: string[];
-  siteNames: string[];
-};
-
-type NameCandidate = { name: string; normalized: string };
-const BUSINESS_TYPES = new Set([
-  "barorpub", "cafeorcoffeeshop", "foodestablishment", "hotel", "localbusiness",
-  "lodgingbusiness", "restaurant", "store", "touristattraction",
-]);
-const GENERIC_NAMES = new Set([
-  "404", "access denied", "home", "home page", "homepage", "login", "menu", "not found",
-  "online ordering", "order online", "page not found", "sign in", "sign up", "untitled", "welcome",
-]);
-const LINK_PROVIDERS = new Set([
-  "clover", "chownow", "doordash", "google", "grubhub", "linktree", "lightspeed",
-  "menufy", "my menu", "order online", "square", "squareup", "spoton", "toast", "ubereats",
-]);
-
-function normalizeVenueName(value: string): string {
-  return value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-}
-
-function metadataName(value: string): NameCandidate | null {
-  const name = value.replace(/\p{Cc}/gu, "").replace(/\s+/gu, " ").trim();
-  if (!name || name.length > 100 || !/\p{L}/u.test(name)) return null;
-  // Page metadata sometimes repeats the scanned URL or a deployment slug as
-  // its title. Keep those technical identifiers out of the shared chat name.
-  if (/^(?:https?:\/\/|www\.)/iu.test(name)
-      || /^(?:[\p{L}\d](?:[\p{L}\d-]{0,61}[\p{L}\d])?\.)+[a-z]{2,}(?:[/:?#].*)?$/iu.test(name)) return null;
-  const parts = name.split(/\s*(?:\||•)\s*|\s+[\-–—]\s+/u).filter(Boolean);
-  const usefulParts = parts.filter((part) => {
-    const normalized = normalizeVenueName(part);
-    return normalized && !GENERIC_NAMES.has(normalized) && !LINK_PROVIDERS.has(normalized);
-  });
-  const uniqueParts = [...new Map(usefulParts.map((part) => [normalizeVenueName(part), part])).values()];
-  if (uniqueParts.length !== 1) return null;
-  const resolvedName = uniqueParts[0]!.trim();
-  const normalized = normalizeVenueName(resolvedName);
-  if (!normalized || GENERIC_NAMES.has(normalized) || LINK_PROVIDERS.has(normalized)) return null;
-  return { name: resolvedName, normalized };
-}
-
-function relatedNames(left: NameCandidate, right: NameCandidate): boolean {
-  return left.normalized === right.normalized
-    || left.normalized.startsWith(`${right.normalized} `)
-    || right.normalized.startsWith(`${left.normalized} `);
-}
-
-function chooseConsistent(values: string[]): NameCandidate | null {
-  const candidates = values.flatMap((value) => {
-    const parsed = metadataName(value);
-    return parsed ? [parsed] : [];
-  });
-  const unique = [...new Map(candidates.map((candidate) => [candidate.normalized, candidate])).values()];
-  if (!unique.length || unique.some((candidate) => !unique.every((other) => relatedNames(candidate, other)))) return null;
-  return [...unique].sort((left, right) =>
-    left.normalized.split(" ").length - right.normalized.split(" ").length
-    || left.name.length - right.name.length,
-  )[0] ?? null;
-}
-
-/** Resolve a venue name only when page metadata supports one consistent identity. */
-export function resolveQrPageName(metadata: QrPageNameMetadata): string | null {
-  const businessNames = metadata.structuredData
-    .filter(({ types }) => types.some((type) => BUSINESS_TYPES.has(type.toLowerCase().split(/[\/#]/u).at(-1) ?? type.toLowerCase())))
-    .flatMap(({ names }) => names);
-  const hasBusinessCandidate = businessNames.some((name) => metadataName(name) !== null);
-  const business = chooseConsistent(businessNames);
-  const titles = [...metadata.openGraphTitles, ...metadata.pageTitles];
-  const hasTitleCandidate = titles.some((name) => metadataName(name) !== null);
-  const title = chooseConsistent(titles);
-  if ((hasBusinessCandidate && !business) || (hasTitleCandidate && !title)) return null;
-  if (business && title) return relatedNames(business, title) ? business.name : null;
-  if (business) return business.name;
-  if (title) return title.name;
-  return chooseConsistent(metadata.siteNames)?.name ?? null;
+const SECOND_LEVEL = new Set(["ac", "co", "com", "edu", "gov", "net", "org"]);
+/** "https://www.happy.co.uk/menu" → "happy". The name comes from the scanned text alone; no site is ever fetched.
+ * IP addresses and punycode (lookalike) hosts get no name, so the host itself is shown instead. */
+export function qrGroupName(code: string): string | null {
+  if (!/^https?:\/\//iu.test(code)) return null;
+  let labels: string[];
+  try { labels = new URL(code).hostname.split("."); } catch { return null; }
+  if (labels.length < 2 || labels.some((label) => /^(?:\d+|xn--.*)$/u.test(label))) return null;
+  if (labels[0] === "www") labels.shift();
+  labels.pop();
+  while (labels.length > 1 && SECOND_LEVEL.has(labels.at(-1)!)) labels.pop();
+  return labels.at(-1) ?? null;
 }
 
 export type FriendshipState = 'none' | 'incoming' | 'outgoing' | 'accepted';

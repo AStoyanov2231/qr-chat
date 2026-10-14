@@ -41,12 +41,11 @@ function fakeDb(results) {
   } });
   return { log, client: { from: builder, storage: { from: (bucket) => ({ upload: async (...args) => { log.push([bucket, 'upload', ...args]); return { error: null }; } }) } } };
 }
-async function loadResolver(db, fetches, pageName = null) {
+async function loadResolver(db, fetches) {
   const previous = globalThis.fetch;
   globalThis.fetch = async (url) => { const next = fetches.shift(); assert.ok(next, `unexpected fetch ${url}`); return next(String(url)); };
   const resolver = await load('../src/lib/group-metadata.ts', {
     '@supabase/supabase-js': { createClient: () => db.client },
-    '@/lib/qr-name-metadata': { lookupQrPageName: async () => pageName },
     '@qr-chat/domain': await import('@qr-chat/domain'),
     '@qr-chat/validation': await import('@qr-chat/validation'),
   });
@@ -72,6 +71,15 @@ test('product lookup names and photographs only an unnamed group the caller is a
   assert.equal(upload[4].cacheControl, '31536000', 'the per-product photo path is immutable, so it caches for a year');
   const write = db.log.filter(([table, method]) => table === 'groups' && method === 'update').at(-1);
   assert.deepEqual(write[2], { name: 'Fanta Orange', image_path: 'p/5449000006271.jpg' });
+});
+
+test('a QR group is named from its host and no site is ever fetched', async (t) => {
+  const db = fakeDb([activeMember(), { data: null, error: null }]);
+  const { resolveGroup, restore } = await loadResolver(db, []);
+  t.after(restore);
+  assert.equal(await resolveGroup('user-1', 'https://www.happy.com/menu'), 'happy');
+  const write = db.log.filter(([table, method]) => table === 'groups' && method === 'update').at(-1);
+  assert.deepEqual(write[2], { name: 'happy', image_path: null });
 });
 
 test('non-members, named groups and throttled groups never trigger a lookup', async (t) => {
@@ -123,7 +131,7 @@ test('a cache miss calls Open Food Facts once and stores the product', async (t)
   assert.deepEqual({ ...stored, fetched_at: typeof stored.fetched_at }, { gtin: '5449000006271', name: 'Fanta Orange', image_path: 'p/5449000006271.jpg', not_found: false, fetched_at: 'string' });
 });
 
-test('rate limits, server errors and timeouts cache nothing and leave the hourly retry in place', async (t) => {
+test('rate limits, server errors and timeouts cache nothing and leave the hourly retry in place', async () => {
   for (const failure of [() => new Response('slow down', { status: 429 }), () => new Response('down', { status: 503 }), () => { throw new DOMException('The operation timed out.', 'TimeoutError'); }]) {
     const db = fakeDb([activeMember(), cacheMiss(), { data: [{ id: groupId }], error: null }]);
     const { resolveGroup, restore } = await loadResolver(db, [failure]);

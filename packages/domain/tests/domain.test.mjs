@@ -8,7 +8,7 @@ import {
   directMessagePreview,
   directConversationTime,
   groupInitials,
-  resolveQrPageName,
+  qrGroupName,
   scannedCode,
   groupFallbackName,
   productGroupName,
@@ -106,25 +106,13 @@ test('group initials use the first two Unicode word tokens', () => {
   assert.equal(groupInitials('   '), '');
 });
 
-test('QR page metadata resolves venue titles while rejecting generic, technical, and conflicting names', () => {
-  const metadata = (overrides = {}) => ({
-    structuredData: [], openGraphTitles: [], pageTitles: [], siteNames: [], ...overrides,
-  });
-  assert.equal(resolveQrPageName(metadata({
-    openGraphTitles: ['Happy - Menu'], siteNames: ['Toast'],
-  })), 'Happy');
-  assert.equal(resolveQrPageName(metadata({ pageTitles: ['Menu | Happy'] })), 'Happy');
-  assert.equal(resolveQrPageName(metadata({ pageTitles: ['Home page'] })), null);
-  assert.equal(resolveQrPageName(metadata({ openGraphTitles: ['https://happy.example/menu'] })), null);
-  assert.equal(resolveQrPageName(metadata({ pageTitles: ['happy.example/menu'] })), null);
-  assert.equal(resolveQrPageName(metadata({ pageTitles: ['84291'] })), null);
-  assert.equal(resolveQrPageName(metadata({
-    openGraphTitles: ['Happy Cafe'], pageTitles: ['Different Place'],
-  })), null);
-  assert.equal(resolveQrPageName(metadata({
-    structuredData: [{ types: ['https://schema.org/Restaurant'], names: ['Happy Cafe'] }],
-    openGraphTitles: ['Happy Cafe - Menu'],
-  })), 'Happy Cafe');
+test('QR groups are named from the scanned host alone', () => {
+  assert.equal(qrGroupName('https://happy.com'), 'happy');
+  assert.equal(qrGroupName('https://www.happy.co.uk/menu'), 'happy');
+  assert.equal(qrGroupName('https://order.happy.com/t/4'), 'happy');
+  for (const code of ['Room-α', 'https://192.168.0.1/x', 'https://[::1]/x', 'https://localhost', 'https://xn--pypal-4ve.com']) {
+    assert.equal(qrGroupName(code), null, code);
+  }
 });
 
 test('chat rows mix groups, DMs and requests with the newest activity first', () => {

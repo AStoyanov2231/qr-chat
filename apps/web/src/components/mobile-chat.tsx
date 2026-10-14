@@ -53,7 +53,7 @@ function MessageSkeleton() {
   );
 }
 
-type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "blockFriend" | "signOut";
+type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "blockFriend" | "signOut" | "deleteAccount" | "nameProductGroup";
 export type ChatViewApi = Pick<ChatApi, "joinGroup" | "resolveGroup"> & {
   [K in PreviewCommands]: (...args: Parameters<ChatApi[K]>) => Promise<unknown>;
 };
@@ -96,6 +96,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const [pending, setPending] = useState<Venue | null>(null);
   const [entry, setEntry] = useState(false);
   const [draft, setDraft] = useState("");
+  const [productName, setProductName] = useState("");
   const outbox = useOutbox();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -521,7 +522,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : "has-profile"}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
-          <ProfileView session={session} ready={ready} busy={busy} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} />
+          <ProfileView session={session} ready={ready} busy={busy} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} onDeleteAccount={() => void perform(async () => { await api.deleteAccount(); router.replace("/sign-in"); router.refresh(); })} />
         </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={openOwnProfile} /> : !active && !directId && (
           <ChatsOverview
             profileName={session?.name}
@@ -580,6 +581,17 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 {groupOutbox.map((item) => <OutboxBubble key={item.key} item={item} onRetry={() => outbox.retry(item, sendGroup(active.id))} />)}
                 <div ref={bottom} />
               </div>
+
+              {group?.venue.nameMissing && group.venue.codes[0]?.startsWith("gtin:") && (
+                <form className="product-name-form" onSubmit={(event) => {
+                  event.preventDefault();
+                  void perform(async () => { await api.nameProductGroup(group.id, productName); setProductName(""); await backend.refresh(); });
+                }}>
+                  <label htmlFor="product-name">We couldn’t find this product. Name it for everyone who scans it:</label>
+                  <input id="product-name" value={productName} maxLength={100} disabled={busy} autoComplete="off" onChange={(event) => setProductName(event.target.value)} />
+                  <button type="submit" disabled={busy || !productName.trim()}>Save</button>
+                </form>
+              )}
 
               {group ? (
                 <form className="message-composer" onSubmit={submitMessage} aria-busy={busy}>

@@ -25,7 +25,7 @@ export default function SignInPage() {
           <SignInError />
 
           <p className="auth-terms">
-            By continuing, you agree to use QR Chat respectfully.
+            By continuing, you agree to use QR Chat respectfully. See our <Link href="/privacy">Privacy Policy</Link>.
           </p>
         </div>
       </section>

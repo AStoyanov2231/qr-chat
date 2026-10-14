@@ -1,8 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@qr-chat/types";
-import { productGroupName } from "@qr-chat/domain";
+import { productGroupName, qrGroupName } from "@qr-chat/domain";
 import { qrNameSchema } from "@qr-chat/validation";
-import { lookupQrPageName } from "@/lib/qr-name-metadata";
 
 const RETRY_MS = 60 * 60 * 1000;
 // Open Food Facts misses are cached this long; transient failures (429, 5xx, timeouts) are never cached.
@@ -60,15 +59,18 @@ export async function resolveGroup(userId: string, code: string): Promise<string
   if (!membership || !group || Date.parse(membership.expires_at as string) <= Date.now()) return null;
   if (group.name) return group.name;
 
-  // A cached product names the group without the hourly claim or an Open Food Facts call.
-  const gtin = code.startsWith("gtin:") ? code.slice(5) : null;
-  // Join accepts any code; only scanner-normalized GTIN-13 keys (@qr-chat/domain) reach OFF, the cache and storage.
-  if (gtin !== null && !/^\d{13}$/u.test(gtin)) return null;
-  if (gtin) {
-    const { data: cached } = await db.from("products").select("name, image_path, not_found, fetched_at").eq("gtin", gtin).maybeSingle();
-    if (cached?.name) return nameGroup(db, group.id, cached.name, cached.image_path);
-    if (cached?.not_found && Date.now() - Date.parse(cached.fetched_at) < NOT_FOUND_TTL_MS) return null;
+  // QR names come from the scanned text alone; no site is fetched.
+  if (!code.startsWith("gtin:")) {
+    const name = qrGroupName(code);
+    return name && nameGroup(db, group.id, name, null);
   }
+  // Join accepts any code; only scanner-normalized GTIN-13 keys (@qr-chat/domain) reach OFF, the cache and storage.
+  const gtin = code.slice(5);
+  if (!/^\d{13}$/u.test(gtin)) return null;
+  // A cached product names the group without the hourly claim or an Open Food Facts call.
+  const { data: cached } = await db.from("products").select("name, image_path, not_found, fetched_at").eq("gtin", gtin).maybeSingle();
+  if (cached?.name) return nameGroup(db, group.id, cached.name, cached.image_path);
+  if (cached?.not_found && Date.now() - Date.parse(cached.fetched_at) < NOT_FOUND_TTL_MS) return null;
 
   // Claim the lookup atomically: at most one per group per hour across server instances.
   const retryBefore = new Date(Date.now() - RETRY_MS).toISOString();
@@ -76,10 +78,6 @@ export async function resolveGroup(userId: string, code: string): Promise<string
     .eq("id", group.id).is("name", null).or(`metadata_checked_at.is.null,metadata_checked_at.lt."${retryBefore}"`).select("id");
   if (!claimed?.length) return null;
 
-  if (!gtin) {
-    const name = qrNameSchema.safeParse(await lookupQrPageName(code)).data ?? null;
-    return name && nameGroup(db, group.id, name, null);
-  }
   const product = await lookupProduct(gtin);
   if (!product) return null;
   const fetched_at = new Date().toISOString();
