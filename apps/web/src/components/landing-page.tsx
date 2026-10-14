@@ -63,6 +63,6 @@ export function LandingPage() {
     </section>
 
     <section id="privacy" className="landing-privacy"><span className="landing-privacy-icon"><ChatCircle size={26} aria-hidden="true" /></span><div><h2>A shared space, with clear boundaries.</h2><p>Group messages are available to members with active access. Direct messages are for accepted friends. Your name and profile photo help people recognize you.</p></div></section>
-    <footer className="landing-footer"><span className="app-brand"><QrCode size={22} aria-hidden="true" />QR Chat</span><span>A little closer.</span><a href="#privacy">Privacy</a></footer>
+    <footer className="landing-footer"><span className="app-brand"><QrCode size={22} aria-hidden="true" />QR Chat</span><span>A little closer.</span><Link href="/privacy">Privacy Policy</Link></footer>
   </main>;
 }

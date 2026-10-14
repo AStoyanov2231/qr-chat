@@ -399,7 +399,9 @@ export type Database = {
           name: string | null
         }[]
       }
+      erase_user_messages: { Args: { p_user_id: string }; Returns: undefined }
       leave_qr_group: { Args: { p_group_id: string }; Returns: string }
+      name_product_group: { Args: { p_group_id: string; p_name: string }; Returns: undefined }
       my_permissions: { Args: { p_group_id?: string }; Returns: string[] }
       remove_friend_connection: {
         Args: { p_connection_id: string }

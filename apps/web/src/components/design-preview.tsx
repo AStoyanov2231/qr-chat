@@ -121,6 +121,8 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
     },
     async resolveGroup() { return null; },
     async signOut() { setSnapshot(sampleSnapshot(initialTime)); setDirectRows(sampleDirectMessages(initialTime)); },
+    async deleteAccount() { setSnapshot(sampleSnapshot(initialTime)); setDirectRows(sampleDirectMessages(initialTime)); },
+    async nameProductGroup(id, name) { setSnapshot((current) => ({ ...current, groups: current.groups.map((group) => group.id === id ? { ...group, venue: { ...group.venue, name: String(name), nameMissing: false } } : group) })); },
   }), [initialTime, snapshot]);
 
   const directPreviews: ChatSnapshot["directPreviews"] = {};

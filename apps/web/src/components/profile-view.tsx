@@ -15,11 +15,13 @@ type Props = {
   onBack?: () => void;
   onSave: (name: string, photo?: AvatarUpload | null) => Promise<boolean | undefined>;
   onSignOut: () => void;
+  onDeleteAccount: () => void;
 };
 
-export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut }: Props) {
+export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut, onDeleteAccount }: Props) {
   const [saveFailed, setSaveFailed] = useState(false);
   const [panel, setPanel] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState<Blob | null | undefined>();
   const [preview, setPreview] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut }:
   function open(title: string) {
     ++selection.current;
     setPhoto(undefined); setPreview(null); setPhotoError(""); setPreparing(false);
-    setSaveFailed(false);
+    setSaveFailed(false); setConfirmDelete(false);
     setPanel(title);
     setName(session?.name ?? "");
     dialog.current?.showModal();
@@ -89,8 +91,14 @@ export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut }:
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
         </form>}
         {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button>
-          <p>Product data and photos © <a href="https://openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a> contributors (ODbL / CC-BY-SA).</p></div>}
-        {panel === "Privacy" && <p>Group messages are available to members with active access. Your name and photo are visible to people in your group and your friends. Direct messages are shared with accepted friends. Each group’s access ends 24 hours after you join it; leaving a group also ends that access.</p>}
+          {confirmDelete
+            ? <><p>This permanently erases your profile, photo, friendships and the messages you sent. It cannot be undone.</p>
+              <button className="profile-action danger" disabled={busy} onClick={onDeleteAccount}>Yes, delete my account<CaretRight size={18} /></button>
+              <button className="text-button" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</button></>
+            : <button className="profile-action danger" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete account<CaretRight size={18} /></button>}
+          <p>Product data and photos © <a href="https://openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a> contributors, under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL</a> and <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA</a> licenses.</p></div>}
+        {panel === "Privacy" && <><p>Group messages are available to members with active access. Your name and photo are visible to people in your group and your friends. Direct messages are shared with accepted friends. Each group’s access ends 24 hours after you join it; leaving a group also ends that access.</p>
+          <p><Link href="/privacy">Read the full Privacy Policy</Link></p></>}
         {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code or a product barcode, then join the group. You can be in as many groups as you scan; each one lasts 24 hours. To keep talking after group access ends, open a member’s profile and send a friend request. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}
       </div>
     </dialog>

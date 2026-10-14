@@ -989,3 +989,16 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .message-retry { flex-shrink: 0; align-self: center; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; background: transparent; }
 .message-retry span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 999px; background: var(--danger); color: #fff; font-size: 14px; font-weight: 800; line-height: 1; }
 .message-failed { display: block; margin-top: 4px; color: var(--danger); font-size: 12px; line-height: 16px; font-weight: 700; text-align: right; }
+
+.legal-page { width: min(680px, 100%); margin: 0 auto; padding: 24px 16px 64px; color: var(--text); line-height: 24px; }
+.legal-page h1 { margin: 32px 0 4px; font-size: 28px; line-height: 34px; }
+.legal-page h2 { margin: 28px 0 8px; font-size: 18px; line-height: 24px; }
+.legal-page ul { padding-left: 20px; }
+.legal-page a { color: var(--secondary); }
+.legal-updated { color: var(--muted); font-size: 14px; }
+
+.product-name-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 0 12px; }
+.product-name-form label { grid-column: 1 / -1; color: var(--muted); font-size: 14px; line-height: 20px; }
+.product-name-form input { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--fill); color: var(--text); font: inherit; }
+.product-name-form button { padding: 0 16px; border: 0; border-radius: 12px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; }
+.product-name-form button:disabled { opacity: .5; }

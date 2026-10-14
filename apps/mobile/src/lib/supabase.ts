@@ -41,6 +41,7 @@ export function getNativeApi(observer?: RequestObserver) {
     detectSessionInUrl: false, flowType: 'pkce',
   } }), {
     qrNameEndpoint: webOrigin ? `${webOrigin.replace(/\/+$/u, '')}/api/qr-name` : '',
+    accountEndpoint: webOrigin ? `${webOrigin.replace(/\/+$/u, '')}/api/account` : '',
   });
   return api;
 }

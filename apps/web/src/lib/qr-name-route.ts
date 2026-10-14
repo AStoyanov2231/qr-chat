@@ -40,7 +40,7 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 
-async function authenticatedUserId(request: Request, createClient: Dependencies["createClient"]): Promise<string | null> {
+export async function authenticatedUserId(request: Request, createClient: Dependencies["createClient"]): Promise<string | null> {
   const authorization = request.headers.get("authorization");
   let bearer: string | undefined;
   if (authorization !== null) {

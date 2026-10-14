@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
-import { codeKeySchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
+import { codeKeySchema, productNameSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
 import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage, Friend, Profile } from "./overview.ts";
 export { getChatStore, createChatStore } from "./store.ts";
 export { createObservedFetch } from "./requests.ts";
@@ -38,10 +38,11 @@ async function result<T>(request: PromiseLike<{ data: T; error: { message: strin
 /** Inject an authenticated public client. Session storage and auth lifecycle belong to the host platform. */
 export function createChatApi(
   client: SupabaseClient<Database>,
-  options: { qrNameEndpoint?: string; fetcher?: typeof fetch } = {},
+  options: { qrNameEndpoint?: string; accountEndpoint?: string; fetcher?: typeof fetch } = {},
 ) {
   const fetcher = options.fetcher ?? fetch;
   const qrNameEndpoint = options.qrNameEndpoint ?? "/api/qr-name";
+  const accountEndpoint = options.accountEndpoint ?? "/api/account";
   const mutations = new Set<(event: ChatMutation) => void>();
   const emit = (event: ChatMutation) => { for (const listener of mutations) listener(event); };
   // The database stores avatar object paths; URLs are derived here so the host lives in one place.
@@ -140,6 +141,9 @@ export function createChatApi(
         return response.ok ? qrNameLookupResponseSchema.parse(await response.json()).name : null;
       } catch { return null; }
     },
+    /** Lets a member name a product group Open Food Facts does not know. */
+    nameProductGroup: (groupId: string, name: unknown) =>
+      nullableResult(client.rpc("name_product_group", { p_group_id: userIdSchema.parse(groupId), p_name: productNameSchema.parse(name) })),
     leaveGroup: (groupId: string) => nullableResult(client.rpc("leave_qr_group", { p_group_id: userIdSchema.parse(groupId) })),
     async memberships() {
       return result(client.from("group_members")
@@ -215,6 +219,14 @@ export function createChatApi(
       const message = await result(client.from("messages").insert({ group_id, body: content, sender_id: id }).select().single());
       emit({ kind: "direct", userId: id, message });
       return message;
+    },
+    /** Permanently erases the signed-in account on the server, then clears the local session. */
+    async deleteAccount() {
+      const { data } = await client.auth.getSession();
+      if (!accountEndpoint || !data.session) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
+      const response = await fetcher(accountEndpoint, { method: "DELETE", credentials: "same-origin", headers: { authorization: `Bearer ${data.session.access_token}` } });
+      if (!response.ok) throw new ChatApiError("Could not delete your account. Please try again.");
+      await client.auth.signOut({ scope: "local" }).catch(() => {});
     },
     async signOut() {
       const { error } = await client.auth.signOut({ scope: "local" });
