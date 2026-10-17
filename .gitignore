@@ -12,9 +12,6 @@ node_modules/
 .mcp.json
 skills-lock.json
 
-# Local migrations stay private except the additive traffic rollout.
-supabase/
-
 analysis
 
 commands.md
