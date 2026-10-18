@@ -12,29 +12,31 @@ import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
 type PlaceInput = { name: string; link: string; menu?: MenuUpload | null };
+let client: ReturnType<typeof createChatApi> | undefined;
+// Created on first use in the browser: the page is prerendered at build time, where no Supabase env exists.
+const api = () => client ??= createChatApi(createClient());
 
 /** Business owners manage their places here, on desktop or phone. Without the plan, places are read-only. */
 export function BusinessView() {
-  const [api] = useState(() => createChatApi(createClient()));
   const [state, setState] = useState<{ business: boolean; places: Place[] } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
   const load = useCallback(async () => {
-    const [business, places] = await Promise.all([api.isBusiness(), api.places()]);
+    const [business, places] = await Promise.all([api().isBusiness(), api().places()]);
     setState({ business, places });
-  }, [api]);
+  }, []);
   useEffect(() => {
-    void api.client.auth.getSession().then(({ data }) => {
+    void api().client.auth.getSession().then(({ data }) => {
       if (!data.session) window.location.replace(signInPath("/business"));
       else load().catch((reason) => setError(errorMessage(reason)));
     });
-  }, [api, load]);
+  }, [load]);
   async function run(action: () => Promise<unknown>) {
     setBusy(true); setError("");
     try { await action(); await load(); return true; } catch (reason) { setError(errorMessage(reason)); return false; } finally { setBusy(false); }
   }
-  const signOut = () => void run(async () => { await api.signOut(); window.location.replace("/"); });
+  const signOut = () => void run(async () => { await api().signOut(); window.location.replace("/"); });
 
   return <main className="business-page">
     <header><h1>Business</h1><button type="button" className="text-button" style={{ width: "auto", margin: 0 }} disabled={busy} onClick={signOut}>Sign out</button></header>
@@ -49,15 +51,15 @@ export function BusinessView() {
         {!state.business && <p role="status">Your business plan is inactive. Your QR codes still work as normal group chats; renew the plan to edit your places again.</p>}
         {state.business && <form className="profile-form" onSubmit={(event) => {
           event.preventDefault();
-          void run(async () => { await api.createPlace(name); setName(""); });
+          void run(async () => { await api().createPlace(name); setName(""); });
         }}>
           <label htmlFor="place-name">New place</label>
           <input id="place-name" value={name} maxLength={100} placeholder="Your venue’s name" disabled={busy} onChange={(event) => setName(event.target.value)} required />
           <button className="scan-primary" disabled={busy || !name.trim()}>Create place</button>
         </form>}
         {state.places.map((place) => <PlaceCard key={place.id} place={place} readOnly={!state.business} busy={busy}
-          onSave={(input) => run(() => api.updatePlace(place, input))}
-          onDelete={() => run(() => api.deletePlace(place.id))} />)}
+          onSave={(input) => run(() => api().updatePlace(place, input))}
+          onDelete={() => run(() => api().deletePlace(place.id))} />)}
       </>}
   </main>;
 }
