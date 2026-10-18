@@ -10,7 +10,7 @@ import { Avatar } from './avatar';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 
-export function GroupQr({ code }: { code: string }) {
+export function GroupQr({ code, size = 180 }: { code: string; size?: number }) {
   const uri = useMemo(() => {
     try {
       const { modules } = QRCode.create(code, { errorCorrectionLevel: 'M' });
@@ -22,7 +22,7 @@ export function GroupQr({ code }: { code: string }) {
       return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><rect width="100%" height="100%" fill="white"/><path d="${path}" fill="#111111"/></svg>`)}`;
     } catch { return null; }
   }, [code]);
-  return uri ? <Image source={{ uri }} contentFit="contain" style={{ width: 180, height: 180, borderRadius: 24 }} accessibilityLabel="Group QR code" /> : <Copy>QR code could not be displayed.</Copy>;
+  return uri ? <Image source={{ uri }} contentFit="contain" style={{ width: size, height: size, borderRadius: size * 2 / 15 }} accessibilityLabel="Group QR code" /> : <Copy>QR code could not be displayed.</Copy>;
 }
 
 export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?: () => void }) {

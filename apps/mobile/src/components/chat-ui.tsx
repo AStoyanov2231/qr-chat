@@ -14,7 +14,7 @@ import { errorMessage } from '@/providers/chat-provider';
 export const colors = {
   canvas: '#ffffff', surface: '#ffffff', text: '#111111', muted: '#66635c', line: '#ece9e2', fill: '#f3f1ec',
   primary: '#ffc629', onPrimary: '#111111', primaryTint: '#fff1bf', onPrimaryTint: '#5a4a12', secondary: '#2d4bd1', onSecondary: '#ffffff',
-  avatar: '#ece9e2', online: '#22b35e', danger: '#c42b2b', dangerTint: '#fdecec', floating: 'rgba(255,255,255,0.94)', photo: '#5b5a55',
+  avatar: '#ece9e2', online: '#22b35e', danger: '#c42b2b', dangerTint: '#fdecec', warning: '#ffe4d1', onWarning: '#7a3410', floating: 'rgba(255,255,255,0.94)', photo: '#5b5a55',
 };
 export const shadowFloat = '0 1px 2px rgba(17,17,17,0.08), 0 8px 24px rgba(17,17,17,0.12)';
 const symbols = {
@@ -27,7 +27,8 @@ const symbols = {
   block: ['nosign', 'block'], userMinus: ['person.badge.minus.fill', 'person_remove'],
   check: ['checkmark', 'check'], userPlus: ['person.badge.plus.fill', 'person_add'],
   help: ['questionmark.circle', 'help'], pin: ['mappin', 'location_on'], close: ['xmark', 'close'],
-  browser: ['safari', 'open_in_browser'],
+  browser: ['safari', 'open_in_browser'], plus: ['plus', 'add'], business: ['storefront', 'storefront'],
+  pdf: ['doc.richtext', 'picture_as_pdf'], trash: ['trash', 'delete'], share: ['square.and.arrow.up', 'share'],
 } as const;
 export type IconName = keyof typeof symbols;
 export function Icon({ name, size = 25, color = colors.text }: { name: IconName; size?: number; color?: string }) {

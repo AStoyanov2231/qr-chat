@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChatSnapshot, Tables } from "@qr-chat/api";
-import { codeKeySchema, displayNameSchema, messageBodySchema, profileSchema } from "@qr-chat/validation";
+import type { ChatSnapshot, Place, Tables } from "@qr-chat/api";
+import { codeKeySchema, displayNameSchema, menuUploadSchema, messageBodySchema, placeLinkSchema, placeNameSchema, profileSchema } from "@qr-chat/validation";
 import { groupFallbackName } from "@qr-chat/domain";
 import { ChatView, type ChatViewApi, type ChatViewBackend } from "./mobile-chat";
+import { BusinessView, type BusinessApi } from "./business-view";
 
 type Friend = ChatSnapshot["friends"][number];
 
@@ -133,7 +134,36 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
     ...snapshot, directPreviews, api, ready: true, error: "", connection: "connected", hasObservedGroup: true,
     refresh: idle, refreshGroup: idle, openGroup: () => () => {}, groupLoading: false, loadOlder: idle,
   };
-  return <ChatView view={view} backend={backend} directId={directId} setDirectId={setDirectId} direct={{
+  return <ChatView view={view} backend={backend} directId={directId} setDirectId={setDirectId} business direct={{
     messages: directRows.filter((row) => row.group_id === directId), nextCursor: null, loading: false, error: "", connection: "connected", refresh: idle, loadOlder: idle,
   }} />;
+}
+
+const samplePlaces = (now: number): Place[] => [
+  { id: "55555555-5555-4555-8555-000000000001", owner_id: localUserId, group_id: groupId, code: "cafecentr2", name: "Cafe Central", link_url: "https://example.com/order", menu_path: `${localUserId}/menu.pdf`, menu_url: "https://example.com/menu.pdf", created_at: new Date(now - 7 * 86400000).toISOString(), deleted_at: null },
+  { id: "55555555-5555-4555-8555-000000000002", owner_id: localUserId, group_id: crypto.randomUUID(), code: "rooftop234", name: "Rooftop Bar", link_url: null, menu_path: null, menu_url: null, created_at: new Date(now - 86400000).toISOString(), deleted_at: null },
+];
+
+/** The Business screen on in-memory places: create, edit, menu and delete behave like the real API, nothing is saved. */
+export function BusinessPreview({ initialTime }: { initialTime: number }) {
+  const places = useRef(samplePlaces(initialTime));
+  const [api] = useState<BusinessApi>(() => ({
+    async isBusiness() { return true; },
+    async places() { return places.current.filter((place) => !place.deleted_at); },
+    async createPlace(input) {
+      const place: Place = { id: crypto.randomUUID(), owner_id: localUserId, group_id: crypto.randomUUID(), code: Math.random().toString(36).slice(2, 12).padEnd(10, "2"), name: placeNameSchema.parse(input), link_url: null, menu_path: null, menu_url: null, created_at: new Date().toISOString(), deleted_at: null };
+      places.current = [...places.current, place];
+      return place;
+    },
+    async updatePlace(place, input) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const upload = input.menu ? menuUploadSchema.parse(input.menu) : input.menu;
+      const menu_url = upload ? URL.createObjectURL(new Blob([upload.data], { type: "application/pdf" })) : upload === null ? null : place.menu_url;
+      const saved = { ...place, name: placeNameSchema.parse(input.name), link_url: placeLinkSchema.parse(input.link) || null, menu_url, menu_path: menu_url && `${localUserId}/${upload?.uploadId ?? "menu"}.pdf` };
+      places.current = places.current.map((item) => item.id === place.id ? saved : item);
+      return saved;
+    },
+    async deletePlace(id) { places.current = places.current.map((place) => place.id === id ? { ...place, deleted_at: new Date().toISOString() } : place); },
+  }));
+  return <BusinessView preview={api} />;
 }

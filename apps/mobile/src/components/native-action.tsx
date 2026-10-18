@@ -10,12 +10,12 @@ import { colors, Icon, PillButton } from './chat-ui';
 type Props = Omit<ButtonProps, 'style'> & {
   align?: 'center' | 'flex-start' | 'flex-end';
   accessibilityLabel?: string;
-  icon?: 'back' | 'settings' | 'close' | 'browser' | 'scan';
+  icon?: 'back' | 'settings' | 'close' | 'browser' | 'scan' | 'plus';
   /** Yellow 64pt primary action (the Scan FAB). */
   prominent?: boolean;
 };
 
-const systemImages = { back: 'chevron.left', settings: 'gearshape', close: 'xmark', browser: 'safari', scan: 'qrcode.viewfinder' } as const;
+const systemImages = { back: 'chevron.left', settings: 'gearshape', close: 'xmark', browser: 'safari', scan: 'qrcode.viewfinder', plus: 'plus' } as const;
 const labelColors = { filled: [colors.primary, colors.onPrimary], outlined: [colors.fill, colors.text], text: [undefined, colors.text] } as const;
 
 export function NativeAction({ align = 'center', accessibilityLabel, icon, prominent = false, ...buttonProps }: Props) {

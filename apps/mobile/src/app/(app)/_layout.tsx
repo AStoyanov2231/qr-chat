@@ -25,6 +25,6 @@ export default function AppLayout() {
     <Stack.Screen name="direct/[id]" options={{ title: 'Direct message', headerShown: false, statusBarStyle: 'light' }} />
     <Stack.Screen name="edit-profile" options={{ ...modal, title: 'Edit Profile' }} />
     <Stack.Screen name="settings" options={{ ...modal, title: 'Settings' }} />
-    <Stack.Screen name="business" options={{ ...modal, title: 'Business' }} />
+    <Stack.Screen name="business" options={{ title: 'Business', headerShown: false }} />
   </Stack></ChatProvider>;
 }

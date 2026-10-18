@@ -8,6 +8,7 @@ const previewRewrites = development
   ? [
     { source: "/", destination: "/design-preview?view=chats", has: localHost },
     { source: "/profile", destination: "/design-preview?view=profile", has: localHost },
+    { source: "/business", destination: "/design-preview?view=business", has: localHost },
     { source: "/sign-in", destination: "/design-preview?view=chats", has: localHost },
   ]
   : [];

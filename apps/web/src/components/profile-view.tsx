@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
-import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, X } from "@phosphor-icons/react";
+import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, Storefront, X } from "@phosphor-icons/react";
 import type { Session } from "@/lib/chat-view";
 
 type Props = {
@@ -59,7 +59,8 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
     </header>
     <div className="chat-header-controls"><Link href="/" className="back-button" onClick={(event) => { if (onBack && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onBack(); } }} aria-label="Back to chats"><ArrowLeft size={20} weight="bold" /></Link></div>
     <div className="chat-conversation-surface profile-surface">
-      <div className="profile-actions">{actions.map(({ label, panel: title, icon: ActionIcon }) => <button key={title} aria-label={title} onClick={() => open(title)}><span><ActionIcon size={24} /></span>{label}</button>)}</div>
+      <div className="profile-actions">{actions.map(({ label, panel: title, icon: ActionIcon }) => <button key={title} aria-label={title} onClick={() => open(title)}><ActionIcon size={28} />{label}</button>)}
+        {business && <Link href="/business"><Storefront size={28} />Business</Link>}</div>
     </div>
     <dialog ref={dialog} className="profile-dialog" aria-label={panel} onCancel={(event) => { if (saving) event.preventDefault(); }} onClick={(event) => { if (event.target === dialog.current && !saving) dialog.current?.close(); }}>
       <div className="entry-panel">
@@ -91,7 +92,7 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
           <label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required />
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
         </form>}
-        {panel === "Settings" && <div className="settings-actions">{business && <Link className="profile-action" href="/business">Business<CaretRight size={18} /></Link>}<button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button>
+        {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button>
           {confirmDelete
             ? <><p>This permanently erases your profile, photo, friendships and the messages you sent. It cannot be undone.</p>
               <button className="profile-action danger" disabled={busy} onClick={onDeleteAccount}>Yes, delete my account<CaretRight size={18} /></button>

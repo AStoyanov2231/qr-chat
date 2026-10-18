@@ -3,60 +3,52 @@
 import Image from "next/image";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { ArrowLeft } from "@phosphor-icons/react";
-import { useCallback, useEffect, useState } from "react";
-import { createChatApi, type MenuUpload, type Place } from "@qr-chat/api";
+import { ArrowLeft, CaretRight, DownloadSimple, FilePdf, Plus, Trash } from "@phosphor-icons/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createChatApi, type ChatApi, type Place } from "@qr-chat/api";
 import { qrPayload } from "@qr-chat/domain";
 import { errorMessage } from "@/hooks/use-chat-backend";
 import { appOrigin } from "@/lib/app-origin";
 import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
-type PlaceInput = { name: string; link: string; menu?: MenuUpload | null };
 let client: ReturnType<typeof createChatApi> | undefined;
 // Created on first use in the browser: the page is prerendered at build time, where no Supabase env exists.
-const api = () => client ??= createChatApi(createClient());
+const live = () => client ??= createChatApi(createClient());
 const HTTPS = "https://\\S+";
+/** What the screen needs; the local design preview passes an in-memory stand-in. */
+export type BusinessApi = Pick<ChatApi, "isBusiness" | "places" | "createPlace" | "updatePlace" | "deletePlace">;
 
 /** Business owners manage their places here, on desktop or phone. Without the plan, places are read-only. */
-export function BusinessView() {
+export function BusinessView({ preview }: { preview?: BusinessApi }) {
+  const api = useCallback((): BusinessApi => preview ?? live(), [preview]);
   const [state, setState] = useState<{ business: boolean; places: Place[] } | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [name, setName] = useState("");
+  // The list is the home; "new" or a place opens the editor, which returns to the list when done.
+  const [editing, setEditing] = useState<Place | "new" | null>(null);
   const load = useCallback(async () => {
     const [business, places] = await Promise.all([api().isBusiness(), api().places()]);
     setState({ business, places });
-  }, []);
+  }, [api]);
   useEffect(() => {
-    void api().client.auth.getSession().then(({ data }) => {
-      if (!data.session) window.location.replace(signInPath("/business"));
+    const signedIn = preview ? Promise.resolve(true) : live().client.auth.getSession().then(({ data }) => !!data.session);
+    void signedIn.then((ok) => {
+      if (!ok) window.location.replace(signInPath("/business"));
       else load().catch((reason) => setError(errorMessage(reason)));
     });
-  }, [load]);
-  async function run(action: () => Promise<unknown>) {
-    setBusy(true); setError("");
-    try { await action(); await load(); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(false); }
-  }
-  const signOut = () => void run(async () => { await api().signOut(); window.location.replace("/"); });
-  const hasPlaces = !!state?.places.length;
-  // The first place is the screen's main job; once places exist, editing them is, and adding another steps back.
-  const create = <form className="profile-form" onSubmit={(event) => {
-    event.preventDefault();
-    void run(async () => { await api().createPlace(name); setName(""); });
-  }}>
-    <label htmlFor="place-name">{hasPlaces ? "Add another place" : "Venue name"}</label>
-    <input id="place-name" value={name} maxLength={100} placeholder="e.g. Natterium Bar" disabled={busy} onChange={(event) => setName(event.target.value)} required />
-    <button className={hasPlaces ? "scan-primary subtle" : "scan-primary"} disabled={busy || !name.trim()}>{busy ? "Creating…" : "Create place"}</button>
-  </form>;
+  }, [load, preview]);
+  const retry = () => { setError(""); load().catch((reason) => setError(errorMessage(reason))); };
+  const done = async () => { await load(); setEditing(null); };
 
+  if (editing && state) return <PlaceEditor place={editing === "new" ? null : editing} readOnly={!state.business} api={api()} onDone={done} onBack={() => setEditing(null)} />;
+  const hasPlaces = !!state?.places.length;
   return <main className="business-page">
     <header>
       <Link href="/" className="back-button" aria-label="Back to chats"><ArrowLeft size={20} weight="bold" /></Link>
       <h1>Business</h1>
-      <button type="button" className="text-button" disabled={busy} onClick={signOut}>Sign out</button>
+      {state?.business && <button type="button" className="back-button" aria-label="Add a place" onClick={() => setEditing("new")}><Plus size={20} weight="bold" /></button>}
     </header>
-    {error && <div className="business-error" role="alert"><p>{error}</p>{!state && <button type="button" className="text-button" onClick={() => void run(async () => {})}>Try again</button>}</div>}
+    {error && <div className="business-error" role="alert"><p>{error}</p>{!state && <button type="button" className="text-button" onClick={retry}>Try again</button>}</div>}
     {!state ? !error && <p role="status">Loading your places…</p>
       : !state.business && !hasPlaces ? <section className="business-intro">
         <h2>This page is for business accounts.</h2>
@@ -64,71 +56,115 @@ export function BusinessView() {
       </section>
       : <>
         {!state.business && <p className="business-notice" role="status">Your business plan is inactive. Your QR codes still work as normal group chats; renew the plan to edit your places again.</p>}
-        {state.business && !hasPlaces && <section className="business-intro">
+        {!hasPlaces && <section className="business-intro">
           <h2>Create your first place</h2>
           <p>You get one QR code for it. Print it and put it on your tables; guests who scan it join your venue’s chat and can open your menu and link.</p>
-          {create}
+          <button type="button" className="scan-primary" onClick={() => setEditing("new")}>Create place</button>
         </section>}
-        {state.places.map((place) => <PlaceCard key={place.id} place={place} readOnly={!state.business}
-          onSave={async (input) => { await api().updatePlace(place, input); await load(); }}
-          onDelete={() => run(() => api().deletePlace(place.id))} />)}
-        {state.business && hasPlaces && create}
+        {hasPlaces && <ul className="business-list">{state.places.map((place) => <li key={place.id}>
+          <button type="button" className="business-row" onClick={() => setEditing(place)}>
+            <PlaceQr place={place} size={88} />
+            <span>
+              <strong>{place.name}</strong>
+              <span>{place.link_url ? place.link_url.replace(/^https:\/\//u, "") : "No link"}</span>
+              <span>{place.menu_url ? "Menu PDF" : "No menu"}</span>
+            </span>
+            <CaretRight size={18} aria-hidden="true" />
+          </button>
+        </li>)}</ul>}
       </>}
   </main>;
 }
 
-function PlaceCard({ place, readOnly, onSave, onDelete }: { place: Place; readOnly: boolean; onSave: (input: PlaceInput) => Promise<void>; onDelete: () => void }) {
-  const [name, setName] = useState(place.name);
-  const [link, setLink] = useState(place.link_url ?? "");
-  const [menu, setMenu] = useState<File | null | undefined>();
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<{ error?: string; saved?: boolean }>({});
+function useQr(url: string) {
   const [qr, setQr] = useState("");
-  const url = qrPayload(`v:${place.code}`, appOrigin());
   useEffect(() => {
     let active = true;
     void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" }).then((data) => { if (active) setQr(data); }, () => {});
     return () => { active = false; };
   }, [url]);
+  return qr;
+}
+
+function PlaceQr({ place, size }: { place: Place; size: number }) {
+  const qr = useQr(qrPayload(`v:${place.code}`, appOrigin()));
+  return qr ? <Image src={qr} alt={`QR code for ${place.name}`} width={size} height={size} unoptimized /> : <span className="business-qr-placeholder" style={{ width: size, height: size }} aria-hidden="true" />;
+}
+
+function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | null; readOnly: boolean; api: BusinessApi; onDone: () => Promise<void>; onBack: () => void }) {
+  const [name, setName] = useState(place?.name ?? "");
+  const [link, setLink] = useState(place?.link_url ?? "");
+  const [menu, setMenu] = useState<File | null | undefined>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  // A new place is created before its link and menu are saved; if that second step fails, a retry must not create it twice.
+  const created = useRef<Place | null>(null);
+  const url = place && qrPayload(`v:${place.code}`, appOrigin());
+  const qr = useQr(url ?? "");
   const disabled = readOnly || saving;
-  const edited = (change: () => void) => { change(); setStatus({}); };
-  const file = `${place.name.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/gu, "") || "place"}-qr.png`;
-  return <section className="business-place" aria-label={place.name}>
-    <div className="business-qr">
+  const file = `${name.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/gu, "") || "place"}-qr.png`;
+  const menuUrl = menu === undefined ? place?.menu_url : null;
+  return <main className="business-page">
+    <header>
+      <button type="button" className="back-button" aria-label="Back to places" disabled={saving} onClick={onBack}><ArrowLeft size={20} weight="bold" /></button>
+      <h1>{place ? place.name : "New place"}</h1>
+    </header>
+    {place && <section className="business-qr" aria-label="QR code">
       {qr ? <Image src={qr} alt={`QR code for ${place.name}`} width={200} height={200} unoptimized /> : <span className="business-qr-placeholder" aria-hidden="true" />}
-      <small>{url}</small>
-      {qr && <a className="scan-primary subtle" href={qr} download={file}>Download QR</a>}
-    </div>
-    <form className="profile-form" aria-busy={saving} onSubmit={async (event) => {
+      <div>
+        <p>Print it for your tables. Guests who scan it join this place’s chat.</p>
+        <small>{url}</small>
+        {qr && <a className="scan-primary subtle" href={qr} download={file}><DownloadSimple size={18} weight="bold" />Download QR</a>}
+      </div>
+    </section>}
+    <form className="profile-form business-form" aria-busy={saving} onSubmit={async (event) => {
       event.preventDefault();
-      setSaving(true); setStatus({});
+      setSaving(true); setError("");
       try {
+        const target = place ?? created.current ?? (created.current = await api.createPlace(name));
         const upload = menu ? { uploadId: crypto.randomUUID(), data: await menu.arrayBuffer() } : menu;
-        await onSave({ name, link, menu: upload });
-        setMenu(undefined); setStatus({ saved: true });
-      } catch (reason) { setStatus({ error: errorMessage(reason) }); } finally { setSaving(false); }
+        if (place || link || upload) await api.updatePlace(target, { name, link, menu: upload });
+        await onDone();
+      } catch (reason) { setError(errorMessage(reason)); setSaving(false); }
     }}>
-      <label htmlFor={`name-${place.id}`}>Name</label>
-      <input id={`name-${place.id}`} value={name} maxLength={100} disabled={disabled} onChange={(event) => edited(() => setName(event.target.value))} required />
-      <label htmlFor={`link-${place.id}`}>Link</label>
-      <input id={`link-${place.id}`} type="url" inputMode="url" value={link} maxLength={2048} placeholder="https://" pattern={HTTPS} title="Use a link that starts with https://" aria-describedby={`link-hint-${place.id}`} disabled={disabled} onChange={(event) => edited(() => setLink(event.target.value))} />
-      <small id={`link-hint-${place.id}`} className="field-hint">Your website or payment page. Guests open it from the group chat.</small>
-      <label htmlFor={`menu-${place.id}`}>Menu (PDF, up to 10 MB)</label>
-      <p className="field-hint" role="status">
-        {menu ? <>{menu.name} will be uploaded when you save. </>
-          : menu === null ? <>The menu will be removed when you save. </>
-          : place.menu_url ? <><a href={place.menu_url} target="_blank" rel="noopener noreferrer">View current menu</a> </>
-          : <>No menu yet. </>}
-        {menu !== undefined && !readOnly && <button type="button" className="inline-button" onClick={() => edited(() => setMenu(undefined))}>Undo</button>}
-      </p>
-      <input id={`menu-${place.id}`} type="file" accept="application/pdf" disabled={disabled} onChange={(event) => { const picked = event.target.files?.[0]; event.target.value = ""; if (picked) edited(() => setMenu(picked)); }} />
-      {place.menu_url && menu === undefined && !readOnly && <button type="button" className="text-button" disabled={saving} onClick={() => edited(() => setMenu(null))}>Remove menu</button>}
+      {/* The label sits inside the field and moves up as a hint once it has focus or a value; needs placeholder=" " for :placeholder-shown. */}
+      <div className="float-field">
+        <input id="place-name" value={name} maxLength={100} placeholder=" " disabled={disabled} onChange={(event) => setName(event.target.value)} required />
+        <label htmlFor="place-name">Name</label>
+      </div>
+      <div className="float-field">
+        <input id="place-link" type="url" inputMode="url" value={link} maxLength={2048} placeholder=" " pattern={HTTPS} title="Use a link that starts with https://" aria-describedby="place-link-hint" disabled={disabled} onChange={(event) => setLink(event.target.value)} />
+        <label htmlFor="place-link">Link <span>(optional)</span></label>
+      </div>
+      <small id="place-link-hint" className="field-hint">Your website or payment page. Guests open it from the group chat.</small>
+      <span className="business-label" id="place-menu-label">Menu <span>(optional)</span></span>
+      <div className={`business-menu${menu === null ? " removing" : ""}`} role="group" aria-labelledby="place-menu-label">
+        <FilePdf size={28} aria-hidden="true" />
+        <p role="status">
+          {menu ? <><strong>{menu.name}</strong><small>Uploads when you save</small></>
+            : menu === null ? <><strong>Menu will be removed</strong><small>When you save</small></>
+            : menuUrl ? <><strong><a href={menuUrl} target="_blank" rel="noopener noreferrer">Current menu</a></strong><small>Tap to view the PDF</small></>
+            : <><strong>No menu yet</strong><small>PDF, up to 10 MB</small></>}
+        </p>
+        {!readOnly && (menu !== undefined
+          ? <button type="button" className="text-button" disabled={saving} onClick={() => setMenu(undefined)}>Undo</button>
+          : <>
+            {menuUrl && <button type="button" className="text-button" aria-label="Remove menu" disabled={saving} onClick={() => setMenu(null)}><Trash size={20} /></button>}
+            <input id="place-menu" className="sr-only" type="file" accept="application/pdf" disabled={disabled} onChange={(event) => { const picked = event.target.files?.[0]; event.target.value = ""; if (picked) setMenu(picked); }} />
+            <label htmlFor="place-menu" className="business-upload">{menuUrl ? "Replace" : "Upload"}</label>
+          </>)}
+      </div>
       {!readOnly && <>
-        <button className="scan-primary" disabled={saving || !name.trim()}>{saving ? "Saving…" : "Save changes"}</button>
-        {status.error && <p className="form-error" role="alert">{status.error}</p>}
-        {status.saved && <p className="field-hint" role="status">Changes saved. Guests see them the next time they open the chat.</p>}
-        <button type="button" className="text-button danger" disabled={saving} onClick={() => { if (window.confirm(`Delete ${place.name}? Its QR code stops working and guests can no longer join.`)) onDelete(); }}>Delete place</button>
+        {place && <button type="button" className="text-button danger" disabled={saving} onClick={() => {
+          if (!window.confirm(`Delete ${place.name}? Its QR code stops working and guests can no longer join.`)) return;
+          setSaving(true); setError("");
+          api.deletePlace(place.id).then(onDone, (reason) => { setError(errorMessage(reason)); setSaving(false); });
+        }}>Delete place</button>}
+        <div className="business-actions">
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button className="scan-primary" disabled={saving || !name.trim()}>{saving ? "Saving…" : place ? "Save changes" : "Create place"}</button>
+        </div>
       </>}
     </form>
-  </section>;
+  </main>;
 }
