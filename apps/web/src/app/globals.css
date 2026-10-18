@@ -796,9 +796,12 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .chat-header-title h1 { flex-shrink: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30px; line-height: 36px; font-weight: 800; overflow-wrap: anywhere; }
 .chat-header-title p { font-size: 14px; }
 .chat-bar { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; padding: calc(var(--safe-top) + 6px) max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); }
-.chat-bar button, .chat-bar-spacer { flex-shrink: 0; width: 44px; height: 44px; }
+.chat-bar button { flex-shrink: 0; width: 44px; height: 44px; }
 .chat-bar button { display: grid; place-items: center; border-radius: 999px; background: transparent; color: var(--text); }
 .chat-bar-title { flex: 1; min-width: 0; text-align: center; }
+/* Equal sides keep the title centred whether one or two actions sit on the right. */
+.chat-bar-side { flex: 0 0 96px; display: flex; align-items: center; gap: 8px; }
+.chat-bar-side.end { justify-content: flex-end; }
 .chat-bar-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; line-height: 22px; font-weight: 700; }
 .chat-bar-title p { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 700; }
 /* One back button everywhere: a soft circle that presses in and nudges its arrow. */
@@ -1005,20 +1008,29 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 
 /* Business places */
 .chat-bar-action { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 999px; color: var(--text); }
-.venue-links { inset: auto; position-area: bottom span-left; margin: 4px 0; min-width: 180px; padding: 6px; border: 0; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-float); }
-.venue-links a { display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 14px; color: var(--text); font-weight: 600; }
+/* Menu and link: a bottom sheet over the chat, within thumb reach. */
+.venue-links { position: fixed; inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: auto; margin: 0; padding: 8px; border: 0; border-radius: 28px; background: var(--surface); box-shadow: var(--shadow-float); }
+.venue-links::backdrop { background: rgba(17, 17, 17, .32); }
+.venue-links a { display: flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 16px; border-radius: 20px; color: var(--text); font-size: 16px; font-weight: 700; }
 .venue-links a:hover { background: var(--fill); }
 .owner-tag { display: inline-flex; align-items: center; height: 24px; margin: 0 0 4px 8px; padding: 0 10px; border-radius: 999px; background: var(--primary-tint); color: var(--on-primary-tint); font-size: 12px; line-height: 16px; font-weight: 700; vertical-align: middle; }
 .message-stream article > div > .owner-tag { margin-left: 0; }
-.business-page { width: 100%; max-width: 720px; margin: 0 auto; padding: max(32px, env(safe-area-inset-top)) 16px 48px; display: grid; gap: 24px; }
+.business-page { width: 100%; max-width: 720px; margin: 0 auto; padding: max(32px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
 .business-page > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .business-page h1 { font-size: 30px; line-height: 36px; font-weight: 800; }
 .business-page h2 { font-size: 20px; line-height: 26px; font-weight: 700; }
 .business-page p { color: var(--muted); }
-.business-place { display: grid; grid-template-columns: 200px 1fr; gap: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 28px; }
-.business-place canvas { width: 200px; height: 200px; border-radius: 16px; }
+.business-page input { width: 100%; min-width: 0; }
+.business-page input[type="file"] { min-height: 44px; padding-block: 8px; font-size: 14px; }
+.business-page .text-button.danger { color: var(--danger); }
+.business-place { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 28px; }
+.business-place img { width: 200px; height: 200px; border-radius: 16px; }
 .business-place .profile-form { margin-top: 0; }
 .business-qr { display: grid; gap: 8px; justify-items: center; align-content: start; }
+.business-qr small { max-width: 100%; color: var(--muted); font-size: 12px; line-height: 16px; text-align: center; overflow-wrap: anywhere; }
 .business-qr .text-button { margin: 0; }
-@media (max-width: 600px) { .business-place { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .business-place { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 16px; border-radius: 24px; }
+  .business-place img { width: min(240px, 100%); height: auto; aspect-ratio: 1; }
+}
 .business-page input:not([type="file"]):focus-visible { outline-offset: 2px; }
