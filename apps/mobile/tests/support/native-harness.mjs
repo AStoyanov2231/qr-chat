@@ -20,6 +20,7 @@ const mocks = {
     import React from 'react';
     export const View='View', Text='Text', TextInput='TextInput', Pressable='Pressable', Button='Button', ScrollView='ScrollView', KeyboardAvoidingView='KeyboardAvoidingView', ActivityIndicator='ActivityIndicator';
     export const Keyboard = { dismiss() {} };
+    export const BackHandler = { addEventListener: () => ({ remove() {} }) };
     export const Animated={Value:class {setValue(){} stopAnimation(){} interpolate(){return 0;}},multiply:()=>0,View:'AnimatedView',timing:()=>({start:callback=>callback?.({finished:true})})};
     export const Easing={bezier:()=>value=>value};
     export const PanResponder={create:handlers=>({panHandlers:handlers})};
@@ -114,7 +115,9 @@ const mocks = {
     if(state.pickerError) throw new Error(state.pickerError);
     return state.pickerResult ?? {canceled:true,assets:null};
   }`,
-  'expo-file-system': `export class File { constructor(uri) {this.uri=uri;} async arrayBuffer(){return new Uint8Array([255,216,255,1]).buffer;} }`,
+  'expo-file-system': `export const Paths={cache:'file:///cache'};
+    export class File { constructor(...parts) {this.uri=parts.join('/');} async arrayBuffer(){return new Uint8Array([255,216,255,1]).buffer;} write(bytes){globalThis.__qrChatNativeTest.written=[this.uri,bytes];} }`,
+  'expo-sharing': "export const shareAsync=async(...args)=>{globalThis.__qrChatNativeTest.shared=args;};",
   'expo-image-manipulator': `export const SaveFormat={JPEG:'jpeg'};
     export const ImageManipulator={manipulate(uri){
       const state=globalThis.__qrChatNativeTest; state.imageActions=[['source',uri]];

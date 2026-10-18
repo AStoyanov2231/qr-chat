@@ -102,6 +102,7 @@ function FloatField({ label, hint, value, ...props }: Omit<NativeInputProps, 'ac
 
 function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | null; readOnly: boolean; api: BusinessApi; onDone: () => Promise<void>; onBack: () => void }) {
   const action = useAction();
+  const sharing = useAction();
   const [name, setName] = useState(place?.name ?? '');
   const [link, setLink] = useState(place?.link_url ?? '');
   const [menu, setMenu] = useState<File | null | undefined>();
@@ -138,7 +139,8 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
       <View style={{ flex: 1, gap: 8, alignItems: 'flex-start' }}>
         <Copy style={{ fontSize: 14, lineHeight: 20 }}>Print it for your tables. Guests who scan it join this place’s chat.</Copy>
         <Copy style={{ color: colors.muted, fontSize: 12, lineHeight: 16 }}>{url}</Copy>
-        <PillButton fill={false} label="Share QR" disabled={action.busy} background={colors.canvas} foreground={colors.text} onPress={() => { void action.run(() => shareQr(place)); }} />
+        <PillButton fill={false} label="Share QR" disabled={sharing.busy} background={colors.canvas} foreground={colors.text} onPress={() => { void sharing.run(() => shareQr(place)); }} />
+        <ErrorNotice message={sharing.error} />
       </View>
     </View>}
     <FloatField label="Name" value={name} onChangeText={setName} maxLength={100} editable={!disabled} autoCapitalize="words" />
