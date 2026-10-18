@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   chatRows,
   unwrapQrCode,
+  qrPayload,
   messageAge,
   groupAccessIndicator,
   directMessagePreview,
@@ -126,4 +127,12 @@ test('chat rows mix groups, DMs and requests with the newest activity first', ()
     { dm: { status: 'ready', message: { created_at: '2026-01-01T13:00:00Z' } } },
   );
   assert.deepEqual(rows.map(row => `${row.kind}:${row.id}`), ['direct:dm', 'group:busy', 'request:request', 'group:quiet']);
+});
+test('venue links unwrap to v: keys and print back as links', () => {
+  assert.equal(unwrapQrCode('https://chat.example/v/abcde23456', 'https://chat.example'), 'v:abcde23456');
+  assert.equal(unwrapQrCode('https://other.example/v/abcde23456', 'https://chat.example'), 'https://other.example/v/abcde23456');
+  assert.equal(unwrapQrCode('https://chat.example/v/short', 'https://chat.example'), 'https://chat.example/v/short');
+  assert.equal(qrPayload('v:abcde23456', 'https://chat.example'), 'https://chat.example/v/abcde23456');
+  assert.equal(qrPayload('Room', 'https://chat.example'), 'Room');
+  assert.equal(groupAccessIndicator('infinity').state, 'permanent');
 });

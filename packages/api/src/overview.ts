@@ -11,8 +11,10 @@ export type Membership = MembershipRow & { groups: (Tables<"groups"> & { image_u
 export type Member = MembershipRow & { profiles: Profile | null };
 export type DirectMessage = Tables<"messages">;
 export type GroupMessage = DirectMessage & { profiles: (Pick<Profile, "display_name" | "avatar_url"> & { avatar_path?: string | null }) | null };
+/** The active business place behind a group; menu_url is derived from menu_path by the API. */
+export type VenuePlace = { owner_id: string; link_url: string | null; menu_path: string | null; menu_url: string | null };
 /** One entry per active QR group, newest join first. */
-export type GroupOverview = Membership & { members: Member[]; preview: GroupMessage | null; headIds: number[] };
+export type GroupOverview = Membership & { members: Member[]; preview: GroupMessage | null; headIds: number[]; place?: VenuePlace | null };
 export type ChatOverview = {
   userId: string;
   profile: Profile | null;

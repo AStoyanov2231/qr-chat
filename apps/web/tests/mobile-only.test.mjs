@@ -33,10 +33,17 @@ test('public landing never receives the development phone frame', () => {
 });
 
 test('desktop product routes show landing and mobile product routes render their authenticated content', () => {
-  for (const pathname of ['/', '/profile', '/sign-in']) {
+  for (const pathname of ['/', '/profile']) {
     const desktop = gate({ pathname, mobile: false });
     assert.equal(desktop.result.type, desktop.LandingPage);
     const phone = gate({ pathname, mobile: true });
     assert.equal(phone.result, phone.children);
+  }
+});
+
+test('desktop lets business owners sign in and manage places', () => {
+  for (const pathname of ['/business', '/sign-in', '/auth/callback']) {
+    const desktop = gate({ pathname, mobile: false });
+    assert.equal(desktop.result, desktop.children);
   }
 });

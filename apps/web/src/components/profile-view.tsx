@@ -12,13 +12,14 @@ type Props = {
   session: Session | null;
   ready: boolean;
   busy: boolean;
+  business?: boolean;
   onBack?: () => void;
   onSave: (name: string, photo?: AvatarUpload | null) => Promise<boolean | undefined>;
   onSignOut: () => void;
   onDeleteAccount: () => void;
 };
 
-export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut, onDeleteAccount }: Props) {
+export function ProfileView({ session, ready, busy, business, onBack, onSave, onSignOut, onDeleteAccount }: Props) {
   const [saveFailed, setSaveFailed] = useState(false);
   const [panel, setPanel] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -90,7 +91,7 @@ export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut, o
           <label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required />
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
         </form>}
-        {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button>
+        {panel === "Settings" && <div className="settings-actions">{business && <Link className="profile-action" href="/business">Business<CaretRight size={18} /></Link>}<button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button>
           {confirmDelete
             ? <><p>This permanently erases your profile, photo, friendships and the messages you sent. It cannot be undone.</p>
               <button className="profile-action danger" disabled={busy} onClick={onDeleteAccount}>Yes, delete my account<CaretRight size={18} /></button>

@@ -948,7 +948,7 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
   .landing-footer > span:nth-child(2) { font-size: 12px; }
 }
 
-.entry-panel input:not([type="file"]) { height: 52px; padding: 0 20px; border: 1px solid var(--line); border-radius: 999px; background: var(--fill); color: var(--text); font-size: 16px; }
+.entry-panel input:not([type="file"]), .business-page input:not([type="file"]) { height: 52px; padding: 0 20px; border: 1px solid var(--line); border-radius: 999px; background: var(--fill); color: var(--text); font-size: 16px; }
 .entry-panel input:not([type="file"]):focus-visible { outline-offset: 2px; }
 .connection-status { flex-shrink: 0; padding: 8px 16px; color: var(--on-warning); background: var(--warning); font-size: 14px; line-height: 20px; }
 .chat-conversation-surface .message-stream { padding-bottom: 12px; transition: padding-top var(--chat-transition); }
@@ -1002,3 +1002,23 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .product-name-form input { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--fill); color: var(--text); font: inherit; }
 .product-name-form button { padding: 0 16px; border: 0; border-radius: 12px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; }
 .product-name-form button:disabled { opacity: .5; }
+
+/* Business places */
+.chat-bar-action { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 999px; color: var(--text); }
+.venue-links { inset: auto; position-area: bottom span-left; margin: 4px 0; min-width: 180px; padding: 6px; border: 0; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-float); }
+.venue-links a { display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 14px; color: var(--text); font-weight: 600; }
+.venue-links a:hover { background: var(--fill); }
+.owner-tag { display: inline-flex; align-items: center; height: 24px; margin: 0 0 4px 8px; padding: 0 10px; border-radius: 999px; background: var(--primary-tint); color: var(--on-primary-tint); font-size: 12px; line-height: 16px; font-weight: 700; vertical-align: middle; }
+.message-stream article > div > .owner-tag { margin-left: 0; }
+.business-page { width: 100%; max-width: 720px; margin: 0 auto; padding: max(32px, env(safe-area-inset-top)) 16px 48px; display: grid; gap: 24px; }
+.business-page > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.business-page h1 { font-size: 30px; line-height: 36px; font-weight: 800; }
+.business-page h2 { font-size: 20px; line-height: 26px; font-weight: 700; }
+.business-page p { color: var(--muted); }
+.business-place { display: grid; grid-template-columns: 200px 1fr; gap: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 28px; }
+.business-place canvas { width: 200px; height: 200px; border-radius: 16px; }
+.business-place .profile-form { margin-top: 0; }
+.business-qr { display: grid; gap: 8px; justify-items: center; align-content: start; }
+.business-qr .text-button { margin: 0; }
+@media (max-width: 600px) { .business-place { grid-template-columns: 1fr; } }
+.business-page input:not([type="file"]):focus-visible { outline-offset: 2px; }

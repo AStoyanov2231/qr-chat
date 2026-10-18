@@ -1,4 +1,6 @@
-export type Venue = { id: string; name: string; label: string; codes: string[]; kind: string; nameMissing?: boolean; imageUrl?: string | null };
+/** An active business place behind a group: its owner (Owner badge) and the links the venue button opens. */
+export type Place = { ownerId: string; linkUrl: string | null; menuUrl: string | null };
+export type Venue = { id: string; name: string; label: string; codes: string[]; kind: string; nameMissing?: boolean; imageUrl?: string | null; place?: Place | null };
 export type Session = { id: string; name: string; avatarUrl?: string | null; hidden: string[] };
 export type Member = { id: string; name: string; avatarUrl?: string | null };
 export type Message = { id: string; user: string; name: string; avatarUrl?: string | null; text: string; time: number };
@@ -37,13 +39,33 @@ export function friendshipState(connection: { accepted_at: string | null; reques
   return connection.requested_by_id === userId ? 'outgoing' : 'incoming';
 }
 
-/** Only first-party QR handoff URLs are unwrapped. Other URLs remain opaque QR keys. */
+/** Only first-party QR handoff URLs are unwrapped: `?code=` and venue links `/v/<code>` (key `v:<code>`).
+ * Other URLs remain opaque QR keys. */
 export function unwrapQrCode(input: string, origin: string): string {
   if (/^https?:\/\//i.test(input)) {
     const url = new URL(input);
     if (url.origin === origin && url.searchParams.has("code")) return url.searchParams.get("code")!;
+    const venue = url.origin === origin && /^\/v\/([a-z0-9]{10})\/?$/u.exec(url.pathname);
+    if (venue) return `v:${venue[1]}`;
   }
   return input;
+}
+
+/** What the venue button opens: an active place's menu and link, else a third-party http(s) QR key
+ * (the venue's own page, kept exactly as scanned). */
+export function venueLinks(venue: Venue, origin: string): { label: string; href: string }[] {
+  if (venue.place) return [
+    ...(venue.place.menuUrl ? [{ label: "Menu", href: venue.place.menuUrl }] : []),
+    ...(venue.place.linkUrl ? [{ label: "Website", href: venue.place.linkUrl }] : []),
+  ];
+  const code = venue.codes[0];
+  if (!code || !/^https?:\/\//i.test(code)) return [];
+  try { return new URL(code).origin === origin ? [] : [{ label: "Venue page", href: code }]; } catch { return []; }
+}
+
+/** What a group's QR encodes: a venue key prints as its web link, so any phone camera opens it. */
+export function qrPayload(code: string, origin: string): string {
+  return code.startsWith("v:") && origin ? `${origin}/v/${code.slice(2)}` : code;
 }
 
 const RETAIL_FORMATS = new Set(["ean13", "ean8", "upca", "upce"]);
@@ -92,12 +114,15 @@ export function messageAge(time: number, now = Date.now()): string {
 export type GroupAccessIndicator =
   | { state: "remaining"; progress: number; label: string; accessibilityLabel: string }
   | { state: "ended"; progress: 0; label: "Access ended"; accessibilityLabel: string }
-  | { state: "unknown"; progress: null; label: "Time unavailable"; accessibilityLabel: string };
+  | { state: "unknown"; progress: null; label: "Time unavailable"; accessibilityLabel: string }
+  | { state: "permanent"; progress: 1; label: "Owner"; accessibilityLabel: string };
 
 export const GROUP_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
 
 /** Describe remaining group access for display only; authorization remains API-owned. */
 export function groupAccessIndicator(expiresAt: string | null, now = Date.now()): GroupAccessIndicator {
+  // The database reports a venue owner's membership as never expiring.
+  if (expiresAt === "infinity") return { state: "permanent", progress: 1, label: "Owner", accessibilityLabel: "You own this place." };
   if (expiresAt === null || !Number.isFinite(now)) {
     return { state: "unknown", progress: null, label: "Time unavailable", accessibilityLabel: "Group access time is unavailable." };
   }

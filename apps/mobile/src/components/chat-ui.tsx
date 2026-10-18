@@ -90,6 +90,10 @@ export function NativeInput({ value, accessibilityLabel, containerStyle, onChang
 export function Field({ label, containerStyle, ...props }: Omit<NativeInputProps, 'accessibilityLabel'> & { label: string }) {
   return <View style={{ gap: 8 }}><Copy style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>{label}</Copy><View style={[styles.input, containerStyle]}><NativeInput accessibilityLabel={label} {...props} /></View></View>;
 }
+/** Marks the venue's owner in its group: a 24 tag on the primary tint. */
+export function OwnerTag() {
+  return <View style={{ alignSelf: 'flex-start', height: 24, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.primaryTint }}><Copy selectable={false} style={{ fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.onPrimaryTint }}>Owner</Copy></View>;
+}
 export function ErrorNotice({ message, retry }: { message: string; retry?: () => void }) {
   if (!message) return null;
   return <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}><Copy style={{ color: colors.danger }}>{message}</Copy>{retry && <Button label="Retry" onPress={retry} subtle />}</View>;

@@ -5,7 +5,8 @@ import { reset, render, state, act, navigate } from './support/native-harness.mj
 const { default: Scan } = await import('../src/app/(app)/scan.tsx');
 const { default: Room } = await import('../src/app/(app)/room.tsx');
 const { roomRoute } = await import('../src/lib/room-route.ts');
-const { venueUrl } = await import('../src/lib/qr-link.ts');
+const { venueLinks } = await import('../../../packages/domain/src/index.ts');
+const venueUrl = (code, origin) => venueLinks({ codes: code ? [code] : [] }, origin)[0]?.href ?? null;
 const origin = 'https://chat.example';
 const groupId = '11111111-1111-4111-8111-111111111111';
 const venue = 'https://order.venue.example/menu?table=12&session=a%2Fb#pay';
