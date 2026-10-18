@@ -183,7 +183,7 @@ export function reset() {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
-    auth: { userId: 'me', active: true, api: { resolveGroup: async () => null } },
+    auth: { userId: 'me', active: true, api: { resolveGroup: async () => null, isBusiness: async () => false } },
     chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
     loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},groups:[],friends:[],directPreviews:{}}),
   });

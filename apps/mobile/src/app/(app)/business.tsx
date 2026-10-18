@@ -1,20 +1,31 @@
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
-import { Alert, BackHandler, Linking, Pressable, ScrollView, Share, View } from 'react-native';
+import { Alert, BackHandler, Linking, Pressable, ScrollView, View } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
+import { shareAsync } from 'expo-sharing';
 import type { TextInputRef } from '@expo/ui';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import { qrPayload } from '@qr-chat/domain';
 import type { Place } from '@qr-chat/api';
+import { placeLinkSchema } from '@qr-chat/validation';
 import { Button, Copy, ErrorNotice, Icon, IconButton, NativeInput, PillButton, TextButton, colors, styles, useAction, type NativeInputProps } from '@/components/chat-ui';
 import { GroupQr } from '@/components/group-details';
 import { NativeAction } from '@/components/native-action';
+import { qrPng } from '@/lib/qr-png';
 import { webOrigin } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 
 type BusinessApi = NonNullable<ReturnType<typeof useAuth>['api']>;
 const placeUrl = (place: Place) => qrPayload(`v:${place.code}`, webOrigin);
+
+/** Shares the printable QR as a PNG file, so owners can save, print or send it. */
+async function shareQr(place: Place) {
+  const name = place.name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/gu, '') || 'place';
+  const file = new File(Paths.cache, `${name}-qr.png`);
+  file.write(qrPng(placeUrl(place)));
+  await shareAsync(file.uri, { mimeType: 'image/png', UTI: 'public.png', dialogTitle: `QR code for ${place.name}` });
+}
 
 /** Business owners manage their places here; without the plan, places are read-only. */
 export default function BusinessScreen() {
@@ -94,6 +105,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   const [name, setName] = useState(place?.name ?? '');
   const [link, setLink] = useState(place?.link_url ?? '');
   const [menu, setMenu] = useState<File | null | undefined>();
+  const [linkError, setLinkError] = useState('');
   // A new place is created before its link and menu are saved; if that second step fails, a retry must not create it twice.
   const created = useRef<Place | null>(null);
   const url = place && placeUrl(place);
@@ -104,12 +116,17 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
     const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; });
     return () => sub.remove();
   });
-  const save = () => { void action.run(async () => {
-    const target = place ?? created.current ?? (created.current = await api.createPlace(name));
-    const upload = menu ? { uploadId: randomUUID(), data: await menu.arrayBuffer() } : menu;
-    if (place || link || upload) await api.updatePlace(target, { name, link, menu: upload });
-    await onDone();
-  }); };
+  const save = () => {
+    // Checked here so a bad link never reaches the server, where a new place would already be created without it.
+    const checked = placeLinkSchema.safeParse(link);
+    if (!checked.success) { setLinkError(checked.error.issues[0]?.message ?? 'Enter a link that starts with https://'); return; }
+    void action.run(async () => {
+      const target = place ?? created.current ?? (created.current = await api.createPlace(name));
+      const upload = menu ? { uploadId: randomUUID(), data: await menu.arrayBuffer() } : menu;
+      if (place || link || upload) await api.updatePlace(target, { name, link, menu: upload });
+      await onDone();
+    });
+  };
   return <Page title={place ? place.name : 'New place'} backLabel="Back to places" busy={action.busy} onBack={back}
     footer={!readOnly && <>
       <ErrorNotice message={action.error} />
@@ -121,13 +138,13 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
       <View style={{ flex: 1, gap: 8, alignItems: 'flex-start' }}>
         <Copy style={{ fontSize: 14, lineHeight: 20 }}>Print it for your tables. Guests who scan it join this place’s chat.</Copy>
         <Copy style={{ color: colors.muted, fontSize: 12, lineHeight: 16 }}>{url}</Copy>
-        <PillButton fill={false} label="Share QR" background={colors.canvas} foreground={colors.text} onPress={() => { void Share.share({ message: url }).catch(() => {}); }} />
+        <PillButton fill={false} label="Share QR" disabled={action.busy} background={colors.canvas} foreground={colors.text} onPress={() => { void action.run(() => shareQr(place)); }} />
       </View>
     </View>}
     <FloatField label="Name" value={name} onChangeText={setName} maxLength={100} editable={!disabled} autoCapitalize="words" />
     <View style={{ gap: 8 }}>
-      <FloatField label="Link" hint="(optional)" value={link} onChangeText={setLink} maxLength={2048} editable={!disabled} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
-      <Copy style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>Your website or payment page. Guests open it from the group chat.</Copy>
+      <FloatField label="Link" hint="(optional)" value={link} onChangeText={(value) => { setLink(value); setLinkError(''); }} maxLength={2048} editable={!disabled} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+      <Copy accessibilityLiveRegion="polite" style={{ color: linkError ? colors.danger : colors.muted, fontSize: 13, lineHeight: 18 }}>{linkError || 'Your website or payment page. Guests open it from the group chat.'}</Copy>
     </View>
     <View style={{ gap: 8 }}>
       <Copy style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>Menu <Copy style={{ fontSize: 14, color: colors.muted, fontWeight: '400' }}>(optional)</Copy></Copy>
