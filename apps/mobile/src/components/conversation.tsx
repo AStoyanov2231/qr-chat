@@ -3,7 +3,7 @@ import { FlatList, Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { messageDayLabel, type Message } from '@qr-chat/domain';
-import { Copy, ErrorNotice, Icon, NativeInput, Skeleton, TextButton, colors, styles, useAction } from './chat-ui';
+import { Copy, ErrorNotice, Icon, NativeInput, Skeleton, TextButton, colors, styles, useAction, OwnerTag } from './chat-ui';
 import { Avatar } from './avatar';
 import { useChatKeyboard } from '@/hooks/use-chat-keyboard';
 import { useOutbox, type OutboxItem } from '@/hooks/use-outbox';
@@ -28,9 +28,10 @@ type Props = {
   endedAction?: ReactNode;
   openProfile?: (message: Message) => void;
   canOpenProfile?: (message: Message) => boolean;
+  ownerId?: string;
 };
 
-export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, emptyState, composerLabel = 'Message', endedAction, openProfile, canOpenProfile }: Props) {
+export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, emptyState, composerLabel = 'Message', endedAction, openProfile, canOpenProfile, ownerId }: Props) {
   const [draft, setDraft] = useState('');
   const action = useAction();
   const outbox = useOutbox();
@@ -84,6 +85,7 @@ export function Conversation({ messages, userId, loading, error, available, conn
           <View style={{ flexDirection: own ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 8 }}>
             {avatars && !own && <Pressable accessibilityRole={profileAvailable ? 'button' : undefined} accessibilityLabel={profileAvailable ? `View ${item.name}'s profile` : undefined} disabled={!profileAvailable} onPress={() => openProfile?.(item)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Avatar name={item.name} url={item.avatarUrl} size={32} /></Pressable>}
             <View style={{ maxWidth: '78%', gap: 4 }}>
+              {item.user === ownerId && <OwnerTag />}
               <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 24, borderCurve: 'continuous', backgroundColor: own ? colors.secondary : colors.fill }}><Copy style={{ fontSize: 16, lineHeight: 22, color: own ? colors.onSecondary : colors.text }}>{item.text}</Copy></View>
               {failed && <Copy style={{ alignSelf: 'flex-end', fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.danger }}>{item.outbox?.notice ? `Not sent. ${item.outbox.notice}` : 'Not sent. Tap ! to retry'}</Copy>}
             </View>

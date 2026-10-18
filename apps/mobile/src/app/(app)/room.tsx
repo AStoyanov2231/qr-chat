@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { venueLinks } from '@qr-chat/domain';
 import { ChatBar } from '@/components/conversation-header';
 import { GroupDetails } from '@/components/group-details';
 import { SettingsSidebar } from '@/components/settings-sidebar';
@@ -9,7 +10,6 @@ import { Button } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { useRoomParams } from '@/hooks/use-room-params';
-import { venueUrl } from '@/lib/qr-link';
 import { webOrigin } from '@/lib/supabase';
 import { ChatBrowser } from '../../../modules/chat-browser';
 
@@ -22,8 +22,12 @@ export default function RoomScreen() {
   const [sidebar, setSidebar] = useState(false);
   const group = chat.groups.find((item) => item.id === groupId) ?? null;
   const title = group?.venue.name ?? (typeof name === 'string' ? name : 'Group');
-  const code = group?.venue.codes[0];
-  const pageUrl = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueUrl(code ?? routeCode, webOrigin) : null;
+  const links = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueLinks(group?.venue ?? { id: '', name: title, label: '', kind: 'place', codes: typeof routeCode === 'string' ? [routeCode] : [] }, webOrigin) : [];
+  const open = (href: string) => { void ChatBrowser?.open(href, title).catch(() => {}); };
+  // One link opens directly; a menu and a link become a native choice.
+  const browse = links.length === 1 ? () => open(links[0]!.href)
+    : links.length > 1 ? () => Alert.alert(title, undefined, [...links.map((link) => ({ text: link.label, onPress: () => open(link.href) })), { text: 'Cancel', style: 'cancel' as const }])
+    : undefined;
   async function sendMessage(body: string) {
     if (!api || !group) throw new Error('Your membership has ended.');
     return api.sendGroupMessage(group.id, body);
@@ -32,7 +36,7 @@ export default function RoomScreen() {
   return <View style={{ flex: 1 }}>
     <Stack.Screen options={{ title, headerShown: false }} />
     <ChatBar title={title} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)}
-      browse={pageUrl ? () => { void ChatBrowser?.open(pageUrl, title).catch(() => {}); } : undefined} />
+      browse={browse} />
     <Conversation
       composerLabel={`Message ${title}`}
       avatars key={groupId ?? 'ended'} messages={group?.messages ?? []} userId={userId!}
@@ -41,6 +45,7 @@ export default function RoomScreen() {
       loadOlder={() => group ? chat.loadOlder(group.id) : Promise.resolve()} refresh={() => groupId ? chat.refreshGroup(groupId) : chat.refresh()} send={sendMessage}
       unavailable={chat.error ? 'Reconnect to open this conversation.' : 'Your membership has ended.'}
       canOpenProfile={(message) => !!group?.members.some((member) => member.id === message.user) || chat.friends.some((friend) => friend.user_a_id === message.user || friend.user_b_id === message.user)}
+      ownerId={group?.venue.place?.ownerId}
       openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
       endedAction={chat.ready && !group ? <Button label="Scan to rejoin" onPress={() => router.push('/scan')} /> : undefined}
     />

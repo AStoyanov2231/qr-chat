@@ -8,6 +8,7 @@ const previewRewrites = development
   ? [
     { source: "/", destination: "/design-preview?view=chats", has: localHost },
     { source: "/profile", destination: "/design-preview?view=profile", has: localHost },
+    { source: "/business", destination: "/design-preview?view=business", has: localHost },
     { source: "/sign-in", destination: "/design-preview?view=chats", has: localHost },
   ]
   : [];
@@ -20,7 +21,11 @@ const nextConfig: NextConfig = {
     : [],
   // Routing-layer redirect: no function runs for legacy /chats links.
   async redirects() {
-    return [{ source: "/chats", destination: "/", permanent: false }];
+    return [
+      { source: "/chats", destination: "/", permanent: false },
+      // A printed venue QR joins through the chat app (sign-in first if needed); unknown codes are refused there.
+      { source: "/v/:code([a-z0-9]{10})", destination: "/?code=v%3A:code", permanent: false },
+    ];
   },
   async rewrites() {
     return { beforeFiles: previewRewrites, afterFiles: [], fallback: [] };

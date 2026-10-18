@@ -18,6 +18,8 @@ export async function DELETE(request: NextRequest) {
     if (erased.error) throw erased.error;
     const { data: files } = await db.storage.from("avatars").list(userId);
     if (files?.length) await db.storage.from("avatars").remove(files.map(({ name }) => `${userId}/${name}`));
+    const { data: menus } = await db.storage.from("venue-menus").list(userId);
+    if (menus?.length) await db.storage.from("venue-menus").remove(menus.map(({ name }) => `${userId}/${name}`));
     const { error } = await db.auth.admin.deleteUser(userId);
     if (error) throw error;
   } catch (error) {

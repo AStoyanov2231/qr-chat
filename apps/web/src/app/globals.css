@@ -786,8 +786,7 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .profile-view .chat-header-title { inset: 0 24px 48px; justify-content: flex-end; }
 .profile-surface { overflow-y: auto; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); }
 .profile-actions { display: flex; justify-content: space-evenly; gap: 8px; }
-.profile-actions button { display: grid; justify-items: center; gap: 8px; min-width: 64px; padding: 0; background: transparent; color: var(--text); font-size: 12px; line-height: 16px; font-weight: 700; }
-.profile-actions span { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px; background: var(--fill); }
+.profile-actions :is(button, a) { display: grid; justify-items: center; gap: 6px; min-width: 64px; padding: 8px 0; background: transparent; color: var(--text); font-size: 12px; line-height: 16px; font-weight: 700; text-decoration: none; }
 .member-hero { align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; min-height: 220px; margin: -34px -34px 0; padding: 72px 24px 24px; border-radius: 24px 24px 0 0; background: var(--photo) center / cover; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.4); }
 .profile-dialog .member-profile .member-hero h2 { color: #fff; }
 .member-hero p { margin: 0; font-size: 14px; }
@@ -796,9 +795,12 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .chat-header-title h1 { flex-shrink: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 30px; line-height: 36px; font-weight: 800; overflow-wrap: anywhere; }
 .chat-header-title p { font-size: 14px; }
 .chat-bar { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; padding: calc(var(--safe-top) + 6px) max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); background: var(--surface); }
-.chat-bar button, .chat-bar-spacer { flex-shrink: 0; width: 44px; height: 44px; }
+.chat-bar button { flex-shrink: 0; width: 44px; height: 44px; }
 .chat-bar button { display: grid; place-items: center; border-radius: 999px; background: transparent; color: var(--text); }
 .chat-bar-title { flex: 1; min-width: 0; text-align: center; }
+/* Equal sides keep the title centred whether one or two actions sit on the right. */
+.chat-bar-side { flex: 0 0 96px; display: flex; align-items: center; gap: 8px; }
+.chat-bar-side.end { justify-content: flex-end; }
 .chat-bar-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; line-height: 22px; font-weight: 700; }
 .chat-bar-title p { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 700; }
 /* One back button everywhere: a soft circle that presses in and nudges its arrow. */
@@ -948,7 +950,7 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
   .landing-footer > span:nth-child(2) { font-size: 12px; }
 }
 
-.entry-panel input:not([type="file"]) { height: 52px; padding: 0 20px; border: 1px solid var(--line); border-radius: 999px; background: var(--fill); color: var(--text); font-size: 16px; }
+.entry-panel input:not([type="file"]), .business-page input:not([type="file"]) { height: 52px; padding: 0 20px; border: 1px solid var(--line); border-radius: 999px; background: var(--fill); color: var(--text); font-size: 16px; }
 .entry-panel input:not([type="file"]):focus-visible { outline-offset: 2px; }
 .connection-status { flex-shrink: 0; padding: 8px 16px; color: var(--on-warning); background: var(--warning); font-size: 14px; line-height: 20px; }
 .chat-conversation-surface .message-stream { padding-bottom: 12px; transition: padding-top var(--chat-transition); }
@@ -1002,3 +1004,67 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .product-name-form input { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--fill); color: var(--text); font: inherit; }
 .product-name-form button { padding: 0 16px; border: 0; border-radius: 12px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; }
 .product-name-form button:disabled { opacity: .5; }
+
+/* Business places */
+.chat-bar-action { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 999px; color: var(--text); }
+/* Menu and link: a bottom sheet over the chat, within thumb reach. */
+.venue-links { position: fixed; inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: auto; margin: 0; padding: 8px; border: 0; border-radius: 28px; background: var(--surface); box-shadow: var(--shadow-float); }
+.venue-links::backdrop { background: rgba(17, 17, 17, .32); }
+.venue-links a { display: flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 16px; border-radius: 20px; color: var(--text); font-size: 16px; font-weight: 700; }
+.venue-links a:hover { background: var(--fill); }
+.owner-tag { display: inline-flex; align-items: center; height: 24px; margin: 0 0 4px 8px; padding: 0 10px; border-radius: 999px; background: var(--primary-tint); color: var(--on-primary-tint); font-size: 12px; line-height: 16px; font-weight: 700; vertical-align: middle; }
+.message-stream article > div > .owner-tag { margin-left: 0; }
+.business-page { width: 100%; max-width: 720px; margin: 0 auto; padding: max(32px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.business-page > header { display: flex; align-items: center; gap: 12px; }
+.business-page > header h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.business-page .scan-primary.subtle { background: var(--fill); color: var(--text); }
+.business-intro { display: grid; gap: 8px; }
+.business-intro .profile-form { margin-top: 12px; }
+.business-notice, .business-error { padding: 14px 16px; border-radius: 20px; background: var(--warning); }
+.business-page .business-notice { color: var(--on-warning); }
+.business-error { display: grid; gap: 4px; background: var(--danger-tint); }
+.business-page .business-error p { color: var(--danger); }
+.business-error .text-button { margin: 0; width: auto; justify-self: start; padding: 0; }
+.business-page .field-hint { margin-top: -4px; color: var(--muted); font-size: 13px; line-height: 18px; }
+.inline-button { padding: 0; background: none; color: var(--text); font-weight: 700; text-decoration: underline; min-height: 24px; }
+.business-qr-placeholder { width: 200px; height: 200px; border-radius: 16px; background: var(--fill); }
+.business-page h1 { font-size: 30px; line-height: 36px; font-weight: 800; }
+.business-page h2 { font-size: 20px; line-height: 26px; font-weight: 700; }
+.business-page p { color: var(--muted); }
+.business-page input { width: 100%; min-width: 0; }
+.business-page input[type="file"] { min-height: 44px; padding-block: 8px; font-size: 14px; }
+.business-page .text-button.danger { color: var(--danger); }
+.business-qr { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; gap: 16px; padding: 14px; border-radius: 24px; background: var(--fill); }
+.business-qr img, .business-qr .business-qr-placeholder { width: 148px; height: 148px; border-radius: 14px; background: var(--canvas); }
+.business-qr > div { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.business-page .business-qr p { color: var(--text); font-size: 14px; line-height: 20px; }
+.business-qr small { max-width: 100%; color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.business-page .business-qr .scan-primary.subtle { min-height: 44px; padding: 0 16px; background: var(--canvas); font-size: 14px; }
+@media (max-width: 380px) { .business-qr { grid-template-columns: 112px minmax(0, 1fr); } .business-qr img, .business-qr .business-qr-placeholder { width: 112px; height: 112px; } }
+.business-page > form.profile-form { margin-top: 0; }
+.business-form label, .business-label { font-size: 14px; font-weight: 700; margin-top: 4px; }
+.business-form label > span, .business-label > span { color: var(--muted); font-weight: 400; }
+.float-field { position: relative; display: grid; }
+.business-page .float-field input:not([type="file"]) { height: 58px; padding: 20px 20px 4px; }
+.business-form .float-field label { position: absolute; left: 21px; top: 50%; margin: 0; transform: translateY(-50%); color: var(--muted); font-size: 16px; font-weight: 400; pointer-events: none; transition: top 160ms ease, font-size 160ms ease; }
+.business-form .float-field input:is(:focus, :not(:placeholder-shown)) + label { top: 16px; font-size: 12px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .business-form .float-field label { transition: none; } }
+.business-menu { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 64px; padding: 10px 10px 10px 16px; border: 1px dashed var(--line); border-radius: 20px; background: var(--fill); }
+.business-menu:focus-within:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+.business-menu.removing { opacity: .7; }
+.business-menu > p { display: grid; min-width: 0; }
+.business-page .business-menu strong { color: var(--text); font-size: 15px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.business-menu small { color: var(--muted); font-size: 12px; line-height: 16px; }
+.business-menu .text-button { width: auto; min-width: 44px; min-height: 44px; margin: 0; padding: 0 8px; }
+.business-form label.business-upload { display: inline-flex; align-items: center; min-height: 40px; margin: 0; padding: 0 16px; border-radius: 999px; background: var(--canvas); cursor: pointer; }
+.business-form .text-button.danger { justify-self: start; width: auto; margin: 4px 0 0; padding: 0; }
+.business-actions { position: sticky; bottom: 0; display: grid; gap: 8px; margin: 0 -16px -48px; padding: 12px 16px max(16px, env(safe-area-inset-bottom)); background: var(--canvas); border-top: 1px solid var(--line); }
+.business-actions .scan-primary { width: 100%; }
+.business-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.business-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; width: 100%; padding: 10px 12px 10px 10px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--text); text-align: left; }
+.business-row img, .business-row .business-qr-placeholder { border-radius: 10px; }
+.business-row > span { display: grid; gap: 2px; min-width: 0; }
+.business-row strong { font-size: 16px; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.business-row > span > span { color: var(--muted); font-size: 13px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.business-row > svg { color: var(--muted); }
+.business-page input:not([type="file"]):focus-visible { outline-offset: 2px; }

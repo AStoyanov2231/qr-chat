@@ -5,20 +5,21 @@ import { useEffect, useRef, useState } from "react";
 import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
-import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, X } from "@phosphor-icons/react";
+import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, Storefront, X } from "@phosphor-icons/react";
 import type { Session } from "@/lib/chat-view";
 
 type Props = {
   session: Session | null;
   ready: boolean;
   busy: boolean;
+  business?: boolean;
   onBack?: () => void;
   onSave: (name: string, photo?: AvatarUpload | null) => Promise<boolean | undefined>;
   onSignOut: () => void;
   onDeleteAccount: () => void;
 };
 
-export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut, onDeleteAccount }: Props) {
+export function ProfileView({ session, ready, busy, business, onBack, onSave, onSignOut, onDeleteAccount }: Props) {
   const [saveFailed, setSaveFailed] = useState(false);
   const [panel, setPanel] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -58,7 +59,8 @@ export function ProfileView({ session, ready, busy, onBack, onSave, onSignOut, o
     </header>
     <div className="chat-header-controls"><Link href="/" className="back-button" onClick={(event) => { if (onBack && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onBack(); } }} aria-label="Back to chats"><ArrowLeft size={20} weight="bold" /></Link></div>
     <div className="chat-conversation-surface profile-surface">
-      <div className="profile-actions">{actions.map(({ label, panel: title, icon: ActionIcon }) => <button key={title} aria-label={title} onClick={() => open(title)}><span><ActionIcon size={24} /></span>{label}</button>)}</div>
+      <div className="profile-actions">{actions.map(({ label, panel: title, icon: ActionIcon }) => <button key={title} aria-label={title} onClick={() => open(title)}><ActionIcon size={28} />{label}</button>)}
+        {business && <Link href="/business"><Storefront size={28} />Business</Link>}</div>
     </div>
     <dialog ref={dialog} className="profile-dialog" aria-label={panel} onCancel={(event) => { if (saving) event.preventDefault(); }} onClick={(event) => { if (event.target === dialog.current && !saving) dialog.current?.close(); }}>
       <div className="entry-panel">

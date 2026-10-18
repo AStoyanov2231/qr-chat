@@ -11,7 +11,7 @@ export function groupMessageView(message: GroupMessage): Message {
 function groupView(membership: GroupOverview): Group | null {
   const room = membership.groups;
   if (!room?.code_key) return null;
-  return { id: room.id, venue: { id: room.id, name: room.name ?? groupFallbackName(room.code_key), nameMissing: room.name === null, imageUrl: room.image_url, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.' }, members: membership.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: membership.preview ? [groupMessageView(membership.preview)] : [], nextCursor: null, expiresAt: membership.expires_at };
+  return { id: room.id, venue: { id: room.id, name: room.name ?? groupFallbackName(room.code_key), nameMissing: room.name === null, imageUrl: room.image_url, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.', place: membership.place ? { ownerId: membership.place.owner_id, linkUrl: membership.place.link_url, menuUrl: membership.place.menu_url } : null }, members: membership.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: membership.preview ? [groupMessageView(membership.preview)] : [], nextCursor: null, expiresAt: membership.expires_at };
 }
 export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
   return {

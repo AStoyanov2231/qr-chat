@@ -39,7 +39,7 @@ test("signed-out visitors are sent to sign-in with their destination; signed-in 
 });
 
 test("the design preview is rewritten only on a local development host", async () => {
-  for (const [path, view] of [["/", "chats"], ["/profile", "profile"], ["/sign-in", "chats"]]) {
+  for (const [path, view] of [["/", "chats"], ["/profile", "profile"], ["/business", "business"], ["/sign-in", "chats"]]) {
     const local = await route(developmentConfig, `http://localhost:3000${path}`, "localhost:3000");
     assert.equal(getRewrittenUrl(local), `http://localhost:3000/design-preview?view=${view}`, path);
     assert.equal(getRewrittenUrl(await route(developmentConfig, `https://qr-chat.example${path}`)), null, path);

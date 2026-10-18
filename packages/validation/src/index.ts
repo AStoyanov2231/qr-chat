@@ -46,6 +46,19 @@ export const avatarUploadSchema = z.strictObject({
       return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
     }, 'Choose a valid JPEG photo.'),
 });
+export const placeNameSchema = text(100);
+/** A venue link opens in a browser tab, so only https URLs are accepted (no javascript: or data:). */
+export const placeLinkSchema = z.string().trim().max(2048).refine((value) => {
+  if (!value) return true;
+  try { return new URL(value).protocol === "https:" && !/\s/u.test(value); } catch { return false; }
+}, "Enter a link that starts with https://");
+export const MENU_MAX_BYTES = 10 * 1024 * 1024;
+export const menuUploadSchema = z.strictObject({
+  uploadId: userIdSchema,
+  data: z.instanceof(ArrayBuffer)
+    .refine((data) => data.byteLength > 0 && data.byteLength <= MENU_MAX_BYTES, 'Choose a PDF smaller than 10 MB.')
+    .refine((data) => new TextDecoder().decode(data.slice(0, 5)) === '%PDF-', 'Choose a valid PDF file.'),
+});
 export const pageSchema = z.strictObject({
   before: z.number().int().positive().safe().optional(),
   limit: z.number().int().min(1).max(100).default(50),
