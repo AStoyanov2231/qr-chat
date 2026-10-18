@@ -1016,7 +1016,20 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .owner-tag { display: inline-flex; align-items: center; height: 24px; margin: 0 0 4px 8px; padding: 0 10px; border-radius: 999px; background: var(--primary-tint); color: var(--on-primary-tint); font-size: 12px; line-height: 16px; font-weight: 700; vertical-align: middle; }
 .message-stream article > div > .owner-tag { margin-left: 0; }
 .business-page { width: 100%; max-width: 720px; margin: 0 auto; padding: max(32px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
-.business-page > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.business-page > header { display: flex; align-items: center; gap: 12px; }
+.business-page > header h1 { flex: 1; min-width: 0; }
+.business-page > header .text-button { width: auto; margin: 0; }
+.business-page .scan-primary.subtle { background: var(--fill); color: var(--text); }
+.business-intro { display: grid; gap: 8px; }
+.business-intro .profile-form { margin-top: 12px; }
+.business-notice, .business-error { padding: 14px 16px; border-radius: 20px; background: var(--warning); }
+.business-page .business-notice { color: var(--on-warning); }
+.business-error { display: grid; gap: 4px; background: var(--danger-tint); }
+.business-page .business-error p { color: var(--danger); }
+.business-error .text-button { margin: 0; width: auto; justify-self: start; padding: 0; }
+.business-page .field-hint { margin-top: -6px; color: var(--muted); font-size: 13px; line-height: 18px; }
+.inline-button { padding: 0; background: none; color: var(--text); font-weight: 700; text-decoration: underline; min-height: 24px; }
+.business-qr-placeholder { width: 200px; height: 200px; border-radius: 16px; background: var(--fill); }
 .business-page h1 { font-size: 30px; line-height: 36px; font-weight: 800; }
 .business-page h2 { font-size: 20px; line-height: 26px; font-weight: 700; }
 .business-page p { color: var(--muted); }
