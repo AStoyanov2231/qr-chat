@@ -188,6 +188,42 @@ export type Database = {
         }
         Relationships: []
       }
+      places: {
+        Row: {
+          code: string
+          created_at: string
+          deleted_at: string | null
+          group_id: string
+          id: string
+          link_url: string | null
+          menu_path: string | null
+          name: string
+          owner_id: string
+        }
+        Insert: {
+          code?: string
+          created_at?: string
+          deleted_at?: string | null
+          group_id?: string
+          id?: string
+          link_url?: string | null
+          menu_path?: string | null
+          name?: string
+          owner_id?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          deleted_at?: string | null
+          group_id?: string
+          id?: string
+          link_url?: string | null
+          menu_path?: string | null
+          name?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           fetched_at: string
@@ -399,6 +435,8 @@ export type Database = {
           name: string | null
         }[]
       }
+      create_place: { Args: { p_name: string }; Returns: Database["public"]["Tables"]["places"]["Row"] }
+      delete_place: { Args: { p_place_id: string }; Returns: undefined }
       erase_user_messages: { Args: { p_user_id: string }; Returns: undefined }
       leave_qr_group: { Args: { p_group_id: string }; Returns: string }
       name_product_group: { Args: { p_group_id: string; p_name: string }; Returns: undefined }
@@ -408,6 +446,10 @@ export type Database = {
         Returns: boolean
       }
       send_friend_request: { Args: { p_receiver_id: string }; Returns: string }
+      update_place: {
+        Args: { p_link_url: string | null; p_menu_path: string | null; p_name: string; p_place_id: string }
+        Returns: Database["public"]["Tables"]["places"]["Row"]
+      }
     }
     Enums: {
       [_ in never]: never

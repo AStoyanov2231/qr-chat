@@ -1,6 +1,6 @@
 "use client";
 
-import { groupFallbackName, messageAge, messageDayLabel, scannedCode } from "@qr-chat/domain";
+import { groupFallbackName, messageAge, messageDayLabel, scannedCode, venueLinks } from "@qr-chat/domain";
 import type { ChatApi } from "@qr-chat/api";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -64,6 +64,7 @@ type ChatViewProps = {
   direct: ReturnType<typeof useDirectMessages>;
   directId: string | null;
   setDirectId: (id: string | null) => void;
+  business?: boolean;
 };
 
 export default function QrChatApp() {
@@ -72,10 +73,12 @@ export default function QrChatApp() {
   const [directId, setDirectId] = useState<string | null>(null);
   const friend = backend.friends.find((friend) => friend.id === directId && friend.accepted_at);
   const direct = useDirectMessages(backend.api, friend?.id ?? null);
-  return <ChatView view={view} backend={backend} direct={direct} directId={directId} setDirectId={setDirectId} />;
+  const [business, setBusiness] = useState(false);
+  useEffect(() => { if (backend.ready) void backend.api.isBusiness().then(setBusiness, () => {}); }, [backend.ready, backend.api]);
+  return <ChatView view={view} backend={backend} direct={direct} directId={directId} setDirectId={setDirectId} business={business} />;
 }
 
-export function ChatView({ view = "chats", backend, direct, directId, setDirectId }: ChatViewProps) {
+export function ChatView({ view = "chats", backend, direct, directId, setDirectId, business }: ChatViewProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -522,7 +525,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : "has-profile"}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
-          <ProfileView session={session} ready={ready} busy={busy} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} onDeleteAccount={() => void perform(async () => { await api.deleteAccount(); router.replace("/sign-in"); router.refresh(); })} />
+          <ProfileView session={session} ready={ready} busy={busy} business={business} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} onDeleteAccount={() => void perform(async () => { await api.deleteAccount(); router.replace("/sign-in"); router.refresh(); })} />
         </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={openOwnProfile} /> : !active && !directId && (
           <ChatsOverview
             profileName={session?.name}
@@ -559,7 +562,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} />
+            <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} venueLinks={group ? venueLinks(group.venue, window.location.origin) : []} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(() => backend.loadOlder(active.id))}>Load older messages</button>}
@@ -573,6 +576,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                       <article className={message.user === session?.id ? "own" : ""}>
                         {message.user !== session?.id && <button className="message-profile" aria-label={`View ${message.name}'s profile`} disabled={!profileAvailable} onClick={() => openPerson(message.user)}><Avatar name={message.name} url={message.avatarUrl} size={44} /></button>}
                         <div>
+                          {message.user === group?.venue.place?.ownerId && <span className="owner-tag">Owner</span>}
                           <p>{message.text}</p>
                         </div>
                       </article>

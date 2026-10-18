@@ -21,7 +21,7 @@ export function LandingPage() {
   return <main className="landing-page">
     <header className="landing-header">
       <Link href="/welcome" className="app-brand" aria-label="QR Chat home"><QrCode size={28} weight="bold" aria-hidden="true" />QR Chat</Link>
-      <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#get-started" className="landing-nav-cta">Get started <ArrowRight size={16} aria-hidden="true" /></a></nav>
+      <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><Link href="/sign-in?next=/business">Business login</Link><a href="#get-started" className="landing-nav-cta">Get started <ArrowRight size={16} aria-hidden="true" /></a></nav>
     </header>
 
     <section className="landing-hero" aria-labelledby="landing-title">

@@ -1,12 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
-import { codeKeySchema, productNameSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
+import { codeKeySchema, productNameSchema, placeNameSchema, placeLinkSchema, menuUploadSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
 import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage, Friend, Profile } from "./overview.ts";
 export { getChatStore, createChatStore } from "./store.ts";
 export { createObservedFetch } from "./requests.ts";
 export type { RequestObservation, RequestObserver } from "./requests.ts";
 export type { ChatOverview, ChatAccess } from "./overview.ts";
 export type AvatarUpload = { uploadId: string; data: ArrayBuffer };
+export type MenuUpload = AvatarUpload;
+/** A business place as its owner sees it; menu_url is derived from menu_path. */
+export type Place = Tables<"places"> & { menu_url: string | null };
 export { watchChanges, topic } from "./realtime.ts";
 export type { ConnectionState, Topic } from "./realtime.ts";
 export type { Database, Tables } from "@qr-chat/types";
@@ -51,6 +54,8 @@ export function createChatApi(
   }
   const withImage = <T extends { image_path: string | null }>(group: T) =>
     ({ ...group, image_url: group.image_path ? client.storage.from("group-images").getPublicUrl(group.image_path).data.publicUrl : null });
+  const menuUrl = (path: string | null) => path ? client.storage.from("venue-menus").getPublicUrl(path).data.publicUrl : null;
+  const withMenu = <T extends { menu_path: string | null }>(place: T) => ({ ...place, menu_url: menuUrl(place.menu_path) });
   const withProfiles = <T extends { profiles: { avatar_path?: string | null } | null }>(message: T) => ({ ...message, profiles: message.profiles && withAvatar(message.profiles) });
   const friendView = <T extends { user_a: { avatar_path?: string | null } | null; user_b: { avatar_path?: string | null } | null }>(friend: T) =>
     ({ ...friend, user_a: friend.user_a && withAvatar(friend.user_a), user_b: friend.user_b && withAvatar(friend.user_b) });
@@ -71,7 +76,7 @@ export function createChatApi(
       return {
         ...overview,
         profile: overview.profile && withAvatar(overview.profile),
-        memberships: overview.memberships.map((membership) => ({ ...membership, groups: membership.groups && withImage(membership.groups), members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
+        memberships: overview.memberships.map((membership) => ({ ...membership, groups: membership.groups && withImage(membership.groups), place: membership.place && withMenu(membership.place), members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
         friends: overview.friends.map(friendView),
       };
     },
@@ -220,6 +225,38 @@ export function createChatApi(
       emit({ kind: "direct", userId: id, message });
       return message;
     },
+    /** True while the account holds the business plan (app-wide places.manage). */
+    async isBusiness() {
+      return (await result(client.rpc("my_permissions"))).includes("places.manage");
+    },
+    /** The owner's places, lapsed ones included; deleted ones are left out. */
+    async places(): Promise<Place[]> {
+      return (await result(client.from("places").select("*").eq("owner_id", await userId()).is("deleted_at", null).order("created_at"))).map(withMenu);
+    },
+    async createPlace(name: unknown): Promise<Place> {
+      const place = withMenu(await result(client.rpc("create_place", { p_name: placeNameSchema.parse(name) })));
+      emit({ kind: "overview" });
+      return place;
+    },
+    /** menu: undefined keeps the current PDF; null removes it. Uploads use immutable keys, like avatars. */
+    async updatePlace(place: Place, input: { name: unknown; link: unknown; menu?: MenuUpload | null }): Promise<Place> {
+      const name = placeNameSchema.parse(input.name);
+      const link = placeLinkSchema.parse(input.link) || null;
+      const upload = input.menu ? menuUploadSchema.parse(input.menu) : input.menu;
+      const bucket = client.storage.from("venue-menus");
+      let menu_path = place.menu_path;
+      if (upload) {
+        menu_path = `${await userId()}/${upload.uploadId}.pdf`;
+        await result(bucket.upload(menu_path, upload.data, { contentType: "application/pdf", cacheControl: "31536000", upsert: false }));
+      } else if (upload === null) menu_path = null;
+      const saved = withMenu(await result(client.rpc("update_place", { p_place_id: userIdSchema.parse(place.id), p_name: name, p_link_url: link, p_menu_path: menu_path })));
+      if (place.menu_path && place.menu_path !== menu_path) {
+        try { await bucket.remove([place.menu_path]); } catch { /* best effort */ }
+      }
+      emit({ kind: "overview" });
+      return saved;
+    },
+    deletePlace: async (placeId: string) => { await nullableResult(client.rpc("delete_place", { p_place_id: userIdSchema.parse(placeId) })); emit({ kind: "overview" }); },
     /** Permanently erases the signed-in account on the server, then clears the local session. */
     async deleteAccount() {
       const { data } = await client.auth.getSession();

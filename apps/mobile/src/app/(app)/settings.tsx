@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Alert, Linking } from 'react-native';
+import { router } from 'expo-router';
 import { Button, Copy, ErrorNotice, Screen, styles, useAction } from '@/components/chat-ui';
 import { webOrigin } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
@@ -6,7 +8,10 @@ import { useAuth } from '@/providers/auth-provider';
 export default function SettingsScreen() {
   const { api } = useAuth();
   const action = useAction();
+  const [business, setBusiness] = useState(false);
+  useEffect(() => { void api?.isBusiness().then(setBusiness, () => {}); }, [api]);
   return <Screen><ErrorNotice message={action.error} />
+    {business && <Button label="Business" subtle onPress={() => router.push('/business')} />}
     <Button label="Sign out" danger subtle disabled={action.busy} onPress={() => { void action.run(async () => { await api!.signOut(); }); }} />
     <Button label="Delete account" danger subtle disabled={action.busy} onPress={() => {
       Alert.alert('Delete account?', 'This permanently erases your profile, photo, friendships and the messages you sent.', [
