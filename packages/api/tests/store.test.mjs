@@ -7,7 +7,7 @@ const friend = '33333333-3333-4333-8333-333333333333';
 const tick = async () => { await new Promise(resolve => setTimeout(resolve, 15)); };
 const row = (id, direct = false) => ({ id, sender_id: self, body: `message ${id}`, created_at: '2026-01-01T00:00:00Z', ...(direct ? { group_id: friend } : { group_id: room, profiles: { display_name: 'Andy', avatar_url: null } }) });
 function fixture(options = {}) {
-  const calls = []; const channels = []; const mutations = new Set(); let authListener; let id = self;
+  const calls = []; const reads = []; const channels = []; const mutations = new Set(); let authListener; let id = self;
   const overview = { userId: self, profile: { display_name: 'Andy' }, memberships: [{ group_id: room, expires_at: '2030-01-01', groups: { id: room, code_key: 'Cafe', name: 'Cafe' }, members: [], preview: null, headIds: [2, 1] }], friends: [{ id: friend, accepted_at: 'yes' }], directPreviews: { [friend]: null } };
   const access = { userId: self, memberships: [{ group_id: room, expires_at: '2030-01-01' }], acceptedConnectionIds: [friend] };
   let groupRows = [row(2), row(1)]; let directRows = [row(2, true), row(1, true)];
@@ -21,6 +21,7 @@ function fixture(options = {}) {
     directMessages: async (_id, options = {}) => call(`direct:${options.before ?? 'head'}`, page(directRows, options.before)),
     groupMessageIds: async (_id, ids) => call('group:ids', groupRows.filter(row => ids.includes(row.id))),
     directMessageIds: async (_id, ids) => call('direct:ids', directRows.filter(row => ids.includes(row.id))),
+    markRead: async (chatId, messageId) => { reads.push([chatId, messageId]); },
     onMutation(listener) { mutations.add(listener); return () => mutations.delete(listener); },
     client: {
       auth: { onAuthStateChange(listener) { authListener = listener; return { data: { subscription: { unsubscribe() {} } } }; } },
@@ -30,7 +31,7 @@ function fixture(options = {}) {
     },
   };
   const store = createChatStore(api, { coalesceMs: 1, random: () => 1, ...options });
-  return { api, store, calls, overview, access, channels,
+  return { api, store, calls, reads, overview, access, channels,
     auth(next) {id=next;authListener('SIGNED_IN', next ? {user:{id:next}} : null);},
     write(message, kind='group') {for(const listener of mutations) listener({kind,userId:self,message});},
     topics() {return channels.filter(channel=>!channel.removed).map(channel=>channel.name);},
@@ -307,4 +308,27 @@ test('joining a group adds its topic on the same socket without resubscribing th
   f.calls.length=0;f.live();await tick();await tick();
   assert.deepEqual(f.calls.filter(call=>call==='overview'),['overview'],'the new topic closes its join gap with one refresh');
   assert.equal(f.store.getState().connection,'connected');
+});
+test('unread counts come from the overview, grow with other people\'s messages and clear when a chat is opened', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());const peer=message=>({...message,sender_id:'peer'});
+  f.overview.unread={[room]:2};await f.store.start();
+  assert.deepEqual(f.store.getState().snapshot.unread,{[room]:2});
+  f.setGroup([peer(row(3)),row(2),row(1)]);f.event('group',3);await tick();
+  assert.equal(f.store.getState().snapshot.unread[room],3,'a message from someone else adds one');
+  f.write(row(4));await tick();
+  assert.equal(f.store.getState().snapshot.unread[room],3,'your own message is never unread');
+  f.setDirect([peer(row(3,true))]);f.event('direct',3);await tick();
+  assert.equal(f.store.getState().snapshot.unread[friend],1);
+  const close=f.store.openGroup(room);await tick();
+  assert.equal(f.store.getState().snapshot.unread[room],undefined);
+  assert.deepEqual(f.reads,[[room,4]],'opening marks the newest message read');
+  close();f.overview.unread[friend]=1;await f.store.refresh('safety');
+  assert.deepEqual(f.store.getState().snapshot.unread,{[friend]:1},'a server count older than the read marker stays cleared');
+  f.store.openDirect(friend);await tick();
+  assert.deepEqual(f.store.getState().snapshot.unread,{});assert.deepEqual(f.reads.at(-1),[friend,3]);
+});
+test('messages arriving in an open chat are marked read instead of counted', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();
+  f.setGroup([{...row(3),sender_id:'peer'},row(2),row(1)]);f.event('group',3);await tick();
+  assert.deepEqual(f.store.getState().snapshot.unread,{});assert.deepEqual(f.reads.at(-1),[room,3]);
 });

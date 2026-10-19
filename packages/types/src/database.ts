@@ -439,6 +439,7 @@ export type Database = {
       delete_place: { Args: { p_place_id: string }; Returns: undefined }
       erase_user_messages: { Args: { p_user_id: string }; Returns: undefined }
       leave_qr_group: { Args: { p_group_id: string }; Returns: string }
+      mark_chat_read: { Args: { p_group_id: string; p_message_id: number }; Returns: undefined }
       name_product_group: { Args: { p_group_id: string; p_name: string }; Returns: undefined }
       my_permissions: { Args: { p_group_id?: string }; Returns: string[] }
       remove_friend_connection: {

@@ -188,6 +188,9 @@ export function createChatApi(
       emit({ kind: "group", userId: id, message });
       return message;
     },
+    /** Moves the caller's read marker for a group or DM up to messageId; the server never moves it back. */
+    markRead: (groupId: string, messageId: number) =>
+      nullableResult(client.rpc("mark_chat_read", { p_group_id: userIdSchema.parse(groupId), p_message_id: pageSchema.parse({ before: messageId }).before! })),
     async friends(): Promise<Friend[]> {
       const id = await userId();
       return (await result(client.from("friendships")

@@ -1,6 +1,6 @@
 "use client";
 
-import { groupFallbackName, messageAge, messageDayLabel, scannedCode, venueLinks } from "@qr-chat/domain";
+import { groupFallbackName, messageAge, messageDayLabel, scannedCode, venueLink } from "@qr-chat/domain";
 import type { ChatApi } from "@qr-chat/api";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -510,15 +510,6 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     });
   }
 
-  function leaveGroup(groupId: string) {
-    setSidebar(false);
-    void perform(async () => {
-      await api.leaveGroup(groupId);
-      await backend.refresh();
-      backToChats();
-    });
-  }
-
   return (
     <div ref={app} className="qr-app">
       {(!online || backend.connection === "reconnecting") && <div className="connection-status" role="status">{online ? "Reconnecting… Your chats will refresh when connected." : "You’re offline. Reconnect to load chats and send messages."}</div>}
@@ -535,6 +526,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             groups={groups}
             friends={backend.friends}
             directPreviews={backend.directPreviews}
+            unread={backend.unread}
             hasObservedGroup={backend.hasObservedGroup}
             sessionId={session?.id ?? null}
             busy={busy}
@@ -546,6 +538,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
             onRemoveRequest={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
             onUnfriend={async (friendId) => { await api.removeFriend(friendId); await backend.refresh(); }}
             onBlock={async (friendId) => { await api.blockFriend(friendId); await backend.refresh(); }}
+            onLeaveGroup={async (groupId) => { await api.leaveGroup(groupId); await backend.refresh(); }}
           />
         )}
 
@@ -562,7 +555,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} venueLinks={group ? venueLinks(group.venue, window.location.origin) : []} />
+            <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} venueLink={group ? venueLink(group.venue, window.location.origin) : null} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(() => backend.loadOlder(active.id))}>Load older messages</button>}
@@ -631,7 +624,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 </button>
               )}
             </div>
-            {sidebar && group && <GroupSidebar key={group.id} group={group} userId={session?.id} busy={busy} onClose={() => setSidebar(false)} onProfile={openPerson} onLeave={() => leaveGroup(group.id)} />}
+            {sidebar && group && <GroupSidebar key={group.id} group={group} userId={session?.id} onClose={() => setSidebar(false)} onProfile={openPerson} />}
           </section>
         )}
 

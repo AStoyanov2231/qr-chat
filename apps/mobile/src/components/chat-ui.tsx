@@ -28,7 +28,7 @@ const symbols = {
   check: ['checkmark', 'check'], userPlus: ['person.badge.plus.fill', 'person_add'],
   help: ['questionmark.circle', 'help'], pin: ['mappin', 'location_on'], close: ['xmark', 'close'],
   browser: ['safari', 'open_in_browser'], plus: ['plus', 'add'], business: ['storefront', 'storefront'],
-  pdf: ['doc.richtext', 'picture_as_pdf'], trash: ['trash', 'delete'], share: ['square.and.arrow.up', 'share'],
+  pdf: ['doc.richtext', 'picture_as_pdf'], link: ['link', 'link'], trash: ['trash', 'delete'], share: ['square.and.arrow.up', 'share'],
 } as const;
 export type IconName = keyof typeof symbols;
 export function Icon({ name, size = 25, color = colors.text }: { name: IconName; size?: number; color?: string }) {
@@ -112,15 +112,13 @@ export function Skeleton({ profile = false, view = 'groups' }: { profile?: boole
     <View style={[styles.skeleton, { height: 92, marginTop: 'auto' }]} />
   </View>;
   if (view === 'chats') {
-    const row = (index: number) => <View key={index} style={[styles.row, { minHeight: index === 1 ? 48 : 72, gap: 12, paddingVertical: index < 2 ? 0 : 10, paddingHorizontal: index < 2 ? 0 : 8 }]}>
+    const row = (index: number) => <View key={index} style={[styles.row, { minHeight: 72, gap: 12, paddingVertical: 10, paddingHorizontal: 8 }]}>
       <View style={[styles.skeleton, { width: 52, height: 52, borderRadius: 26 }]} />
       <View style={{ flex: 1, gap: 8 }}><View style={[styles.skeleton, { width: '70%', height: 14 }]} /><View style={[styles.skeleton, { width: '50%', height: 12 }]} /></View>
       <View style={[styles.skeleton, { width: 36, height: 12 }]} />
     </View>;
     return <View accessibilityLabel="Loading chats" accessibilityRole="progressbar" style={{ gap: 8 }}>
-      <View style={{ minHeight: 98, padding: 16, borderRadius: 24, backgroundColor: colors.primaryTint }}>{row(0)}</View>
-      <View style={{ padding: 16, borderWidth: 1, borderColor: colors.line, borderRadius: 24, backgroundColor: colors.surface }}>{row(1)}</View>
-      {[2, 3, 4].map(row)}
+      {[0, 1, 2, 3, 4].map(row)}
       <Copy style={[styles.muted, { textAlign: 'center', marginTop: 16 }]}>Loading chats…</Copy>
     </View>;
   }

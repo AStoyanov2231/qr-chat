@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Alert, View } from 'react-native';
-import { venueLinks } from '@qr-chat/domain';
+import { View } from 'react-native';
+import { venueLink } from '@qr-chat/domain';
 import { ChatBar } from '@/components/conversation-header';
 import { GroupDetails } from '@/components/group-details';
 import { SettingsSidebar } from '@/components/settings-sidebar';
@@ -22,12 +22,8 @@ export default function RoomScreen() {
   const [sidebar, setSidebar] = useState(false);
   const group = chat.groups.find((item) => item.id === groupId) ?? null;
   const title = group?.venue.name ?? (typeof name === 'string' ? name : 'Group');
-  const links = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueLinks(group?.venue ?? { id: '', name: title, label: '', kind: 'place', codes: typeof routeCode === 'string' ? [routeCode] : [] }, webOrigin) : [];
-  const open = (href: string) => { void ChatBrowser?.open(href, title).catch(() => {}); };
-  // One link opens directly; a menu and a link become a native choice.
-  const browse = links.length === 1 ? () => open(links[0]!.href)
-    : links.length > 1 ? () => Alert.alert(title, undefined, [...links.map((link) => ({ text: link.label, onPress: () => open(link.href) })), { text: 'Cancel', style: 'cancel' as const }])
-    : undefined;
+  const link = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueLink(group?.venue ?? { id: '', name: title, label: '', kind: 'place', codes: typeof routeCode === 'string' ? [routeCode] : [] }, webOrigin) : null;
+  const browse = link ? () => { void ChatBrowser?.open(link, title).catch(() => {}); } : undefined;
   async function sendMessage(body: string) {
     if (!api || !group) throw new Error('Your membership has ended.');
     return api.sendGroupMessage(group.id, body);

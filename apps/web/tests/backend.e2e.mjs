@@ -278,10 +278,11 @@ try {
   await bob.page.getByRole('button', { name: 'Group settings', exact: true }).click();
   await bob.page.getByLabel('2 members', { exact: true }).waitFor({ timeout });
   await alice.page.bringToFront();
-  await alice.page.goto(`${origin}/?code=${encodeURIComponent(code)}`);
-  await alice.page.getByRole('button', { name: 'Group settings', exact: true }).click();
+  await overview(alice);
+  await alice.page.locator('.group-card').press('ArrowLeft');
+  alice.page.once('dialog', (dialog) => void dialog.accept());
   const leaveStarted = Date.now();
-  await alice.page.getByRole('button', { name: 'Leave group' }).click();
+  await alice.page.locator('.dm-swipe-action.danger').click();
   await eventually(async () => (await alice.api.memberships()).length === 0, 'leave must revoke membership');
   await twin.page.bringToFront();
   await twin.page.locator('.group-card').waitFor({ state: 'hidden', timeout });

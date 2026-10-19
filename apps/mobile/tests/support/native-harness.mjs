@@ -136,7 +136,7 @@ const mocks = {
     export {getChatStore} from '${new URL('./chat-store.mjs', import.meta.url).href}';
     export const loadDirectSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadDirectSnapshot(...args);
     export const loadChatSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadChatSnapshot(...args);
-    export const emptySnapshot={session:null,groups:[],friends:[],directPreviews:{}};
+    export const emptySnapshot={session:null,groups:[],friends:[],directPreviews:{},unread:{}};
     export function watchChanges(client,filters,refresh,onState) {
       const watcher={filters,refresh,onState,stopped:false,stop(){this.stopped=true;}};
       globalThis.__qrChatNativeTest.watchers.push(watcher);onState('connected');return watcher;
@@ -187,7 +187,7 @@ export function reset() {
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
     auth: { userId: 'me', active: true, api: { resolveGroup: async () => null, isBusiness: async () => false } },
-    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
+    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, unread: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
     loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},groups:[],friends:[],directPreviews:{}}),
   });
 }

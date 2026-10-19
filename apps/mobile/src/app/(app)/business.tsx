@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
 import { Alert, BackHandler, Linking, Pressable, ScrollView, View } from 'react-native';
+import Animated, { useAnimatedStyle, useReducedMotion, withTiming } from 'react-native-reanimated';
 import { router, Stack } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { File, Paths } from 'expo-file-system';
@@ -9,7 +10,7 @@ import { SafeAreaView } from 'react-native-screens/experimental';
 import { qrPayload } from '@qr-chat/domain';
 import type { Place } from '@qr-chat/api';
 import { placeLinkSchema } from '@qr-chat/validation';
-import { Button, Copy, ErrorNotice, Icon, IconButton, NativeInput, PillButton, TextButton, colors, styles, useAction, type NativeInputProps } from '@/components/chat-ui';
+import { Button, Copy, ErrorNotice, Icon, NativeInput, PillButton, TextButton, colors, styles, useAction, type NativeInputProps } from '@/components/chat-ui';
 import { GroupQr } from '@/components/group-details';
 import { NativeAction } from '@/components/native-action';
 import { qrPng } from '@/lib/qr-png';
@@ -64,8 +65,7 @@ export default function BusinessScreen() {
           <GroupQr code={placeUrl(place)} size={88} />
           <View style={{ flex: 1, gap: 2 }}>
             <Copy selectable={false} numberOfLines={1} style={{ fontWeight: '700' }}>{place.name}</Copy>
-            <Copy selectable={false} numberOfLines={1} style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{place.link_url ? place.link_url.replace(/^https:\/\//u, '') : 'No link'}</Copy>
-            <Copy selectable={false} numberOfLines={1} style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{place.menu_url ? 'Menu PDF' : 'No menu'}</Copy>
+            <Copy selectable={false} numberOfLines={1} style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{place.menu_url ? 'Menu PDF' : place.link_url ? place.link_url.replace(/^https:\/\//u, '') : 'No menu'}</Copy>
           </View>
           <Icon name="chevron" size={18} color={colors.muted} />
         </Pressable>)}
@@ -104,14 +104,17 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   const action = useAction();
   const sharing = useAction();
   const [name, setName] = useState(place?.name ?? '');
+  // A place offers one menu: a link or a PDF. Saving one clears the other.
+  const [kind, setKind] = useState<MenuKind>(place?.menu_path ? 'pdf' : 'link');
   const [link, setLink] = useState(place?.link_url ?? '');
-  const [menu, setMenu] = useState<File | null | undefined>();
+  const [menu, setMenu] = useState<File | undefined>();
   const [linkError, setLinkError] = useState('');
+  // Once a link or file is entered the other type locks; clearing it unlocks.
+  const locked = kind === 'link' ? link.trim() !== '' : !!menu;
   // A new place is created before its link and menu are saved; if that second step fails, a retry must not create it twice.
   const created = useRef<Place | null>(null);
   const url = place && placeUrl(place);
   const disabled = readOnly || action.busy;
-  const menuUrl = menu === undefined ? place?.menu_url : null;
   const back = () => { if (!action.busy) onBack(); };
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; });
@@ -120,11 +123,12 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   const save = () => {
     // Checked here so a bad link never reaches the server, where a new place would already be created without it.
     const checked = placeLinkSchema.safeParse(link);
-    if (!checked.success) { setLinkError(checked.error.issues[0]?.message ?? 'Enter a link that starts with https://'); return; }
+    if (kind === 'link' && !checked.success) { setLinkError(checked.error.issues[0]?.message ?? 'Enter a link that starts with https://'); return; }
     void action.run(async () => {
       const target = place ?? created.current ?? (created.current = await api.createPlace(name));
-      const upload = menu ? { uploadId: randomUUID(), data: await menu.arrayBuffer() } : menu;
-      if (place || link || upload) await api.updatePlace(target, { name, link, menu: upload });
+      const upload = menu && { uploadId: randomUUID(), data: await menu.arrayBuffer() };
+      const input = kind === 'link' ? { name, link, menu: null } : { name, link: '', menu: upload };
+      if (place || input.link || input.menu) await api.updatePlace(target, input);
       await onDone();
     });
   };
@@ -143,35 +147,47 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
         <ErrorNotice message={sharing.error} />
       </View>
     </View>}
-    <FloatField label="Name" value={name} onChangeText={setName} maxLength={100} editable={!disabled} autoCapitalize="words" />
-    <View style={{ gap: 8 }}>
-      <FloatField label="Link" hint="(optional)" value={link} onChangeText={(value) => { setLink(value); setLinkError(''); }} maxLength={2048} editable={!disabled} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
-      <Copy accessibilityLiveRegion="polite" style={{ color: linkError ? colors.danger : colors.muted, fontSize: 13, lineHeight: 18 }}>{linkError || 'Your website or payment page. Guests open it from the group chat.'}</Copy>
-    </View>
-    <View style={{ gap: 8 }}>
-      <Copy style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>Menu <Copy style={{ fontSize: 14, color: colors.muted, fontWeight: '400' }}>(optional)</Copy></Copy>
-      <View style={[styles.row, { minHeight: 64, padding: 10, paddingLeft: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.line, borderRadius: 20, backgroundColor: colors.fill, opacity: menu === null ? 0.7 : 1 }]}>
-        <Icon name="pdf" size={28} />
-        <View accessibilityLiveRegion="polite" style={{ flex: 1 }}>
-          <Copy numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '700' }}
-            {...(menuUrl && !menu ? { accessibilityRole: 'link' as const, onPress: () => { void Linking.openURL(menuUrl).catch(() => {}); } } : {})}>
-            {menu ? menu.name : menu === null ? 'Menu will be removed' : menuUrl ? 'Current menu' : 'No menu yet'}
-          </Copy>
-          <Copy style={{ color: colors.muted, fontSize: 12, lineHeight: 16 }}>{menu ? 'Uploads when you save' : menu === null ? 'When you save' : menuUrl ? 'Tap to view the PDF' : 'PDF, up to 10 MB'}</Copy>
-        </View>
-        {!readOnly && (menu !== undefined
-          ? <TextButton label="Undo" disabled={action.busy} onPress={() => setMenu(undefined)} />
-          : <>
-            {menuUrl && <IconButton name="trash" label="Remove menu" onPress={() => { if (!action.busy) setMenu(null); }} />}
-            <PillButton fill={false} label={menuUrl ? 'Replace' : 'Upload'} disabled={action.busy} background={colors.canvas} foreground={colors.text} onPress={() => {
-              void File.pickFileAsync({ mimeTypes: ['application/pdf'] }).then((picked) => { if (!picked.canceled) setMenu(picked.result); }, () => {});
-            }} />
-          </>)}
-      </View>
-    </View>
+    <MenuKindToggle kind={kind} disabled={disabled} locked={locked} onChange={setKind} />
+    {locked && !disabled && <Copy style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{kind === 'link' ? 'Clear the link to use a PDF instead.' : 'Remove the file to use a link instead.'}</Copy>}
+    <FloatField label="Place name" value={name} onChangeText={setName} maxLength={100} editable={!disabled} autoCapitalize="words" />
+    {kind === 'link' ? <View style={{ gap: 8 }}>
+      <FloatField label="Menu link" value={link} onChangeText={(value) => { setLink(value); setLinkError(''); }} maxLength={2048} editable={!disabled} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+      <Copy accessibilityLiveRegion="polite" style={{ color: linkError ? colors.danger : colors.muted, fontSize: 13, lineHeight: 18 }}>{linkError || 'A link to your menu, starting with https://. Guests open it from the group chat.'}</Copy>
+    </View> : <View style={{ gap: 8 }}>
+      <Copy style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>Menu file</Copy>
+      <Pressable accessibilityRole="button" accessibilityLabel={menu ? `Replace ${menu.name}` : 'Upload menu (PDF)'} accessibilityState={{ disabled }} disabled={disabled} onPress={() => {
+        void File.pickFileAsync({ mimeTypes: ['application/pdf'] }).then((picked) => { if (!picked.canceled) setMenu(picked.result); }, () => {});
+      }} style={({ pressed }) => ({ alignItems: 'center', gap: 6, paddingVertical: 28, paddingHorizontal: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.muted, borderRadius: 20, backgroundColor: pressed ? colors.line : colors.fill })}>
+        <Icon name="pdf" size={32} />
+        <Copy selectable={false} numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '700' }}>{menu ? menu.name : place?.menu_url ? 'Replace menu (PDF)' : 'Upload menu (PDF)'}</Copy>
+        <Copy selectable={false} accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{menu ? 'Uploads when you save' : 'Tap to browse your files'}</Copy>
+      </Pressable>
+      {menu && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Remove file" disabled={disabled} onPress={() => setMenu(undefined)} /></View>}
+      <Copy style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>Max file size 10 MB. Only PDF files are supported.</Copy>
+      {place?.menu_url && !menu && <View style={{ alignSelf: 'flex-start' }}><TextButton label="View current menu" onPress={() => { void Linking.openURL(place.menu_url!).catch(() => {}); }} /></View>}
+    </View>}
     {!readOnly && place && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Delete place" danger disabled={action.busy} onPress={() => Alert.alert(`Delete ${place.name}?`, 'Its QR code stops working and guests can no longer join.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => { void action.run(async () => { await api.deletePlace(place.id); await onDone(); }); } },
     ])} /></View>}
   </Page>;
+}
+
+type MenuKind = 'link' | 'pdf';
+/** Two-option pill switch; the primary-filled thumb slides to the chosen option. */
+function MenuKindToggle({ kind, disabled, locked, onChange }: { kind: MenuKind; disabled: boolean; locked: boolean; onChange: (kind: MenuKind) => void }) {
+  const [width, setWidth] = useState(0);
+  const reduced = useReducedMotion();
+  const half = Math.max(0, (width - 8) / 2);
+  const thumb = useAnimatedStyle(() => ({ transform: [{ translateX: withTiming(kind === 'pdf' ? half : 0, { duration: reduced ? 0 : 240 }) }] }));
+  return <View accessibilityRole="tablist" onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+    style={{ flexDirection: 'row', height: 52, padding: 4, borderRadius: 26, backgroundColor: colors.fill, opacity: disabled ? 0.5 : 1 }}>
+    <Animated.View style={[{ position: 'absolute', top: 4, bottom: 4, left: 4, width: half, borderRadius: 22, backgroundColor: colors.primary }, thumb]} />
+    {([['link', 'Link', 'link'], ['pdf', 'PDF', 'pdf']] as const).map(([value, label, icon]) => <Pressable key={value} accessibilityRole="tab" accessibilityLabel={label}
+      accessibilityState={{ selected: kind === value, disabled: disabled || (locked && kind !== value) }} disabled={disabled || (locked && kind !== value)} onPress={() => onChange(value)}
+      style={{ opacity: locked && kind !== value ? 0.4 : 1, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <Icon name={icon} size={18} color={kind === value ? colors.onPrimary : colors.muted} />
+      <Copy selectable={false} style={{ fontSize: 15, fontWeight: '700', color: kind === value ? colors.onPrimary : colors.muted }}>{label}</Copy>
+    </Pressable>)}
+  </View>;
 }

@@ -16,7 +16,7 @@ const Avatar = ({ name, url, size = 44 }) => React.createElement('span', {
   style: { width: size, height: size },
 }, url ? React.createElement('img', { src: url, alt: '' }) : name.slice(0, 2).toUpperCase());
 const Icon = ({ name }) => React.createElement('span', { 'data-icon': name, 'aria-hidden': 'true' });
-const icons = Object.fromEntries(['Prohibit', 'UserMinus', 'Check', 'UserPlus', 'ArrowRight', 'ChatCircle', 'DeviceMobile', 'Globe', 'QrCode', 'Users', 'CaretLeft', 'ArrowLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
+const icons = Object.fromEntries(['Prohibit', 'SignOut', 'UserMinus', 'Check', 'UserPlus', 'ArrowRight', 'ChatCircle', 'DeviceMobile', 'Globe', 'QrCode', 'Users', 'CaretLeft', 'ArrowLeft', 'CaretRight', 'Clock', 'MagnifyingGlass', 'X', 'Bell', 'BookmarkSimple', 'Gear', 'LockSimple', 'PencilSimple', 'Question', 'User'].map((name) => [
   name,
   (props) => React.createElement('svg', { ...props, 'data-icon': name, 'aria-hidden': 'true' }),
 ]));
@@ -90,6 +90,7 @@ function props(overrides = {}) {
     onRemoveRequest: noOp,
     onUnfriend: noOp,
     onBlock: noOp,
+    onLeaveGroup: noOp,
     ...overrides,
   };
 }
@@ -408,7 +409,9 @@ test('every incoming request gets its own row, newest first', () => {
 test('every joined group gets its own card with its own countdown', () => {
   const later = { ...group, id: 'group-late', venue: { ...group.venue, id: 'group-late', name: 'Late Bar' }, messages: [{ ...group.messages[0], time: Date.now() - 60_000 }], expiresAt: new Date(Date.now() + 2.5 * 60 * 60_000).toISOString() };
   const html = renderOverview(props({ groups: [{ ...group, expiresAt: new Date(Date.now() + 18.5 * 60 * 60_000).toISOString() }, later] }));
-  assert.equal((html.match(/class="group-card"/g) ?? []).length, 2);
+  assert.equal((html.match(/class="dm-row-open group-card"/g) ?? []).length, 2);
+  assert.match(html, /aria-label="Leave Late Bar"/);
+  assert.equal((html.match(/class="dm-swipe-actions" aria-hidden="true" inert=""/g) ?? []).length, 2);
   assert.ok(html.indexOf('Open Late Bar') < html.indexOf('Open Brew'), 'newest group message first');
   assert.match(html, /2h left/);
   assert.match(html, /18h left/);
@@ -423,4 +426,21 @@ test('the profile fills its header with the avatar and no longer shows the curre
   }));
   assert.match(html, /chat-photo-header[\s\S]*url\(&quot;https:\/\/cdn\.example\/me\.jpg&quot;\)/);
   assert.doesNotMatch(html, /Cafe Nine|current group/i);
+});
+
+test('rows with unread messages show a count badge and a bold preview; read rows stay plain', () => {
+  const message = { id: 7, group_id: acceptedMaya.id, sender_id: 'user-maya', body: 'Are you coming?', created_at: new Date(Date.now() - 60_000).toISOString() };
+  const html = renderOverview(props({
+    groups: [group],
+    friends: [acceptedMaya, acceptedJordan],
+    directPreviews: { [acceptedMaya.id]: { status: 'ready', message }, [acceptedJordan.id]: { status: 'ready', message: null } },
+    unread: { [group.id]: 3, [acceptedMaya.id]: 120 },
+  }));
+  assert.match(html, /class="group-preview preview-unread">Anyone here for the workshop\?<\/span><span class="unread-badge" aria-hidden="true">3<\/span>/);
+  assert.match(html, /class="dm-preview preview-unread">Are you coming\?<\/span><span class="unread-badge" aria-hidden="true">99\+<\/span>/);
+  assert.match(html, /aria-label="Open Brew &amp; Chat, 2 members\.[^"]* 3 unread messages\."/);
+  assert.match(html, /aria-label="Open direct message with Maya Chen, 99\+ unread messages"/);
+  assert.match(html, /aria-label="Open direct message with Jordan Lee"/);
+  assert.equal((html.match(/class="unread-badge"/g) ?? []).length, 2, 'chats without unread messages show no badge');
+  assert.doesNotMatch(renderOverview(props({ groups: [group] })), /unread-badge|preview-unread/);
 });

@@ -24,6 +24,9 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   const pendingWrites = new Map<string, Row[]>();
   const writtenIds = new Map<string, Set<number>>();
   const directViews = new Map<string, number>();
+  // Newest message id each chat's unread count accounts for, and the newest id this session marked read.
+  const unreadAfter = new Map<string, number>();
+  const readIds = new Map<string, number>();
   let state = initialState;
   let active = false;
   let generation = 0;
@@ -78,6 +81,28 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       const preview = latest && (previous?.status !== 'ready' || !previous.message || latest.id >= previous.message.id) ? { status: 'ready' as const, message: latest } : previous;
       publish({ directs: { ...state.directs, [id]: { messages: rows as DirectMessage[], nextCursor: cache.nextCursor, loading: false, error: '' } }, snapshot: preview ? { ...state.snapshot, directPreviews: { ...state.snapshot.directPreviews, [id]: preview } } : state.snapshot });
     }
+  }
+  const viewing = (id: string) => viewingGroup(id) || directViews.has(id);
+  function setUnread(id: string, count: number) {
+    if ((state.snapshot.unread[id] ?? 0) === count) return;
+    const unread = { ...state.snapshot.unread };
+    if (count) unread[id] = count; else delete unread[id];
+    publish({ snapshot: { ...state.snapshot, unread } });
+  }
+  /** An open chat is read up to its newest known message. */
+  function read(id: string) {
+    setUnread(id, 0);
+    const latest = unreadAfter.get(id) ?? 0;
+    if (latest <= (readIds.get(id) ?? 0)) return;
+    readIds.set(id, latest);
+    void api.markRead(id, latest).catch(() => { if (readIds.get(id) === latest) readIds.delete(id); });
+  }
+  /** Rows that reached the cache since the overview: open chats stay read, others count other people's messages. */
+  function track(id: string, rows: Row[]) {
+    const fresh = rows.filter((row) => row.id > (unreadAfter.get(id) ?? 0));
+    if (fresh.length) unreadAfter.set(id, Math.max(...fresh.map((row) => row.id)));
+    if (viewing(id)) read(id);
+    else setUnread(id, (state.snapshot.unread[id] ?? 0) + fresh.filter((row) => row.sender_id !== identity).length);
   }
   function forgetConversation(key: string) {
     conversations.delete(key); pendingIds.delete(key); pendingWrites.delete(key); writtenIds.delete(key);
@@ -162,6 +187,11 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       const headIds = new Map(next.memberships.map((membership) => [membership.group_id, membership.headIds]));
       for (const key of new Set([...conversations.keys(), ...pendingWrites.keys(), ...writtenIds.keys()])) if (key.startsWith('g:') ? !headIds.has(key.slice(2)) : !allowed.has(key.slice(2))) forgetConversation(key);
       const snapshot = snapshotFromOverview(next);
+      for (const id of [...headIds.keys(), ...allowed]) {
+        unreadAfter.set(id, headIds.get(id)?.[0] ?? next.directPreviews[id]?.id ?? 0);
+        // The server may answer before a just-sent read marker lands.
+        if ((readIds.get(id) ?? 0) >= unreadAfter.get(id)!) delete snapshot.unread[id];
+      }
       snapshot.groups = snapshot.groups.map((group) => {
         const cache = conversations.get(`g:${group.id}`);
         return cache?.loaded ? { ...group, messages: groupMessageViews([...cache.rows.values()].sort((a, b) => a.id - b.id), snapshot), nextCursor: cache.nextCursor } : group;
@@ -169,6 +199,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
       const directs = Object.fromEntries(Object.entries(state.directs).filter(([id]) => allowed.has(id)));
       publish({ snapshot, directs, ready: true, error: '', groupLoading: viewedGroupLoading(snapshot.groups), hasObservedGroup: state.hasObservedGroup || snapshot.groups.length > 0 });
       updateWatcher(); scheduleExpiry(next.memberships);
+      for (const id of unreadAfter.keys()) if (viewing(id)) read(id);
       const tasks: Promise<void>[] = [];
       for (const group of snapshot.groups) if (viewingGroup(group.id)) {
         const key = `g:${group.id}`;
@@ -256,6 +287,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
         }
         if (!current(ticket)) return;
         if (needsRecovery || (!next.loaded && (key.startsWith('g:') ? viewingGroup(id) : directViews.has(id)))) await recover(key, next, signal, validateCachedRange);
+        const fresh = [...next.rows.values()].filter((row) => !cache.rows.has(row.id));
         if (!next.loaded && next.rows.size > 1) {
           const latest = [...next.rows.values()].sort((a, b) => b.id - a.id)[0]!;
           next.rows = new Map([[latest.id, latest]]);
@@ -263,7 +295,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
         if (next.loaded) next.headIds = [...next.rows.keys()].sort((a, b) => b - a).slice(0, 50);
         const access = await checkAccess(ticket);
         if (!access || (key.startsWith('g:') ? !access.memberships.some((membership) => membership.group_id === id) : !access.acceptedConnectionIds.includes(id))) { updateWatcher(); return; }
-        conversations.set(key, next); publishMessages(key);
+        conversations.set(key, next); publishMessages(key); track(id, fresh);
       } catch (error) { fail(error, ticket); throw error; }
     });
   }
@@ -298,6 +330,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     generation++; controller.abort(); controller = new AbortController(); coordinator.cancel(); stopWatcher();
     clearTimeout(expiry); clearTimeout(retry); attempts = 0;
     conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); recoverOverview = false; identity = id;
+    unreadAfter.clear(); readIds.clear();
     publish({ ...initialState });
   }
   function pause() {
@@ -337,12 +370,12 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     start, pause, refresh,
     openGroup(groupId: string) {
       groupViews.set(groupId, (groupViews.get(groupId) ?? 0) + 1);
-      if (active && hasGroup(groupId)) { publish({ groupLoading: !conversations.get(`g:${groupId}`)?.loaded }); void refreshConversation(`g:${groupId}`, true).catch(() => {}); }
+      if (active && hasGroup(groupId)) { publish({ groupLoading: !conversations.get(`g:${groupId}`)?.loaded }); read(groupId); void refreshConversation(`g:${groupId}`, true).catch(() => {}); }
       return () => { const count = (groupViews.get(groupId) ?? 1) - 1; if (count) groupViews.set(groupId, count); else groupViews.delete(groupId); };
     },
     openDirect(id: string) {
       directViews.set(id, (directViews.get(id) ?? 0) + 1);
-      if (active && state.ready) void refreshConversation(`d:${id}`, true).catch(() => {});
+      if (active && state.ready) { read(id); void refreshConversation(`d:${id}`, true).catch(() => {}); }
       return () => { const count = (directViews.get(id) ?? 1) - 1; if (count) directViews.set(id, count); else directViews.delete(id); };
     },
     refreshGroup(groupId: string) { return !state.ready ? refresh() : hasGroup(groupId) ? refreshConversation(`g:${groupId}`) : Promise.resolve(); },
