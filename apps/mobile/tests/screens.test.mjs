@@ -141,14 +141,12 @@ for (const platform of ['ios', 'android']) {
   test(`${platform}: member actions stop when that membership is no longer current`, async (t) => {
     reset(); process.env.EXPO_OS = platform; state.params = { groupId: group.id }; state.chat.groups = [group];
     const calls = [];
-    state.auth.api = { requestFriend: async id => calls.push(['request', id]), leaveGroup: async () => calls.push(['leave']) };
+    state.auth.api = { requestFriend: async id => calls.push(['request', id]) };
     const screen = await render(t, Members);
     await screen.press("View Sam's profile");
     assert.deepEqual(state.navigation.at(-1), ['push', {pathname:'/person/[id]',params:{id:'peer'}}]);
     assert.deepEqual(calls, []);
-    await screen.press('Leave group');
-    await act(async () => { state.alerts.at(-1)[2].find(button => button.text === 'Leave').onPress(); });
-    assert.deepEqual(state.navigation.at(-1), ['dismissTo', '/']);
+    assert.doesNotMatch(screen.text(), /Leave group/);
     state.chat.groups = [{ ...group, id: 'new-room' }]; await screen.update();
     assert.match(screen.text(), /membership has ended/);
     assert.equal(screen.root.findAllByType('Pressable').length, 0);

@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { Image } from 'expo-image';
 import QRCode from 'qrcode/lib/core/qrcode';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { qrPayload, type Group } from '@qr-chat/domain';
-import { Copy, ErrorNotice, Icon, OwnerTag, colors, styles, useAction } from './chat-ui';
+import { Copy, ErrorNotice, Icon, OwnerTag, colors, styles } from './chat-ui';
 import { webOrigin } from '@/lib/supabase';
 import { Avatar } from './avatar';
 import { useChat } from '@/providers/chat-provider';
@@ -27,17 +27,15 @@ export function GroupQr({ code, size = 180 }: { code: string; size?: number }) {
 
 export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?: () => void }) {
   const chat = useChat();
-  const { api, userId } = useAuth();
-  const action = useAction();
+  const { userId } = useAuth();
   return <View style={{ flex: 1, gap: 14 }}>
     <View style={{ alignItems: 'center', gap: 8, paddingVertical: 18 }}>
       <GroupQr code={qrPayload(group.venue.codes[0], webOrigin)} />
       <View accessible accessibilityLabel={`${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24, paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.secondary }}><Copy style={{ color: colors.onSecondary, fontSize: 12, lineHeight: 16, fontWeight: '700' }}>{group.members.length}</Copy><Icon name="group" size={14} color={colors.onSecondary} /></View>
     </View>
-    <ErrorNotice message={action.error || chat.error} />
+    <ErrorNotice message={chat.error} />
     {group.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => { onNavigate?.(); router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } }); }} style={[styles.row, { minHeight: 60, paddingVertical: 8 }]}>
       <Avatar name={member.name} url={member.avatarUrl} size={44} /><Copy style={{ flex: 1, fontSize: 16 }}>{member.id === userId ? 'You' : member.name}</Copy>{member.id === group.venue.place?.ownerId && <OwnerTag />}<Icon name="chevron" size={18} />
     </Pressable>)}
-    <View style={{ marginTop: 'auto', paddingTop: 24 }}><Pressable accessibilityRole="button" accessibilityLabel="Leave group" accessibilityState={{ disabled: action.busy }} disabled={action.busy} style={({ pressed }) => [styles.row, { justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: 26, backgroundColor: colors.dangerTint, opacity: action.busy ? 0.4 : 1, transform: [{ scale: pressed ? 1.02 : 1 }] }]} onPress={() => Alert.alert('Leave this group?', 'You can join again by scanning its QR code.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave', style: 'destructive', onPress: () => { void action.run(async () => { await api!.leaveGroup(group.id); await chat.refresh(); router.dismissTo('/'); }); } }])}><Icon name="exit" color={colors.danger} size={20} /><Copy style={{ color: colors.danger, fontWeight: '700' }}>Leave group</Copy></Pressable></View>
   </View>;
 }

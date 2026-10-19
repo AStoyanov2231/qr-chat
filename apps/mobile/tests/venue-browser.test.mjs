@@ -5,8 +5,8 @@ import { reset, render, state, act, navigate } from './support/native-harness.mj
 const { default: Scan } = await import('../src/app/(app)/scan.tsx');
 const { default: Room } = await import('../src/app/(app)/room.tsx');
 const { roomRoute } = await import('../src/lib/room-route.ts');
-const { venueLinks } = await import('../../../packages/domain/src/index.ts');
-const venueUrl = (code, origin) => venueLinks({ codes: code ? [code] : [] }, origin)[0]?.href ?? null;
+const { venueLink } = await import('../../../packages/domain/src/index.ts');
+const venueUrl = (code, origin) => venueLink({ codes: code ? [code] : [] }, origin);
 const origin = 'https://chat.example';
 const groupId = '11111111-1111-4111-8111-111111111111';
 const venue = 'https://order.venue.example/menu?table=12&session=a%2Fb#pay';
@@ -18,6 +18,13 @@ test('only third-party http(s) QR keys are venue pages, kept exactly as scanned'
   assert.equal(venueUrl('HTTP://Venue.example/a?b=%2F', origin), 'HTTP://Venue.example/a?b=%2F');
   assert.equal(venueUrl(`${origin}/somewhere?x=1`, origin), null);
   for (const code of ['Room-A', 'qrchat://join?code=A', 'ftp://venue.example', 'https://', undefined]) assert.equal(venueUrl(code, origin), null, code);
+});
+
+test('a place opens its one menu directly: the PDF or the link', () => {
+  const place = (menuUrl, linkUrl) => venueLink({ codes: ['v:cafecentr2'], place: { ownerId: 'o', menuUrl, linkUrl } }, origin);
+  assert.equal(place('https://cdn.example/menu.pdf', null), 'https://cdn.example/menu.pdf');
+  assert.equal(place(null, 'https://cafe.example/menu'), 'https://cafe.example/menu');
+  assert.equal(place(null, null), null);
 });
 
 for (const platform of ['ios', 'android']) {

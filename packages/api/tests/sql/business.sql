@@ -34,6 +34,9 @@ begin
   denied := false;
   begin perform public.update_place(place.id, 'Natterium', null, guest || '/' || gen_random_uuid() || '.pdf'); exception when check_violation then denied := true; end;
   assert denied, 'menus must live in the owner''s folder';
+  denied := false;
+  begin perform public.update_place(place.id, 'Natterium', 'https://natterium.com/menu', owner || '/' || gen_random_uuid() || '.pdf'); exception when check_violation then denied := true; end;
+  assert denied, 'a place has a menu link or a menu PDF, not both';
 
   perform set_config('request.jwt.claim.sub', guest::text, true);
   select * into joined from public.join_qr_group('v:' || place.code);

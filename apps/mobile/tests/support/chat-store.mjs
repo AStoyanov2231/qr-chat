@@ -5,7 +5,7 @@ export function getChatStore(api) {
   if (host.chatStore) return host.chatStore;
   if (stores.has(api)) return stores.get(api);
   const listeners = new Set();
-  let state = { snapshot: {session:null,groups:[],friends:[],directPreviews:{}}, ready: false, error: '', connection: 'connected', hasObservedGroup: false, groupLoading: false, directs: {} };
+  let state = { snapshot: {session:null,groups:[],friends:[],directPreviews:{},unread:{}}, ready: false, error: '', connection: 'connected', hasObservedGroup: false, groupLoading: false, directs: {} };
   const counts = new Map();
   const publish = patch => { state = {...state,...patch}; for(const listener of listeners) listener(); };
   const watcher = filters => { const value={filters,stopped:false,onState:connection=>publish({connection}),stop(){this.stopped=true;}};host.watchers.push(value);return value; };
@@ -17,7 +17,7 @@ export function getChatStore(api) {
       const ids=snapshot.friends.filter(friend=>friend.accepted_at).map(friend=>friend.id);
       if(previewWatcher && !ids.length) {previewWatcher.stop();previewWatcher=null;}
       if(ids.length && !previewWatcher) previewWatcher=watcher(ids.map(id=>({table:'messages',id})));
-    } catch(error) {publish({snapshot:{session:null,groups:[],friends:[],directPreviews:{}},ready:false,error:error.message});throw error;}
+    } catch(error) {publish({snapshot:{session:null,groups:[],friends:[],directPreviews:{},unread:{}},ready:false,error:error.message});throw error;}
   }
   async function refreshDirect(id) {
     try {const page=await host.loadDirectSnapshot(api,id,counts.get(id)||1);publish({ready:host.chat.ready,directs:{...state.directs,[id]:{...page,loading:false,error:''}}});}

@@ -81,6 +81,24 @@ for (const platform of ['ios', 'android']) {
     assert.equal(calls.length, 1, 'Opening a direct message does not create a friendship');
   });
 
+  test(`${platform}: group rows swipe to a Leave action that confirms, leaves and refreshes`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    state.chat.groups = [{ ...group, expiresAt: new Date(Date.now() + 14.5 * 60 * 60_000).toISOString() }];
+    const calls = [];
+    state.auth.api = { leaveGroup: async id => calls.push(['leave', id]) };
+    const screen = await render(t, Groups);
+    const row = screen.root.findAllByType('View').find(node => node.props.onPanResponderMove && node.findAllByType('Pressable').some(button => button.props.accessibilityLabel === 'Leave Cafe'));
+    await act(async () => {
+      row.props.onPanResponderGrant();
+      row.props.onPanResponderMove(null, { dx: -80, dy: 0 });
+      row.props.onPanResponderRelease();
+    });
+    await screen.press('Leave Cafe');
+    await act(async () => { await state.alerts.at(-1)[2].find(button => button.text === 'Leave').onPress(); });
+    assert.deepEqual(calls, [['leave', 'room-one']]);
+    assert.match(screen.text(), /You left Cafe\./);
+  });
+
   test(`${platform}: DM swipes reveal circular actions, preserve vertical scrolling and close the previous row`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     const connection = (id, name) => ({ id, user_a_id: 'me', user_b_id: id, accepted_at: '2026-10-01', requested_at: '2026-10-01', user_b: { id, display_name: name } });
@@ -271,6 +289,25 @@ for (const platform of ['ios', 'android']) {
     assert.match(screen.text(), /Preview unavailable/);
     await screen.press('Retry');
     assert.equal(refreshed, true);
+  });
+
+  test(`${platform}: rows with unread messages show a count badge and a bold preview`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    state.chat.groups = [{ ...group, messages: [{ id: '5', user: 'peer', name: 'Sam', text: 'Table by the window', time: Date.now() - 60_000 }], expiresAt: new Date(Date.now() + 3600_000).toISOString() }];
+    const accepted = { id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'me', requested_at: '2026-09-30T10:00:00Z', accepted_at: '2026-09-30T11:00:00Z', user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } };
+    const quiet = { ...accepted, id: '55555555-5555-4555-8555-555555555555', user_b_id: 'mira', user_b: { id: 'mira', display_name: 'Mira', avatar_url: null } };
+    state.chat.friends = [accepted, quiet];
+    state.chat.directPreviews[friendId] = { status: 'ready', message: { id: 9, group_id: friendId, sender_id: 'peer', body: 'Are you coming?', created_at: new Date(Date.now() - 120_000).toISOString() } };
+    state.chat.directPreviews[quiet.id] = { status: 'ready', message: null };
+    state.chat.unread = { [group.id]: 1, [friendId]: 150 };
+    const screen = await render(t, Groups);
+    const labels = screen.root.findAllByType('Pressable').map(node => node.props.accessibilityLabel);
+    assert.ok(labels.some(label => /^Open Cafe, 2 members\. .* 1 unread message\.$/.test(label)));
+    assert.ok(labels.includes('Open direct message with Sam, 99+ unread messages'));
+    assert.ok(labels.includes('Open direct message with Mira'), 'a read chat keeps its plain label');
+    assert.match(screen.text(), /99\+/);
+    const bold = screen.root.findAll(node => node.props.style && [node.props.style].flat(Infinity).some(style => style?.fontWeight === '700' && style?.color !== undefined) && /Table by the window|Are you coming\?/.test([node.props.children].flat().join('')));
+    assert.ok(bold.length >= 2, 'unread previews are bold');
   });
 
 

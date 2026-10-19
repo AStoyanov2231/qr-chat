@@ -24,11 +24,11 @@ export default function ProfileScreen() {
     <ConversationHeader title={chat.session?.name || 'Your profile'} imageUrl={chat.session?.avatarUrl} belowSafeArea onBack={() => router.back()} />
     <View style={styles.profileSurface}>
       <ErrorNotice message={chat.error} retry={() => { void chat.refresh().catch(() => {}); }} />
-      {!chat.ready && !chat.error ? <Skeleton profile /> : <View style={{ flexDirection: 'row', justifyContent: 'space-evenly' }}>
+      {!chat.ready && !chat.error ? <Skeleton profile /> : <View>
         {(business ? [...actions, businessAction] : actions).map((action) => <Pressable key={action.label} accessibilityRole="button" accessibilityLabel={action.accessibilityLabel} onPress={action.onPress}
-          style={({ pressed }) => ({ alignItems: 'center', gap: 6, minWidth: 64, paddingVertical: 8, transform: [{ scale: pressed ? 1.08 : 1 }] })}>
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 54, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: pressed ? colors.fill : 'transparent' })}>
           <Icon name={action.icon} size={28} />
-          <Copy selectable={false} style={{ fontSize: 12, lineHeight: 16, fontWeight: '700' }}>{action.label}</Copy>
+          <Copy selectable={false} style={{ fontWeight: '600' }}>{action.label}</Copy>
         </Pressable>)}
       </View>}
     </View>

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { qrPayload, type Group } from '@qr-chat/domain';
-import { CaretRight, SignOut, Users } from '@phosphor-icons/react';
+import { CaretRight, Users } from '@phosphor-icons/react';
 import { Avatar } from './avatar';
 import { SettingsSidebar } from './settings-sidebar';
 import { appOrigin } from '@/lib/app-origin';
 
-export function GroupSidebar({ group, userId, busy, onClose, onProfile, onLeave }: { group: Group; userId?: string; busy: boolean; onClose: () => void; onProfile: (id: string) => void; onLeave: () => void }) {
+export function GroupSidebar({ group, userId, onClose, onProfile }: { group: Group; userId?: string; onClose: () => void; onProfile: (id: string) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [qrError, setQrError] = useState(false);
   const code = group.venue.codes[0];
@@ -21,6 +21,5 @@ export function GroupSidebar({ group, userId, busy, onClose, onProfile, onLeave 
         <span className="group-member-count" aria-label={`${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}`}><span aria-hidden="true">{group.members.length}</span><Users size={18} weight="fill" aria-hidden="true" /></span>
       </div>
       <div className="group-sidebar-members">{group.members.map((member) => <button type="button" className="member-row" key={member.id} aria-label={`View ${member.name}'s profile`} onClick={() => closeSidebar(() => { onClose(); onProfile(member.id); })}><Avatar name={member.name} url={member.avatarUrl} size={44} /><span>{member.id === userId ? 'You' : member.name}{member.id === group.venue.place?.ownerId && <span className="owner-tag">Owner</span>}</span><CaretRight size={18} /></button>)}</div>
-      <button type="button" className="group-leave" disabled={busy} onClick={onLeave}><SignOut size={20} />Leave group</button>
     </>}</SettingsSidebar>;
 }

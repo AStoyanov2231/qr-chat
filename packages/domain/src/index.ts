@@ -51,16 +51,13 @@ export function unwrapQrCode(input: string, origin: string): string {
   return input;
 }
 
-/** What the venue button opens: an active place's menu and link, else a third-party http(s) QR key
+/** What the venue button opens: an active place's menu (its PDF or its link), else a third-party http(s) QR key
  * (the venue's own page, kept exactly as scanned). */
-export function venueLinks(venue: Venue, origin: string): { label: string; href: string }[] {
-  if (venue.place) return [
-    ...(venue.place.menuUrl ? [{ label: "Menu", href: venue.place.menuUrl }] : []),
-    ...(venue.place.linkUrl ? [{ label: "Website", href: venue.place.linkUrl }] : []),
-  ];
+export function venueLink(venue: Venue, origin: string): string | null {
+  if (venue.place) return venue.place.menuUrl ?? venue.place.linkUrl;
   const code = venue.codes[0];
-  if (!code || !/^https?:\/\//i.test(code)) return [];
-  try { return new URL(code).origin === origin ? [] : [{ label: "Venue page", href: code }]; } catch { return []; }
+  if (!code || !/^https?:\/\//i.test(code)) return null;
+  try { return new URL(code).origin === origin ? null : code; } catch { return null; }
 }
 
 /** What a group's QR encodes: a venue key prints as its web link, so any phone camera opens it. */

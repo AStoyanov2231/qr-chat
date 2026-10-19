@@ -21,6 +21,8 @@ export type ChatOverview = {
   memberships: GroupOverview[];
   friends: Friend[];
   directPreviews: Record<string, DirectMessage | null>;
+  /** Other people's unread messages per group or DM id (capped at 100); chats with none are left out. */
+  unread: Record<string, number>;
 };
 export type ChatAccess = { userId: string; memberships: Pick<MembershipRow, "group_id" | "expires_at">[]; acceptedConnectionIds: string[] };
 export type ChatMutation =

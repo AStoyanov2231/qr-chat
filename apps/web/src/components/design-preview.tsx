@@ -41,6 +41,7 @@ function sampleSnapshot(now: number): ChatSnapshot {
       user_a: profile(localUserId, "Local designer"), user_b: profile(peerId(index), name),
     })),
     directPreviews: {},
+    unread: { [groupId]: 2, [connectionId(0)]: 1 },
   };
 }
 
@@ -140,7 +141,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
 }
 
 const samplePlaces = (now: number): Place[] => [
-  { id: "55555555-5555-4555-8555-000000000001", owner_id: localUserId, group_id: groupId, code: "cafecentr2", name: "Cafe Central", link_url: "https://example.com/order", menu_path: `${localUserId}/menu.pdf`, menu_url: "https://example.com/menu.pdf", created_at: new Date(now - 7 * 86400000).toISOString(), deleted_at: null },
+  { id: "55555555-5555-4555-8555-000000000001", owner_id: localUserId, group_id: groupId, code: "cafecentr2", name: "Cafe Central", link_url: null, menu_path: `${localUserId}/menu.pdf`, menu_url: "https://example.com/menu.pdf", created_at: new Date(now - 7 * 86400000).toISOString(), deleted_at: null },
   { id: "55555555-5555-4555-8555-000000000002", owner_id: localUserId, group_id: crypto.randomUUID(), code: "rooftop234", name: "Rooftop Bar", link_url: null, menu_path: null, menu_url: null, created_at: new Date(now - 86400000).toISOString(), deleted_at: null },
 ];
 

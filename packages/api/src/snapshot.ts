@@ -3,8 +3,9 @@ import type { ChatApi } from './index.ts';
 import type { ChatOverview, GroupMessage, GroupOverview, Friend, DirectMessage } from './overview.ts';
 
 export type DirectPreview = { status: 'ready'; message: DirectMessage | null } | { status: 'error' };
-export type ChatSnapshot = { session: Session | null; groups: Group[]; friends: Friend[]; directPreviews: Record<string, DirectPreview> };
-export const emptySnapshot: ChatSnapshot = { session: null, groups: [], friends: [], directPreviews: {} };
+/** unread: other people's unread messages per group or DM id; chats with none are left out. */
+export type ChatSnapshot = { session: Session | null; groups: Group[]; friends: Friend[]; directPreviews: Record<string, DirectPreview>; unread: Record<string, number> };
+export const emptySnapshot: ChatSnapshot = { session: null, groups: [], friends: [], directPreviews: {}, unread: {} };
 export function groupMessageView(message: GroupMessage): Message {
   return { id: String(message.id), user: message.sender_id ?? 'deleted', name: message.profiles?.display_name ?? 'Former participant', avatarUrl: message.profiles?.avatar_url ?? null, text: message.body, time: Date.parse(message.created_at) };
 }
@@ -19,6 +20,7 @@ export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
     groups: overview.memberships.flatMap((membership) => groupView(membership) ?? []),
     friends: overview.friends,
     directPreviews: Object.fromEntries(overview.friends.filter((friend) => friend.accepted_at).map((friend) => [friend.id, { status: 'ready' as const, message: overview.directPreviews[friend.id] ?? null }])),
+    unread: { ...overview.unread },
   };
 }
 
