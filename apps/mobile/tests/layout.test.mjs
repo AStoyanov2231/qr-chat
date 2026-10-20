@@ -7,7 +7,7 @@ const { default: Chats } = await import('../src/app/(app)/index.tsx');
 const { default: Profile } = await import('../src/app/(app)/profile.tsx');
 const { default: Layout } = await import('../src/app/(app)/_layout.tsx');
 const { default: ChatsRoute } = await import('../src/app/(app)/chats.tsx');
-const { ConversationHeader } = await import('../src/components/conversation-header.tsx');
+const { ChatBar, ConversationHeader } = await import('../src/components/conversation-header.tsx');
 const { default: Scan } = await import('../src/app/(app)/scan.tsx');
 const { NativeInput } = await import('../src/components/chat-ui.tsx');
 
@@ -74,6 +74,18 @@ for (const platform of ['ios', 'android']) {
     await screen.update({ title: 'Sam' });
     nativeIconButton(screen, 'Back to chats', platform);
     assert.equal(screen.root.findAllByType(platform === 'ios' ? 'SwiftUIButton' : 'FilledIconButton').length, 1);
+  });
+
+  test(`${platform}: the group chat bar shows a member pill that opens the members panel`, async (t) => {
+    reset(); process.env.EXPO_OS = platform;
+    let opened = 0;
+    const props = { title: 'Cafe', settingsLabel: 'Group members', members: 4, settings: () => opened++ };
+    const screen = await render(t, ChatBar, props);
+    assert.match(screen.text(), /4/);
+    await screen.press('Group members');
+    assert.equal(opened, 1);
+    await screen.update({ ...props, members: 101 });
+    assert.match(screen.text(), /\+100/);
   });
 
   test(`${platform}: the scanner close control is a native circle and goes back`, async (t) => {

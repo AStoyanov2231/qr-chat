@@ -437,7 +437,8 @@ test('rows with unread messages show a count badge and a bold preview; read rows
     unread: { [group.id]: 3, [acceptedMaya.id]: 120 },
   }));
   assert.match(html, /class="group-preview preview-unread">Anyone here for the workshop\?<\/span><span class="unread-badge" aria-hidden="true">3<\/span>/);
-  assert.match(html, /class="dm-preview preview-unread">Are you coming\?<\/span><span class="unread-badge" aria-hidden="true">99\+<\/span>/);
+  assert.match(html, /class="dm-preview preview-unread">Are you coming\?<\/span>/);
+  assert.match(html, /<span class="dm-row-meta"><time[^>]*>[^<]+<\/time><span class="unread-badge" aria-hidden="true">99\+<\/span><\/span>/, 'the DM badge sits under the time, apart from the preview');
   assert.match(html, /aria-label="Open Brew &amp; Chat, 2 members\.[^"]* 3 unread messages\."/);
   assert.match(html, /aria-label="Open direct message with Maya Chen, 99\+ unread messages"/);
   assert.match(html, /aria-label="Open direct message with Jordan Lee"/);

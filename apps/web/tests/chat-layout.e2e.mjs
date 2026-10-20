@@ -171,7 +171,7 @@ try {
     assert.ok(await page.evaluate(() => document.querySelector('.chat-header-controls') === window.chatControls && window.chatControlButtons.every(button => button.isConnected)), 'Keyboard toggles never replace the controls');
     await resize(430);
     if (chat === 'group') {
-      await page.getByRole('button', { name: 'Group settings', exact: true }).click();
+      await page.getByRole('button', { name: 'Group members', exact: true }).click();
       await page.getByRole('button', { name: 'Close group settings', exact: true }).click();
     } else assert.equal(await page.getByRole('button', { name: 'Conversation settings', exact: true }).count(), 0);
     await resize(844);

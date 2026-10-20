@@ -287,8 +287,8 @@ export default function ChatsScreen() {
                 { kind: 'block', label: 'Block', icon: 'block', danger: true, title: `Block ${peer.name}?`, message: 'This ends your friendship and prevents new friend requests between you.', run: () => api!.blockFriend(friend.id), notice: `Blocked ${peer.name}.` },
               ]}>
               <Avatar name={peer.name} url={peer.avatarUrl} size={52} />
-              <View style={homeStyles.copy}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy><View style={homeStyles.previewRow}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.preview, { flex: 1 }, !!unread && homeStyles.unreadPreview]}>{failed ? 'Preview unavailable' : directMessagePreview(message, userId)}</Copy><UnreadBadge count={unread} /></View></View>
-              {message && <Copy style={[homeStyles.meta, { alignSelf: 'flex-start', paddingTop: 2 }]}>{messageAge(Date.parse(message.created_at))}</Copy>}
+              <View style={homeStyles.copy}><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={homeStyles.name}>{peer.name}</Copy><Copy selectable={false} numberOfLines={1} ellipsizeMode="tail" style={[homeStyles.preview, !!unread && homeStyles.unreadPreview]}>{failed ? 'Preview unavailable' : directMessagePreview(message, userId)}</Copy></View>
+              <View style={homeStyles.rowMeta}><Copy style={[homeStyles.meta, { lineHeight: 22 }]}>{message ? messageAge(Date.parse(message.created_at)) : ''}</Copy><UnreadBadge count={unread} /></View>
             </SwipeRow>
             {failed && <View style={{ marginLeft: 80 }}><NativeAction label="Retry" accessibilityLabel={`Retry loading message preview for ${peer.name}`} variant="text" disabled={action.busy} onPress={() => action.run(chat.refresh)} align="flex-start" /></View>}
           </View>;
@@ -325,6 +325,7 @@ const homeStyles = StyleSheet.create({
   preview: { fontSize: 14, lineHeight: 20, color: colors.muted },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   unreadPreview: { color: colors.text, fontWeight: '700' },
+  rowMeta: { alignItems: 'flex-end', gap: 2 },
   unreadBadge: { minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.secondary },
   groupAvatar: { minWidth: 52, alignItems: 'center', gap: 2 },
   expiry: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.onPrimaryTint, textAlign: 'center' },

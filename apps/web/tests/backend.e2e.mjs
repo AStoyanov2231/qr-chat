@@ -134,7 +134,7 @@ try {
   await screenshot(alice.page, 'web-group-short-viewport');
   await alice.page.getByLabel('Message', { exact: true }).fill('');
   await alice.page.setViewportSize({ width: 390, height: 844 });
-  await alice.page.getByRole('button', { name: 'Group settings', exact: true }).click();
+  await alice.page.getByRole('button', { name: 'Group members', exact: true }).click();
   await alice.page.getByRole('img', { name: 'Group QR code', exact: true }).waitFor();
   await alice.page.locator('.group-sidebar-panel').evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
   await screenshot(alice.page, 'web-group-settings');
@@ -275,8 +275,8 @@ try {
   await overview(twin);
   await twin.page.locator('.group-card').waitFor();
   await bob.page.goto(`${origin}/?code=${encodeURIComponent(code)}`);
-  await bob.page.getByRole('button', { name: 'Group settings', exact: true }).click();
-  await bob.page.getByLabel('2 members', { exact: true }).waitFor({ timeout });
+  await bob.page.getByRole('button', { name: 'Group members', exact: true }).click();
+  await bob.page.getByRole('heading', { name: '2 members', exact: true }).waitFor({ timeout });
   await alice.page.bringToFront();
   await overview(alice);
   await alice.page.locator('.group-card').press('ArrowLeft');

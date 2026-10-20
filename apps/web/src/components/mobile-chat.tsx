@@ -544,7 +544,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && backend.error && (active || directId) && (
           <section className="conversation-view">
-            <ConversationHeader title={active?.name ?? peer?.display_name ?? "Direct message"} subtitle="Access could not be checked" onBack={backToChats} disabled settingsLabel="Group settings" onSettings={active ? () => {} : undefined} />
+            <ConversationHeader title={active?.name ?? peer?.display_name ?? "Direct message"} subtitle="Access could not be checked" onBack={backToChats} disabled settingsLabel="Group members" onSettings={active ? () => {} : undefined} />
             <div className="chat-conversation-surface conversation-load-error" role="alert">
               <h2>Couldn’t load this chat.</h2>
               <p>We couldn’t verify your access. Try again to reload the conversation.</p>
@@ -555,7 +555,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && active && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group settings" disabled={!group} onSettings={() => setSidebar(true)} venueLink={group ? venueLink(group.venue, window.location.origin) : null} />
+            <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group members" members={group?.members.length} disabled={!group} onSettings={() => setSidebar(true)} venueLink={group ? venueLink(group.venue, window.location.origin) : null} />
             <div className="chat-conversation-surface">
               <div className="message-stream" aria-live="polite">
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(() => backend.loadOlder(active.id))}>Load older messages</button>}

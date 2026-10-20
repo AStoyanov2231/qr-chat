@@ -8,8 +8,8 @@ export type { RequestObservation, RequestObserver } from "./requests.ts";
 export type { ChatOverview, ChatAccess } from "./overview.ts";
 export type AvatarUpload = { uploadId: string; data: ArrayBuffer };
 export type MenuUpload = AvatarUpload;
-/** A business place as its owner sees it; menu_url is derived from menu_path. */
-export type Place = Tables<"places"> & { menu_url: string | null };
+/** A business place as its owner sees it; menu_url and photo_url are derived from their paths. */
+export type Place = Tables<"places"> & { menu_url: string | null; photo_url: string | null };
 export { watchChanges, topic } from "./realtime.ts";
 export type { ConnectionState, Topic } from "./realtime.ts";
 export type { Database, Tables } from "@qr-chat/types";
@@ -56,6 +56,8 @@ export function createChatApi(
     ({ ...group, image_url: group.image_path ? client.storage.from("group-images").getPublicUrl(group.image_path).data.publicUrl : null });
   const menuUrl = (path: string | null) => path ? client.storage.from("venue-menus").getPublicUrl(path).data.publicUrl : null;
   const withMenu = <T extends { menu_path: string | null }>(place: T) => ({ ...place, menu_url: menuUrl(place.menu_path) });
+  const withPlace = (place: Tables<"places">): Place =>
+    ({ ...withMenu(place), photo_url: place.photo_path ? client.storage.from("venue-photos").getPublicUrl(place.photo_path).data.publicUrl : null });
   const withProfiles = <T extends { profiles: { avatar_path?: string | null } | null }>(message: T) => ({ ...message, profiles: message.profiles && withAvatar(message.profiles) });
   const friendView = <T extends { user_a: { avatar_path?: string | null } | null; user_b: { avatar_path?: string | null } | null }>(friend: T) =>
     ({ ...friend, user_a: friend.user_a && withAvatar(friend.user_a), user_b: friend.user_b && withAvatar(friend.user_b) });
@@ -234,15 +236,15 @@ export function createChatApi(
     },
     /** The owner's places, lapsed ones included; deleted ones are left out. */
     async places(): Promise<Place[]> {
-      return (await result(client.from("places").select("*").eq("owner_id", await userId()).is("deleted_at", null).order("created_at"))).map(withMenu);
+      return (await result(client.from("places").select("*").eq("owner_id", await userId()).is("deleted_at", null).order("created_at"))).map(withPlace);
     },
     async createPlace(name: unknown): Promise<Place> {
-      const place = withMenu(await result(client.rpc("create_place", { p_name: placeNameSchema.parse(name) })));
+      const place = withPlace(await result(client.rpc("create_place", { p_name: placeNameSchema.parse(name) })));
       emit({ kind: "overview" });
       return place;
     },
-    /** menu: undefined keeps the current PDF; null removes it. Uploads use immutable keys, like avatars. */
-    async updatePlace(place: Place, input: { name: unknown; link: unknown; menu?: MenuUpload | null }): Promise<Place> {
+    /** menu and photo: undefined keeps the current file; null removes it. Uploads use immutable keys, like avatars. */
+    async updatePlace(place: Place, input: { name: unknown; link: unknown; menu?: MenuUpload | null; photo?: AvatarUpload | null }): Promise<Place> {
       const name = placeNameSchema.parse(input.name);
       const link = placeLinkSchema.parse(input.link) || null;
       const upload = input.menu ? menuUploadSchema.parse(input.menu) : input.menu;
@@ -252,9 +254,19 @@ export function createChatApi(
         menu_path = `${await userId()}/${upload.uploadId}.pdf`;
         await result(bucket.upload(menu_path, upload.data, { contentType: "application/pdf", cacheControl: "31536000", upsert: false }));
       } else if (upload === null) menu_path = null;
-      const saved = withMenu(await result(client.rpc("update_place", { p_place_id: userIdSchema.parse(place.id), p_name: name, p_link_url: link, p_menu_path: menu_path })));
+      const photo = input.photo ? avatarUploadSchema.parse(input.photo) : input.photo;
+      const photos = client.storage.from("venue-photos");
+      let photo_path = place.photo_path;
+      if (photo) {
+        photo_path = `${await userId()}/${photo.uploadId}.jpg`;
+        await result(photos.upload(photo_path, photo.data, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));
+      } else if (photo === null) photo_path = null;
+      const saved = withPlace(await result(client.rpc("update_place", { p_place_id: userIdSchema.parse(place.id), p_name: name, p_link_url: link, p_menu_path: menu_path, p_photo_path: photo_path })));
       if (place.menu_path && place.menu_path !== menu_path) {
         try { await bucket.remove([place.menu_path]); } catch { /* best effort */ }
+      }
+      if (place.photo_path && place.photo_path !== photo_path) {
+        try { await photos.remove([place.photo_path]); } catch { /* best effort */ }
       }
       emit({ kind: "overview" });
       return saved;

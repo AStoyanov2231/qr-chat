@@ -5,6 +5,7 @@ import { router, Stack } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { File, Paths } from 'expo-file-system';
 import { shareAsync } from 'expo-sharing';
+import { Image } from 'expo-image';
 import type { TextInputRef } from '@expo/ui';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import { qrPayload } from '@qr-chat/domain';
@@ -13,6 +14,7 @@ import { placeLinkSchema } from '@qr-chat/validation';
 import { Button, Copy, ErrorNotice, Icon, NativeInput, PillButton, TextButton, colors, styles, useAction, type NativeInputProps } from '@/components/chat-ui';
 import { GroupQr } from '@/components/group-details';
 import { NativeAction } from '@/components/native-action';
+import { pickAvatar, type SelectedAvatar } from '@/lib/avatar';
 import { qrPng } from '@/lib/qr-png';
 import { webOrigin } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
@@ -62,7 +64,7 @@ export default function BusinessScreen() {
         </View>}
         {state.places.map((place) => <Pressable key={place.id} accessibilityRole="button" accessibilityLabel={`Edit ${place.name}`} onPress={() => setEditing(place)}
           style={({ pressed }) => [styles.row, { gap: 14, padding: 10, paddingRight: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 20, backgroundColor: pressed ? colors.fill : colors.canvas }]}>
-          <GroupQr code={placeUrl(place)} size={88} />
+          {place.photo_url ? <Image source={place.photo_url} contentFit="cover" style={{ width: 88, height: 88, borderRadius: 88 * 2 / 15 }} accessibilityElementsHidden /> : <GroupQr code={placeUrl(place)} size={88} />}
           <View style={{ flex: 1, gap: 2 }}>
             <Copy selectable={false} numberOfLines={1} style={{ fontWeight: '700' }}>{place.name}</Copy>
             <Copy selectable={false} numberOfLines={1} style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{place.menu_url ? 'Menu PDF' : place.link_url ? place.link_url.replace(/^https:\/\//u, '') : 'No menu'}</Copy>
@@ -103,23 +105,27 @@ function FloatField({ label, hint, value, ...props }: Omit<NativeInputProps, 'ac
 function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | null; readOnly: boolean; api: BusinessApi; onDone: () => Promise<void>; onBack: () => void }) {
   const action = useAction();
   const sharing = useAction();
+  const picking = useAction();
   const [name, setName] = useState(place?.name ?? '');
   // A place offers one menu: a link or a PDF. Saving one clears the other.
   const [kind, setKind] = useState<MenuKind>(place?.menu_path ? 'pdf' : 'link');
   const [link, setLink] = useState(place?.link_url ?? '');
   const [menu, setMenu] = useState<File | undefined>();
   const [linkError, setLinkError] = useState('');
-  // Once a link or file is entered the other type locks; clearing it unlocks.
-  const locked = kind === 'link' ? link.trim() !== '' : !!menu;
   // A new place is created before its link and menu are saved; if that second step fails, a retry must not create it twice.
   const created = useRef<Place | null>(null);
-  const url = place && placeUrl(place);
+  // undefined keeps the saved photo, a pick replaces it, null removes it.
+  const [photo, setPhoto] = useState<SelectedAvatar | null | undefined>();
+  const shown = photo === undefined ? place?.photo_url : photo?.uri;
+  const dirty = !place || name.trim() !== place.name || (kind === 'link' ? link.trim() : '') !== (place.link_url ?? '') || (kind === 'pdf' ? !!menu : !!place.menu_path) || photo !== undefined;
   const disabled = readOnly || action.busy;
   const back = () => { if (!action.busy) onBack(); };
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; });
     return () => sub.remove();
   });
+  const choose = () => { void picking.run(async () => { const picked = await pickAvatar(); if (picked) setPhoto(picked); }); };
+  const removePhoto = () => setPhoto(place?.photo_url ? null : undefined);
   const save = () => {
     // Checked here so a bad link never reaches the server, where a new place would already be created without it.
     const checked = placeLinkSchema.safeParse(link);
@@ -127,45 +133,60 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
     void action.run(async () => {
       const target = place ?? created.current ?? (created.current = await api.createPlace(name));
       const upload = menu && { uploadId: randomUUID(), data: await menu.arrayBuffer() };
-      const input = kind === 'link' ? { name, link, menu: null } : { name, link: '', menu: upload };
-      if (place || input.link || input.menu) await api.updatePlace(target, input);
+      const picked = photo && { ...photo.upload, uploadId: randomUUID() };
+      const input = kind === 'link' ? { name, link, menu: null, photo: picked } : { name, link: '', menu: upload, photo: picked };
+      if (place || input.link || input.menu || input.photo) await api.updatePlace(target, input);
       await onDone();
     });
   };
   return <Page title={place ? place.name : 'New place'} backLabel="Back to places" busy={action.busy} onBack={back}
-    footer={!readOnly && <>
-      <ErrorNotice message={action.error} />
-      <Button label={action.busy ? 'Saving…' : place ? 'Save changes' : 'Create place'} disabled={action.busy || !name.trim()} onPress={save} />
+    footer={(!readOnly || place) && <>
+      {!readOnly && <>
+        <ErrorNotice message={action.error} />
+        <Button label={action.busy ? 'Saving…' : place ? 'Save changes' : 'Create place'} disabled={action.busy || !name.trim() || !dirty} onPress={save} />
+      </>}
+      {place && <>
+        <View style={{ alignSelf: 'center', width: '50%' }}><PillButton fill label="Share QR" disabled={sharing.busy} background={colors.fill} foreground={colors.text} onPress={() => { void sharing.run(() => shareQr(place)); }} /></View>
+        <ErrorNotice message={sharing.error} />
+      </>}
     </>}>
     {readOnly && <ErrorNotice message={action.error} />}
-    {place && url && <View style={[styles.row, { gap: 16, padding: 14, borderRadius: 24, backgroundColor: colors.fill }]}>
-      <GroupQr code={url} size={132} />
+    {place && <View style={[styles.row, { gap: 16, padding: 14, borderRadius: 24, backgroundColor: colors.fill }]}>
+      <View style={{ width: 132, height: 132, borderRadius: 132 * 2 / 15, overflow: 'hidden', backgroundColor: colors.canvas }}>
+        {shown && <Image source={shown} contentFit="cover" style={{ width: 132, height: 132 }} accessibilityLabel="Place photo" />}
+      </View>
       <View style={{ flex: 1, gap: 8, alignItems: 'flex-start' }}>
-        <Copy style={{ fontSize: 14, lineHeight: 20 }}>Print it for your tables. Guests who scan it join this place’s chat.</Copy>
-        <Copy style={{ color: colors.muted, fontSize: 12, lineHeight: 16 }}>{url}</Copy>
-        <PillButton fill={false} label="Share QR" disabled={sharing.busy} background={colors.canvas} foreground={colors.text} onPress={() => { void sharing.run(() => shareQr(place)); }} />
-        <ErrorNotice message={sharing.error} />
+        <PillButton fill={false} label={shown ? 'Change photo' : 'Add photo'} disabled={disabled} background={colors.canvas} foreground={colors.text} onPress={choose} />
+        {shown && <TextButton label="Remove photo" disabled={disabled} onPress={removePhoto} />}
+        <ErrorNotice message={picking.error} />
       </View>
     </View>}
-    <MenuKindToggle kind={kind} disabled={disabled} locked={locked} onChange={setKind} />
-    {locked && !disabled && <Copy style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{kind === 'link' ? 'Clear the link to use a PDF instead.' : 'Remove the file to use a link instead.'}</Copy>}
     <FloatField label="Place name" value={name} onChangeText={setName} maxLength={100} editable={!disabled} autoCapitalize="words" />
-    {kind === 'link' ? <View style={{ gap: 8 }}>
-      <FloatField label="Menu link" value={link} onChangeText={(value) => { setLink(value); setLinkError(''); }} maxLength={2048} editable={!disabled} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+    <MenuKindToggle kind={kind} disabled={disabled} onChange={setKind} />
+    <View style={{ gap: 8, opacity: kind === 'link' ? 1 : 0.4 }}>
+      <FloatField label="Menu link" hint="(optional)" value={link} onChangeText={(value) => { setLink(value); setLinkError(''); }} maxLength={2048} editable={!disabled && kind === 'link'} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
       <Copy accessibilityLiveRegion="polite" style={{ color: linkError ? colors.danger : colors.muted, fontSize: 13, lineHeight: 18 }}>{linkError || 'A link to your menu, starting with https://. Guests open it from the group chat.'}</Copy>
-    </View> : <View style={{ gap: 8 }}>
-      <Copy style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>Menu file</Copy>
-      <Pressable accessibilityRole="button" accessibilityLabel={menu ? `Replace ${menu.name}` : 'Upload menu (PDF)'} accessibilityState={{ disabled }} disabled={disabled} onPress={() => {
-        void File.pickFileAsync({ mimeTypes: ['application/pdf'] }).then((picked) => { if (!picked.canceled) setMenu(picked.result); }, () => {});
-      }} style={({ pressed }) => ({ alignItems: 'center', gap: 6, paddingVertical: 28, paddingHorizontal: 16, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.muted, borderRadius: 20, backgroundColor: pressed ? colors.line : colors.fill })}>
-        <Icon name="pdf" size={32} />
-        <Copy selectable={false} numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '700' }}>{menu ? menu.name : place?.menu_url ? 'Replace menu (PDF)' : 'Upload menu (PDF)'}</Copy>
-        <Copy selectable={false} accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{menu ? 'Uploads when you save' : 'Tap to browse your files'}</Copy>
-      </Pressable>
+    </View>
+    <Pressable accessibilityRole="button" accessibilityLabel={menu ? `Replace ${menu.name}` : 'Upload menu (PDF)'} accessibilityState={{ disabled: disabled || kind !== 'pdf' }} disabled={disabled || kind !== 'pdf'} onPress={() => {
+      void File.pickFileAsync({ mimeTypes: ['application/pdf'] }).then((picked) => { if (!picked.canceled) setMenu(picked.result); }, () => {});
+    }} style={({ pressed }) => [styles.input, { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: kind === 'pdf' ? 1 : 0.4, backgroundColor: pressed ? colors.line : colors.fill }]}>
+      <Icon name="pdf" size={32} />
+      <Copy selectable={false} numberOfLines={1} style={{ flex: 1, fontSize: 16, lineHeight: 22, color: menu ? colors.text : colors.muted }}>{menu ? menu.name : place?.menu_url ? 'Replace PDF' : <>Select menu (PDF)<Copy style={{ color: colors.muted }}> (optional)</Copy></>}</Copy>
+    </Pressable>
+    {kind === 'pdf' && <>
       {menu && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Remove file" disabled={disabled} onPress={() => setMenu(undefined)} /></View>}
       <Copy style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>Max file size 10 MB. Only PDF files are supported.</Copy>
       {place?.menu_url && !menu && <View style={{ alignSelf: 'flex-start' }}><TextButton label="View current menu" onPress={() => { void Linking.openURL(place.menu_url!).catch(() => {}); }} /></View>}
-    </View>}
+    </>}
+    {!place && <>
+      <Pressable accessibilityRole="button" accessibilityLabel={photo ? 'Replace place photo' : 'Add place photo'} accessibilityState={{ disabled }} disabled={disabled} onPress={choose}
+        style={({ pressed }) => [styles.input, { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: pressed ? colors.line : colors.fill }]}>
+        {photo ? <Image source={photo.uri} contentFit="cover" style={{ width: 32, height: 32, borderRadius: 8 }} accessibilityElementsHidden /> : <Icon name="plus" size={32} />}
+        <Copy selectable={false} numberOfLines={1} style={{ flex: 1, fontSize: 16, lineHeight: 22, color: photo ? colors.text : colors.muted }}>{photo ? 'Photo selected' : 'Add place photo (optional)'}</Copy>
+      </Pressable>
+      {photo && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Remove photo" disabled={disabled} onPress={removePhoto} /></View>}
+      <ErrorNotice message={picking.error} />
+    </>}
     {!readOnly && place && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Delete place" danger disabled={action.busy} onPress={() => Alert.alert(`Delete ${place.name}?`, 'Its QR code stops working and guests can no longer join.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => { void action.run(async () => { await api.deletePlace(place.id); await onDone(); }); } },
@@ -175,7 +196,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
 
 type MenuKind = 'link' | 'pdf';
 /** Two-option pill switch; the primary-filled thumb slides to the chosen option. */
-function MenuKindToggle({ kind, disabled, locked, onChange }: { kind: MenuKind; disabled: boolean; locked: boolean; onChange: (kind: MenuKind) => void }) {
+function MenuKindToggle({ kind, disabled, onChange }: { kind: MenuKind; disabled: boolean; onChange: (kind: MenuKind) => void }) {
   const [width, setWidth] = useState(0);
   const reduced = useReducedMotion();
   const half = Math.max(0, (width - 8) / 2);
@@ -184,8 +205,8 @@ function MenuKindToggle({ kind, disabled, locked, onChange }: { kind: MenuKind; 
     style={{ flexDirection: 'row', height: 52, padding: 4, borderRadius: 26, backgroundColor: colors.fill, opacity: disabled ? 0.5 : 1 }}>
     <Animated.View style={[{ position: 'absolute', top: 4, bottom: 4, left: 4, width: half, borderRadius: 22, backgroundColor: colors.primary }, thumb]} />
     {([['link', 'Link', 'link'], ['pdf', 'PDF', 'pdf']] as const).map(([value, label, icon]) => <Pressable key={value} accessibilityRole="tab" accessibilityLabel={label}
-      accessibilityState={{ selected: kind === value, disabled: disabled || (locked && kind !== value) }} disabled={disabled || (locked && kind !== value)} onPress={() => onChange(value)}
-      style={{ opacity: locked && kind !== value ? 0.4 : 1, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      accessibilityState={{ selected: kind === value, disabled }} disabled={disabled} onPress={() => onChange(value)}
+      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
       <Icon name={icon} size={18} color={kind === value ? colors.onPrimary : colors.muted} />
       <Copy selectable={false} style={{ fontSize: 15, fontWeight: '700', color: kind === value ? colors.onPrimary : colors.muted }}>{label}</Copy>
     </Pressable>)}

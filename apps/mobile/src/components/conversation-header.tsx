@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { View, useWindowDimensions } from 'react-native';
+import { Pressable, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Copy, colors } from './chat-ui';
+import { Copy, Icon, colors } from './chat-ui';
 import { NativeAction } from './native-action';
 
 export function ConversationHeader({ title, subtitle, imageUrl, settings, settingsLabel, disabled, browse, onBack, belowSafeArea }: { title: string; subtitle?: string; imageUrl?: string | null; settings?: () => void; browse?: () => void; onBack?: () => void; settingsLabel?: string; disabled?: boolean; belowSafeArea?: boolean }) {
@@ -34,7 +34,7 @@ export function ConversationHeader({ title, subtitle, imageUrl, settings, settin
 }
 
 /** Plain top bar for chats: back, title, optional actions. */
-export function ChatBar({ title, subtitle, settings, settingsLabel, disabled, browse }: { title: string; subtitle?: string; settings?: () => void; browse?: () => void; settingsLabel?: string; disabled?: boolean }) {
+export function ChatBar({ title, subtitle, settings, settingsLabel, members, disabled, browse }: { title: string; subtitle?: string; settings?: () => void; browse?: () => void; settingsLabel?: string; members?: number; disabled?: boolean }) {
   const insets = useSafeAreaInsets();
   return <>
     <Stack.Screen options={{ statusBarStyle: 'dark' }} />
@@ -46,7 +46,10 @@ export function ChatBar({ title, subtitle, settings, settingsLabel, disabled, br
       </View>
       <View style={{ minWidth: 96, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
         {browse && <NativeAction icon="browser" accessibilityLabel="Open venue page" onPress={browse} />}
-        {settings && <NativeAction icon="settings" accessibilityLabel={settingsLabel ?? 'Settings'} disabled={disabled} onPress={settings} />}
+        {settings && <Pressable accessibilityRole="button" accessibilityLabel={settingsLabel ?? 'Settings'} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={settings} hitSlop={4} style={{ minHeight: 36, minWidth: 44, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12, borderRadius: 18, backgroundColor: disabled ? colors.fill : colors.secondary }}>
+          {members !== undefined && <Copy selectable={false} style={{ fontSize: 14, lineHeight: 20, fontWeight: '700', color: disabled ? colors.muted : colors.onSecondary }}>{members > 100 ? '+100' : String(members)}</Copy>}
+          <Icon name="group" size={18} color={disabled ? colors.muted : colors.onSecondary} />
+        </Pressable>}
       </View>
     </View>
   </>;

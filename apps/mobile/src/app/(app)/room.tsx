@@ -31,7 +31,7 @@ export default function RoomScreen() {
 
   return <View style={{ flex: 1 }}>
     <Stack.Screen options={{ title, headerShown: false }} />
-    <ChatBar title={title} settingsLabel="Group settings" disabled={!group} settings={() => setSidebar(true)}
+    <ChatBar title={title} settingsLabel="Group members" members={group?.members.length} disabled={!group} settings={() => setSidebar(true)}
       browse={browse} />
     <Conversation
       composerLabel={`Message ${title}`}
@@ -45,6 +45,6 @@ export default function RoomScreen() {
       openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
       endedAction={chat.ready && !group ? <Button label="Scan to rejoin" onPress={() => router.push('/scan')} /> : undefined}
     />
-    {sidebar && group && <SettingsSidebar key={group.id} label="Group settings" onClose={() => setSidebar(false)}>{(close) => <GroupDetails group={group} onNavigate={close} />}</SettingsSidebar>}
+    {sidebar && group && <SettingsSidebar key={group.id} label="Group members" onClose={() => setSidebar(false)}>{(close) => <GroupDetails group={group} onNavigate={close} />}</SettingsSidebar>}
   </View>;
 }

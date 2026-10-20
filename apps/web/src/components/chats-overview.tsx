@@ -381,10 +381,12 @@ export function ChatsOverview(props: LoadingProps | ReadyProps) {
                         <span className={failed ? "dm-preview dm-preview-error" : unreadCount ? "dm-preview preview-unread" : "dm-preview"}>
                         {failed ? "Preview unavailable" : directMessagePreview(message, sessionId ?? "")}
                         </span>
-                        <UnreadBadge count={unreadCount} />
                       </span>
                     </span>
-                    {age && <time dateTime={message?.created_at}>{age}</time>}
+                    <span className="dm-row-meta">
+                      {age && <time dateTime={message?.created_at}>{age}</time>}
+                      <UnreadBadge count={unreadCount} />
+                    </span>
                   </SwipeRow>
                   {failed && <button type="button" className="preview-retry" disabled={busy} onClick={onRetry} aria-label={`Retry loading message preview for ${peer.name}`}>Retry</button>}
                 </li>

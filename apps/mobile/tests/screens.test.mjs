@@ -147,6 +147,7 @@ for (const platform of ['ios', 'android']) {
     assert.deepEqual(state.navigation.at(-1), ['push', {pathname:'/person/[id]',params:{id:'peer'}}]);
     assert.deepEqual(calls, []);
     assert.doesNotMatch(screen.text(), /Leave group/);
+    assert.match(screen.text(), /2 members/);
     state.chat.groups = [{ ...group, id: 'new-room' }]; await screen.update();
     assert.match(screen.text(), /membership has ended/);
     assert.equal(screen.root.findAllByType('Pressable').length, 0);
