@@ -71,7 +71,7 @@ try {
   await noMotion(() => page.locator('#message').fill('Message updates must not move the screen'), 'draft edits');
   await noMotion(async () => { await page.getByRole('button', { name: 'Send message', exact: true }).click(); await page.getByText('Message updates must not move the screen', { exact: true }).waitFor(); }, 'message updates');
   await noMotion(() => page.evaluate(() => history.pushState(history.state, '', `${location.pathname}${location.search}&unrelated=1`)), 'same-conversation query');
-  await page.getByRole('button', { name: 'Group settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Group members', exact: true }).click();
   const settings = await page.locator('.group-sidebar-panel').evaluate(element => ({ name: getComputedStyle(element).animationName, duration: getComputedStyle(element).animationDuration }));
   assert.deepEqual(settings, { name: 'sidebar-slide-in', duration: '0.24s' });
   await page.getByRole('button', { name: 'Close group settings', exact: true }).click();

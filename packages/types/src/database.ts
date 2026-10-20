@@ -199,6 +199,7 @@ export type Database = {
           menu_path: string | null
           name: string
           owner_id: string
+          photo_path: string | null
         }
         Insert: {
           code?: string
@@ -210,6 +211,7 @@ export type Database = {
           menu_path?: string | null
           name?: string
           owner_id?: string
+          photo_path?: string | null
         }
         Update: {
           code?: string
@@ -221,6 +223,7 @@ export type Database = {
           menu_path?: string | null
           name?: string
           owner_id?: string
+          photo_path?: string | null
         }
         Relationships: []
       }
@@ -448,7 +451,7 @@ export type Database = {
       }
       send_friend_request: { Args: { p_receiver_id: string }; Returns: string }
       update_place: {
-        Args: { p_link_url: string | null; p_menu_path: string | null; p_name: string; p_place_id: string }
+        Args: { p_link_url: string | null; p_menu_path: string | null; p_name: string; p_photo_path: string | null; p_place_id: string }
         Returns: Database["public"]["Tables"]["places"]["Row"]
       }
     }

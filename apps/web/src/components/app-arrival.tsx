@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { animateMotion } from "@/lib/motion";
 
 const publicScreen = (path: string) => path === "/welcome" || path === "/sign-in";
@@ -12,6 +12,12 @@ export function AppArrival({ children }: { children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const previous = useRef(pathname);
   const snapshot = useRef<HTMLElement | null>(null);
+  // iOS Safari ignores user-scalable=no for pinch; cancelling its gesture events stops the zoom.
+  useEffect(() => {
+    const stop = (event: Event) => event.preventDefault();
+    document.addEventListener("gesturestart", stop, { passive: false });
+    return () => document.removeEventListener("gesturestart", stop);
+  }, []);
   useLayoutEffect(() => {
     const from = previous.current;
     previous.current = pathname;

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatSnapshot, Place, Tables } from "@qr-chat/api";
-import { codeKeySchema, displayNameSchema, menuUploadSchema, messageBodySchema, placeLinkSchema, placeNameSchema, profileSchema } from "@qr-chat/validation";
+import { avatarUploadSchema, codeKeySchema, displayNameSchema, menuUploadSchema, messageBodySchema, placeLinkSchema, placeNameSchema, profileSchema } from "@qr-chat/validation";
 import { groupFallbackName } from "@qr-chat/domain";
 import { ChatView, type ChatViewApi, type ChatViewBackend } from "./mobile-chat";
 import { BusinessView, type BusinessApi } from "./business-view";
@@ -141,8 +141,8 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
 }
 
 const samplePlaces = (now: number): Place[] => [
-  { id: "55555555-5555-4555-8555-000000000001", owner_id: localUserId, group_id: groupId, code: "cafecentr2", name: "Cafe Central", link_url: null, menu_path: `${localUserId}/menu.pdf`, menu_url: "https://example.com/menu.pdf", created_at: new Date(now - 7 * 86400000).toISOString(), deleted_at: null },
-  { id: "55555555-5555-4555-8555-000000000002", owner_id: localUserId, group_id: crypto.randomUUID(), code: "rooftop234", name: "Rooftop Bar", link_url: null, menu_path: null, menu_url: null, created_at: new Date(now - 86400000).toISOString(), deleted_at: null },
+  { id: "55555555-5555-4555-8555-000000000001", owner_id: localUserId, group_id: groupId, code: "cafecentr2", name: "Cafe Central", link_url: null, menu_path: `${localUserId}/menu.pdf`, menu_url: "https://example.com/menu.pdf", photo_path: null, photo_url: null, created_at: new Date(now - 7 * 86400000).toISOString(), deleted_at: null },
+  { id: "55555555-5555-4555-8555-000000000002", owner_id: localUserId, group_id: crypto.randomUUID(), code: "rooftop234", name: "Rooftop Bar", link_url: null, menu_path: null, menu_url: null, photo_path: `${localUserId}/rooftop.jpg`, photo_url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'%3E%3Crect width='4' height='4' fill='%23c9a227'/%3E%3Ccircle cx='2' cy='2' r='1' fill='%23fff'/%3E%3C/svg%3E", created_at: new Date(now - 86400000).toISOString(), deleted_at: null },
 ];
 
 /** The Business screen on in-memory places: create, edit, menu and delete behave like the real API, nothing is saved. */
@@ -152,7 +152,7 @@ export function BusinessPreview({ initialTime }: { initialTime: number }) {
     async isBusiness() { return true; },
     async places() { return places.current.filter((place) => !place.deleted_at); },
     async createPlace(input) {
-      const place: Place = { id: crypto.randomUUID(), owner_id: localUserId, group_id: crypto.randomUUID(), code: Math.random().toString(36).slice(2, 12).padEnd(10, "2"), name: placeNameSchema.parse(input), link_url: null, menu_path: null, menu_url: null, created_at: new Date().toISOString(), deleted_at: null };
+      const place: Place = { id: crypto.randomUUID(), owner_id: localUserId, group_id: crypto.randomUUID(), code: Math.random().toString(36).slice(2, 12).padEnd(10, "2"), name: placeNameSchema.parse(input), link_url: null, menu_path: null, menu_url: null, photo_path: null, photo_url: null, created_at: new Date().toISOString(), deleted_at: null };
       places.current = [...places.current, place];
       return place;
     },
@@ -160,7 +160,9 @@ export function BusinessPreview({ initialTime }: { initialTime: number }) {
       await new Promise((resolve) => setTimeout(resolve, 400));
       const upload = input.menu ? menuUploadSchema.parse(input.menu) : input.menu;
       const menu_url = upload ? URL.createObjectURL(new Blob([upload.data], { type: "application/pdf" })) : upload === null ? null : place.menu_url;
-      const saved = { ...place, name: placeNameSchema.parse(input.name), link_url: placeLinkSchema.parse(input.link) || null, menu_url, menu_path: menu_url && `${localUserId}/${upload?.uploadId ?? "menu"}.pdf` };
+      const picked = input.photo ? avatarUploadSchema.parse(input.photo) : input.photo;
+      const photo_url = picked ? URL.createObjectURL(new Blob([picked.data], { type: "image/jpeg" })) : picked === null ? null : place.photo_url;
+      const saved = { ...place, name: placeNameSchema.parse(input.name), link_url: placeLinkSchema.parse(input.link) || null, menu_url, menu_path: menu_url && `${localUserId}/${upload?.uploadId ?? "menu"}.pdf`, photo_url, photo_path: photo_url && `${localUserId}/${picked?.uploadId ?? "photo"}.jpg` };
       places.current = places.current.map((item) => item.id === place.id ? saved : item);
       return saved;
     },

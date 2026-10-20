@@ -40,7 +40,8 @@ for (const platform of ['ios', 'android']) {
     const [button] = browseButton(room);
     assert.ok(button, 'browser button is shown');
     const actions = room.root.findAll(node => node.props.onAccessibilityTap).map(node => node.props.accessibilityLabel);
-    assert.deepEqual(actions.slice(-2), [label, 'Group settings']);
+    assert.equal(actions.at(-1), label);
+    assert.ok(room.root.findAll(node => node.props.accessibilityLabel === 'Group members' && node.props.onPress).length, 'the member pill sits next to the browser button');
     await act(async () => { button.props.onAccessibilityTap(); });
     assert.deepEqual(state.browserOpened, [venue, 'Cafe']);
   });

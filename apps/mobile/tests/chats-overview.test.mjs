@@ -306,6 +306,10 @@ for (const platform of ['ios', 'android']) {
     assert.ok(labels.includes('Open direct message with Sam, 99+ unread messages'));
     assert.ok(labels.includes('Open direct message with Mira'), 'a read chat keeps its plain label');
     assert.match(screen.text(), /99\+/);
+    const textOf = node => node.findAll(n => n.type === 'Text' && typeof n.props.children === 'string').map(n => n.props.children).join(' ');
+    const badge = screen.root.findAll(n => n.props.children === '99+').at(-1);
+    let meta = badge.parent; while (!/\dm/.test(textOf(meta))) meta = meta.parent;
+    assert.match(textOf(meta), /^2m 99\+$/, 'the badge sits under the time, apart from the preview');
     const bold = screen.root.findAll(node => node.props.style && [node.props.style].flat(Infinity).some(style => style?.fontWeight === '700' && style?.color !== undefined) && /Table by the window|Are you coming\?/.test([node.props.children].flat().join('')));
     assert.ok(bold.length >= 2, 'unread previews are bold');
   });
