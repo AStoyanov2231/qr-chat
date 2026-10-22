@@ -3,13 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { ArrowLeft, Camera, CaretRight, DownloadSimple, FilePdf, LinkSimple, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, Camera, CaretRight, DownloadSimple, FilePdf, LinkSimple, Plus, Trash } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createChatApi, type ChatApi, type Place } from "@qr-chat/api";
 import { qrPayload } from "@qr-chat/domain";
 import { errorMessage } from "@/hooks/use-chat-backend";
 import { appOrigin } from "@/lib/app-origin";
 import { prepareAvatar } from "@/lib/avatar";
+import { SwipeRow } from "./chats-overview";
 import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
@@ -27,6 +28,7 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
   const [error, setError] = useState("");
   // The list is the home; "new" or a place opens the editor, which returns to the list when done.
   const [editing, setEditing] = useState<Place | "new" | null>(null);
+  const [revealedId, setRevealedId] = useState<string | null>(null);
   const load = useCallback(async () => {
     const [business, places] = await Promise.all([api().isBusiness(), api().places()]);
     setState({ business, places });
@@ -62,16 +64,22 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
           <p>You get one QR code for it. Print it and put it on your tables; guests who scan it join your venue’s chat and can open your menu and link.</p>
           <button type="button" className="scan-primary" onClick={() => setEditing("new")}>Create place</button>
         </section>}
-        {hasPlaces && <ul className="business-list">{state.places.map((place) => <li key={place.id}>
-          <button type="button" className="business-row" onClick={() => setEditing(place)}>
+        {hasPlaces && <ul className="business-list">{state.places.map((place) => {
+          const row = <>
             {place.photo_url ? <Image src={place.photo_url} alt={`Photo of ${place.name}`} width={88} height={88} unoptimized /> : <PlaceQr place={place} size={88} />}
             <span>
               <strong>{place.name}</strong>
               <span>{place.menu_url ? "Menu PDF" : place.link_url ? place.link_url.replace(/^https:\/\//u, "") : "No menu"}</span>
             </span>
             <CaretRight size={18} aria-hidden="true" />
-          </button>
-        </li>)}</ul>}
+          </>;
+          // Swiping a row reveals Delete, as on the chats list; without the plan, places can't be deleted.
+          return <li key={place.id}>{state.business
+            ? <SwipeRow className="business-row" label={`Edit ${place.name}`} actionsLabel={place.name} open={revealedId === place.id} onReveal={(open) => setRevealedId(open ? place.id : null)}
+              onOpen={() => setEditing(place)} busy={false} onNotice={() => {}} errorText="Couldn’t delete this place. Try again."
+              actions={[{ kind: "delete", label: "Delete", danger: true, icon: <Trash size={24} weight="bold" />, confirm: `Delete ${place.name}? Its QR code stops working and guests can no longer join.`, run: async () => { await api().deletePlace(place.id); await load(); }, notice: "" }]}>{row}</SwipeRow>
+            : <button type="button" className="business-row" onClick={() => setEditing(place)}>{row}</button>}</li>;
+        })}</ul>}
       </>}
   </main>;
 }
@@ -120,20 +128,20 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
     catch (reason) { setPhotoError(reason instanceof Error ? reason.message : "Could not open this photo."); }
   };
   const removePhoto = () => { setPreview(""); setPhoto(place?.photo_url ? null : undefined); };
-  const photoInput = <input id="place-photo" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled} onChange={(event) => { void pickPhoto(event.target.files?.[0]); event.target.value = ""; }} />;
   return <main className="business-page">
     <header>
       <button type="button" className="back-button" aria-label="Back to places" disabled={saving} onClick={onBack}><ArrowLeft size={20} weight="bold" /></button>
       <h1>{place ? place.name : "New place"}</h1>
     </header>
-    {place && <section className="business-photo" aria-label="Place photo">
-      {shown ? <Image src={shown} alt={`Photo of ${place.name}`} width={148} height={148} unoptimized /> : <span className="business-qr-placeholder" aria-hidden="true"><Camera size={32} /></span>}
-      {!readOnly && <div>
-        {photoInput}
-        <label htmlFor="place-photo" className="scan-primary subtle">{shown ? "Change photo" : "Add photo"}</label>
-        {shown && <button type="button" className="text-button" disabled={saving} onClick={removePhoto}>Remove photo</button>}
-        {photoError && <p className="form-error" role="alert">{photoError}</p>}
-      </div>}
+    {/* One square for picking the photo; the camera sits on top of the current photo when there is one. */}
+    {(!readOnly || shown) && <section className="business-photo" aria-label="Place photo">
+      <input id="place-photo" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled} onChange={(event) => { void pickPhoto(event.target.files?.[0]); event.target.value = ""; }} />
+      <label htmlFor="place-photo" aria-label={readOnly ? undefined : shown ? "Change place photo" : "Add place photo"}>
+        {shown && <Image src={shown} alt={`Photo of ${name || "your place"}`} width={148} height={148} unoptimized />}
+        {!readOnly && <span aria-hidden="true"><Camera size={24} weight="bold" /></span>}
+      </label>
+      {shown && !readOnly && <button type="button" className="text-button" disabled={saving} onClick={removePhoto}>Remove photo</button>}
+      {photoError && <p className="form-error" role="alert">{photoError}</p>}
     </section>}
     <form className="profile-form business-form" aria-busy={saving} onSubmit={async (event) => {
       event.preventDefault();
@@ -172,21 +180,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
         {menu && <button type="button" className="text-button" disabled={disabled} onClick={() => setMenu(undefined)}>Remove file</button>}
         <small id="place-menu-hint" className="field-hint">Max file size 10 MB. Only PDF files are supported.{place?.menu_url && <> <a href={place.menu_url} target="_blank" rel="noopener noreferrer">View current menu</a></>}</small>
       </>}
-      {!place && <>
-        {photoInput}
-        <label htmlFor="place-photo" className="business-file photo">
-          {shown ? <Image className="business-thumb" src={shown} alt="" width={36} height={36} unoptimized /> : <Camera size={32} aria-hidden="true" />}
-          <span>{shown ? "Photo selected" : <>Add place photo <span>(optional)</span></>}</span>
-        </label>
-        {shown && <button type="button" className="text-button" disabled={disabled} onClick={removePhoto}>Remove photo</button>}
-        {photoError && <p className="form-error" role="alert">{photoError}</p>}
-      </>}
       {(!readOnly || place) && <div className="business-actions">
-        {!readOnly && place && <button type="button" className="text-button danger" disabled={saving} onClick={() => {
-          if (!window.confirm(`Delete ${place.name}? Its QR code stops working and guests can no longer join.`)) return;
-          setSaving(true); setError("");
-          api.deletePlace(place.id).then(onDone, (reason) => { setError(errorMessage(reason)); setSaving(false); });
-        }}>Delete place</button>}
         {error && <p className="form-error" role="alert">{error}</p>}
         {!readOnly && <button className="scan-primary" disabled={saving || !name.trim() || !dirty}>{saving ? "Saving…" : place ? "Save changes" : "Create place"}</button>}
         {place && qr && <a className="scan-primary subtle business-download" href={qr} download={file}><DownloadSimple size={16} weight="bold" />Download QR</a>}

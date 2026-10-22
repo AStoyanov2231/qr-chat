@@ -1012,8 +1012,9 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .message-stream article > div > .owner-tag { margin-left: 0; }
 html:has(.business-page) { overflow: hidden; overscroll-behavior: none; }
 body:has(.business-page) { position: fixed; inset: 0; height: 100dvh; min-height: 0; overflow: hidden; overscroll-behavior: none; }
-.business-page { width: 100%; height: 100dvh; overflow-y: auto; overscroll-behavior: none; scrollbar-width: none; padding: max(32px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right), calc((100% - 688px) / 2)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left), calc((100% - 688px) / 2)); display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 24px; }
-.business-page > header { display: flex; align-items: center; gap: 12px; }
+.business-page { width: 100%; height: 100dvh; overflow-y: auto; overscroll-behavior: none; scrollbar-width: none; padding: 0 max(16px, env(safe-area-inset-right), calc((100% - 688px) / 2)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left), calc((100% - 688px) / 2)); display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 24px; }
+/* Content scrolling up fades out in the header's eased bottom 40px; button shadows paint on top of it. */
+.business-page > header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px; padding: max(32px, env(safe-area-inset-top)) 0 40px; margin-bottom: -40px; background: linear-gradient(var(--canvas) calc(100% - 40px), color-mix(in srgb, var(--canvas) 80%, transparent) calc(100% - 28px), color-mix(in srgb, var(--canvas) 35%, transparent) calc(100% - 16px), transparent); }
 .business-page > header h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .business-page .scan-primary.subtle { background: var(--fill); color: var(--text); }
 .business-intro { display: grid; gap: 8px; }
@@ -1031,14 +1032,11 @@ body:has(.business-page) { position: fixed; inset: 0; height: 100dvh; min-height
 .business-page p { color: var(--muted); }
 .business-page input { width: 100%; min-width: 0; }
 .business-page input[type="file"] { min-height: 44px; padding-block: 8px; font-size: 14px; }
-.business-page .text-button.danger { color: var(--danger); }
-.business-photo { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; gap: 16px; padding: 14px; border-radius: 24px; background: var(--fill); }
-.business-photo img, .business-photo .business-qr-placeholder { width: 148px; height: 148px; border-radius: 14px; background: var(--canvas); object-fit: cover; }
-.business-photo .business-qr-placeholder { display: grid; place-items: center; color: var(--muted); }
-.business-photo > div { display: grid; gap: 8px; justify-items: start; min-width: 0; }
-.business-page .business-photo .scan-primary.subtle { min-height: 44px; padding: 0 16px; background: var(--canvas); font-size: 14px; cursor: pointer; }
+.business-photo { display: grid; justify-items: start; gap: 8px; }
+.business-photo label { position: relative; display: grid; place-items: center; width: 148px; height: 148px; border-radius: 14px; overflow: hidden; background: var(--fill); cursor: pointer; }
+.business-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.business-photo label > span { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--floating); color: var(--text); box-shadow: var(--shadow-float); }
 .business-photo .text-button { width: auto; margin: 0; padding: 0; }
-@media (max-width: 380px) { .business-photo { grid-template-columns: 112px minmax(0, 1fr); } .business-photo img, .business-photo .business-qr-placeholder { width: 112px; height: 112px; } }
 .business-page > form.profile-form { margin-top: 0; }
 .business-form label { font-size: 14px; font-weight: 700; margin-top: 4px; }
 .business-form label > span { color: var(--muted); font-weight: 400; }
@@ -1058,16 +1056,13 @@ body:has(.business-page) { position: fixed; inset: 0; height: 100dvh; min-height
 .business-form label.business-file > span { min-width: 0; overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
 .business-file svg { flex: none; color: var(--danger); }
 .business-form label.business-file.dragging { border-color: var(--text); }
-#place-menu:focus-visible + .business-file, #place-photo:focus-visible + .business-file { outline: 2px solid var(--text); outline-offset: 2px; }
+#place-menu:focus-visible + .business-file { outline: 2px solid var(--text); outline-offset: 2px; }
 .business-form label.business-file > span > span { color: var(--muted); }
-.business-file.photo svg { color: var(--muted); }
-.business-thumb { flex: none; width: 36px; height: 36px; border-radius: 999px; object-fit: cover; }
 #place-photo:focus-visible + label { outline: 2px solid var(--text); outline-offset: 2px; }
 .business-form .off { opacity: .4; }
 .business-form label.business-file.off { cursor: default; }
 .business-page .field-hint a { color: var(--text); font-weight: 700; text-decoration: underline; }
-.business-form .text-button.danger { justify-self: start; width: auto; margin: 4px 0 0; padding: 0; }
-.business-actions { position: sticky; bottom: 0; display: grid; gap: 8px; margin: 0 -16px -48px; padding: 12px 16px max(16px, env(safe-area-inset-bottom)); background: var(--canvas); border-top: 1px solid var(--line); }
+.business-actions { display: grid; gap: 8px; margin-top: 8px; }
 .business-actions .scan-primary { width: 100%; }
 .business-actions .scan-primary.business-download { width: 50%; justify-self: center; min-height: 44px; padding: 0 16px; font-size: 14px; }
 .business-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -1077,4 +1072,5 @@ body:has(.business-page) { position: fixed; inset: 0; height: 100dvh; min-height
 .business-row strong { font-size: 16px; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .business-row > span > span { color: var(--muted); font-size: 13px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .business-row > svg { color: var(--muted); }
+.business-list .dm-swipe-row { border-radius: 20px; }
 .business-page input:not([type="file"]):focus-visible { outline-offset: 2px; }

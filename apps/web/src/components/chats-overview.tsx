@@ -220,7 +220,7 @@ function IncomingRequestRow({ peer, sentAt, onOpen }: { peer: Peer; sentAt: stri
 
 type SwipeAction = { kind: string; label: string; icon: React.ReactNode; danger?: boolean; confirm: string; run: () => Promise<void>; notice: string };
 
-function SwipeRow({ label, actionsLabel, className, children, open, onReveal, onOpen, busy, actions, errorText, onNotice }: {
+export function SwipeRow({ label, actionsLabel, className, children, open, onReveal, onOpen, busy, actions, errorText, onNotice }: {
   label: string; actionsLabel: string; className?: string; children: React.ReactNode; open: boolean; onReveal: (open: boolean) => void;
   onOpen: () => void; busy: boolean; actions: SwipeAction[]; errorText: string; onNotice: (message: string) => void;
 }) {
