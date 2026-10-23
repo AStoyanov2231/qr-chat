@@ -3,9 +3,8 @@ import { Image } from 'expo-image';
 import QRCode from 'qrcode/lib/core/qrcode';
 import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
-import { groupInitials, qrPayload, type Group } from '@qr-chat/domain';
+import { groupInitials, type Group } from '@qr-chat/domain';
 import { Copy, ErrorNotice, Icon, OwnerTag, colors, styles } from './chat-ui';
-import { webOrigin } from '@/lib/supabase';
 import { Avatar } from './avatar';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
@@ -37,6 +36,5 @@ export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?:
     {group.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => { onNavigate?.(); router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } }); }} style={[styles.row, { minHeight: 60, paddingVertical: 8 }]}>
       <Avatar name={member.name} url={member.avatarUrl} size={44} /><Copy style={{ flex: 1, fontSize: 16 }}>{member.id === userId ? 'You' : member.name}</Copy>{member.id === group.venue.place?.ownerId && <OwnerTag />}<Icon name="chevron" size={18} />
     </Pressable>)}
-    <View style={{ alignItems: 'center', paddingVertical: 18 }}><GroupQr code={qrPayload(group.venue.codes[0], webOrigin)} /></View>
   </View>;
 }

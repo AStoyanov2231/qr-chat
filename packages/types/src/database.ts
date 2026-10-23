@@ -227,6 +227,30 @@ export type Database = {
         }
         Relationships: []
       }
+      pages: {
+        Row: {
+          failed: boolean
+          fetched_at: string
+          image_path: string | null
+          name: string | null
+          url: string
+        }
+        Insert: {
+          failed?: boolean
+          fetched_at?: string
+          image_path?: string | null
+          name?: string | null
+          url: string
+        }
+        Update: {
+          failed?: boolean
+          fetched_at?: string
+          image_path?: string | null
+          name?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           fetched_at: string

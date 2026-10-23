@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-screens/experimental';
 import { qrPayload } from '@qr-chat/domain';
 import type { Place } from '@qr-chat/api';
 import { placeLinkSchema } from '@qr-chat/validation';
-import { Button, Copy, ErrorNotice, Icon, NativeInput, PillButton, TextButton, colors, styles, useAction, type NativeInputProps } from '@/components/chat-ui';
+import { Button, ClearButton, Copy, ErrorNotice, Icon, NativeInput, PillButton, TextButton, colors, styles, useAction, type NativeInputProps } from '@/components/chat-ui';
 import { GroupQr } from '@/components/group-details';
 import { NativeAction } from '@/components/native-action';
 import { pickAvatar, type SelectedAvatar } from '@/lib/avatar';
@@ -83,22 +83,23 @@ function Page({ title, backLabel, onBack, onAdd, busy, footer, children }: Props
       <Copy selectable={false} accessibilityRole="header" numberOfLines={1} style={[styles.title, { flex: 1 }]}>{title}</Copy>
       {onAdd && <NativeAction icon="plus" accessibilityLabel="Add a place" onPress={onAdd} />}
     </View>
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 24 }]} automaticallyAdjustKeyboardInsets
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 24, gap: 20 }]} automaticallyAdjustKeyboardInsets
       keyboardDismissMode={process.env.EXPO_OS === 'ios' ? 'interactive' : 'on-drag'} keyboardShouldPersistTaps="handled">{children}</ScrollView>
     {footer && <View style={{ gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.canvas }}>{footer}</View>}
   </SafeAreaView>;
 }
 
-/** The label sits inside the field and moves up once it has focus or a value. */
-function FloatField({ label, hint, value, ...props }: Omit<NativeInputProps, 'accessibilityLabel' | 'onFocus' | 'onBlur'> & { label: string; hint?: string }) {
+/** The label sits inside the field and moves up once it has focus or a value; the placeholder and the clear button show while it has focus. */
+function FloatField({ label, hint, value, placeholder, onChangeText, ...props }: Omit<NativeInputProps, 'accessibilityLabel' | 'onFocus' | 'onBlur'> & { label: string; hint?: string }) {
   const input = useRef<TextInputRef>(null);
   const [focused, setFocused] = useState(false);
   const up = focused || !!value;
-  return <Pressable accessible={false} onPress={() => input.current?.focus()} style={[styles.input, { minHeight: 58, paddingTop: 20, paddingBottom: 4 }]}>
+  return <Pressable accessible={false} onPress={() => input.current?.focus()} style={[styles.input, { minHeight: 58, paddingTop: 20, paddingBottom: 4, paddingRight: 52 }]}>
     <Copy selectable={false} style={[{ position: 'absolute', left: 21, color: colors.muted, pointerEvents: 'none' }, up ? { top: 7, fontSize: 12, lineHeight: 16, fontWeight: '700' } : { top: 17, fontSize: 16, lineHeight: 22 }]}>
       {label}{hint && <Copy style={{ color: colors.muted, fontSize: up ? 12 : 16, fontWeight: '400' }}> {hint}</Copy>}
     </Copy>
-    <NativeInput ref={input} accessibilityLabel={label} value={value} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} {...props} />
+    <NativeInput ref={input} accessibilityLabel={label} value={value} placeholder={focused ? placeholder : undefined} onChangeText={onChangeText} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} {...props} />
+    {focused && !!value && props.editable !== false && <ClearButton label={`Clear ${label.toLowerCase()}`} onPress={() => { onChangeText?.(''); input.current?.focus(); }} />}
   </Pressable>;
 }
 
@@ -119,6 +120,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   const shown = photo === undefined ? place?.photo_url : photo?.uri;
   const dirty = !place || name.trim() !== place.name || (kind === 'link' ? link.trim() : '') !== (place.link_url ?? '') || (kind === 'pdf' ? !!menu : !!place.menu_path) || photo !== undefined;
   const disabled = readOnly || action.busy;
+  const viewable = !!place?.menu_url && !menu;
   const back = () => { if (!action.busy) onBack(); };
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; });
@@ -139,53 +141,46 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
       await onDone();
     });
   };
-  return <Page title={place ? place.name : 'New place'} backLabel="Back to places" busy={action.busy} onBack={back}
-    footer={(!readOnly || place) && <>
-      {!readOnly && <>
-        <ErrorNotice message={action.error} />
-        <Button label={action.busy ? 'Saving…' : place ? 'Save changes' : 'Create place'} disabled={action.busy || !name.trim() || !dirty} onPress={save} />
-      </>}
-      {place && <>
-        <View style={{ alignSelf: 'center', width: '50%' }}><PillButton fill label="Share QR" disabled={sharing.busy} background={colors.fill} foreground={colors.text} onPress={() => { void sharing.run(() => shareQr(place)); }} /></View>
-        <ErrorNotice message={sharing.error} />
-      </>}
+  return <Page title={place ? 'Edit place' : 'New place'} backLabel="Back to places" busy={action.busy} onBack={back}
+    footer={!readOnly && <>
+      <ErrorNotice message={action.error} />
+      <Button label={action.busy ? 'Saving…' : place ? 'Save changes' : 'Create place'} disabled={action.busy || !name.trim() || !dirty} onPress={save} />
     </>}>
     {readOnly && <ErrorNotice message={action.error} />}
-    {place && <View style={[styles.row, { gap: 16, padding: 14, borderRadius: 24, backgroundColor: colors.fill }]}>
-      <View style={{ width: 132, height: 132, borderRadius: 132 * 2 / 15, overflow: 'hidden', backgroundColor: colors.canvas }}>
-        {shown && <Image source={shown} contentFit="cover" style={{ width: 132, height: 132 }} accessibilityLabel="Place photo" />}
-      </View>
-      <View style={{ flex: 1, gap: 8, alignItems: 'flex-start' }}>
-        <PillButton fill={false} label={shown ? 'Change photo' : 'Add photo'} disabled={disabled} background={colors.canvas} foreground={colors.text} onPress={choose} />
-        {shown && <TextButton label="Remove photo" disabled={disabled} onPress={removePhoto} />}
-        <ErrorNotice message={picking.error} />
-      </View>
+    {(!readOnly || shown) && <View style={{ alignItems: 'center', gap: 8 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={readOnly ? 'Place photo' : shown ? 'Change place photo' : 'Add place photo'} accessibilityState={{ disabled }} disabled={disabled} onPress={choose}
+        style={{ width: '100%', maxWidth: 280, aspectRatio: 1, borderRadius: 28, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.fill }}>
+        {shown && <Image source={shown} contentFit="cover" style={{ position: 'absolute', width: '100%', height: '100%' }} />}
+        {!readOnly && <View style={[{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.floating }, shown && { position: 'absolute', right: 12, bottom: 12 }]}><Icon name={shown ? 'edit' : 'plus'} size={22} /></View>}
+      </Pressable>
+      {shown && !readOnly && <TextButton label="Remove photo" disabled={disabled} onPress={removePhoto} />}
+      <ErrorNotice message={picking.error} />
     </View>}
     <FloatField label="Place name" value={name} onChangeText={setName} maxLength={100} editable={!disabled} autoCapitalize="words" />
-    <MenuKindToggle kind={kind} disabled={disabled} onChange={setKind} />
-    <View style={{ gap: 8, opacity: kind === 'link' ? 1 : 0.4 }}>
-      <FloatField label="Menu link" hint="(optional)" value={link} onChangeText={(value) => { setLink(value); setLinkError(''); }} maxLength={2048} editable={!disabled && kind === 'link'} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
-      <Copy accessibilityLiveRegion="polite" style={{ color: linkError ? colors.danger : colors.muted, fontSize: 13, lineHeight: 18 }}>{linkError || 'A link to your menu, starting with https://. Guests open it from the group chat.'}</Copy>
+    <View style={{ gap: 12 }}>
+      <MenuKindToggle kind={kind} disabled={disabled} onChange={setKind} />
+      {kind === 'link' ? <>
+        <FloatField label="Menu link" hint="(optional)" placeholder="https://" value={link} onChangeText={(value) => { setLink(value); setLinkError(''); }} maxLength={2048} editable={!disabled} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+        {!!linkError && <Copy accessibilityLiveRegion="polite" style={{ color: colors.danger, fontSize: 13, lineHeight: 18 }}>{linkError}</Copy>}
+      </> : <>
+        {/* One pill: the whole row picks a PDF, and the View button at its end opens the saved one. */}
+        <View style={[styles.input, { minHeight: 58, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', paddingHorizontal: 0 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={menu ? `Replace ${menu.name}` : 'Upload menu (PDF)'} accessibilityState={{ disabled }} disabled={disabled} onPress={() => {
+            void File.pickFileAsync({ mimeTypes: ['application/pdf'] }).then((picked) => { if (!picked.canceled) setMenu(picked.result); }, () => {});
+          }} style={({ pressed }) => ({ flex: 1, minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 12, paddingRight: viewable ? 0 : 20, backgroundColor: pressed ? colors.line : 'transparent' })}>
+            <Icon name="pdf" size={32} />
+            <Copy selectable={false} numberOfLines={1} style={{ flex: 1, fontSize: 16, lineHeight: 22 }}>{menu ? menu.name : place?.menu_url ? 'Replace PDF' : <>Select PDF<Copy style={{ color: colors.muted }}> (max 10 MB)</Copy></>}</Copy>
+            {!viewable && <Icon name="share" size={20} color={colors.muted} />}
+          </Pressable>
+          {viewable && <Pressable accessibilityRole="button" accessibilityLabel="View current menu" onPress={() => { void Linking.openURL(place.menu_url!).catch(() => {}); }}
+            style={{ height: 38, marginHorizontal: 10, paddingHorizontal: 16, borderRadius: 19, justifyContent: 'center', backgroundColor: colors.canvas }}><Copy selectable={false} style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>View</Copy></Pressable>}
+        </View>
+        {menu && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Remove file" disabled={disabled} onPress={() => setMenu(undefined)} /></View>}
+      </>}
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel={menu ? `Replace ${menu.name}` : 'Upload menu (PDF)'} accessibilityState={{ disabled: disabled || kind !== 'pdf' }} disabled={disabled || kind !== 'pdf'} onPress={() => {
-      void File.pickFileAsync({ mimeTypes: ['application/pdf'] }).then((picked) => { if (!picked.canceled) setMenu(picked.result); }, () => {});
-    }} style={({ pressed }) => [styles.input, { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: kind === 'pdf' ? 1 : 0.4, backgroundColor: pressed ? colors.line : colors.fill }]}>
-      <Icon name="pdf" size={32} />
-      <Copy selectable={false} numberOfLines={1} style={{ flex: 1, fontSize: 16, lineHeight: 22, color: menu ? colors.text : colors.muted }}>{menu ? menu.name : place?.menu_url ? 'Replace PDF' : <>Select menu (PDF)<Copy style={{ color: colors.muted }}> (optional)</Copy></>}</Copy>
-    </Pressable>
-    {kind === 'pdf' && <>
-      {menu && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Remove file" disabled={disabled} onPress={() => setMenu(undefined)} /></View>}
-      <Copy style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>Max file size 10 MB. Only PDF files are supported.</Copy>
-      {place?.menu_url && !menu && <View style={{ alignSelf: 'flex-start' }}><TextButton label="View current menu" onPress={() => { void Linking.openURL(place.menu_url!).catch(() => {}); }} /></View>}
-    </>}
-    {!place && <>
-      <Pressable accessibilityRole="button" accessibilityLabel={photo ? 'Replace place photo' : 'Add place photo'} accessibilityState={{ disabled }} disabled={disabled} onPress={choose}
-        style={({ pressed }) => [styles.input, { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: pressed ? colors.line : colors.fill }]}>
-        {photo ? <Image source={photo.uri} contentFit="cover" style={{ width: 32, height: 32, borderRadius: 8 }} accessibilityElementsHidden /> : <Icon name="plus" size={32} />}
-        <Copy selectable={false} numberOfLines={1} style={{ flex: 1, fontSize: 16, lineHeight: 22, color: photo ? colors.text : colors.muted }}>{photo ? 'Photo selected' : 'Add place photo (optional)'}</Copy>
-      </Pressable>
-      {photo && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Remove photo" disabled={disabled} onPress={removePhoto} /></View>}
-      <ErrorNotice message={picking.error} />
+    {place && <>
+      <View style={{ marginTop: 8 }}><PillButton fill label="Share QR" disabled={sharing.busy} background={colors.fill} foreground={colors.text} onPress={() => { void sharing.run(() => shareQr(place)); }} /></View>
+      <ErrorNotice message={sharing.error} />
     </>}
     {!readOnly && place && <View style={{ alignSelf: 'flex-start' }}><TextButton label="Delete place" danger disabled={action.busy} onPress={() => Alert.alert(`Delete ${place.name}?`, 'Its QR code stops working and guests can no longer join.', [
       { text: 'Cancel', style: 'cancel' },

@@ -135,11 +135,11 @@ try {
   await alice.page.getByLabel('Message', { exact: true }).fill('');
   await alice.page.setViewportSize({ width: 390, height: 844 });
   await alice.page.getByRole('button', { name: 'Group members', exact: true }).click();
-  await alice.page.getByRole('img', { name: 'Group QR code', exact: true }).waitFor();
+  await alice.page.getByRole('heading', { name: /^\d+ members?$/ }).waitFor();
   await alice.page.locator('.group-sidebar-panel').evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
   await screenshot(alice.page, 'web-group-settings');
   await alice.page.getByRole('button', { name: 'Close group settings', exact: true }).click();
-  pass('Bidirectional live group messages appear once; member settings display the group QR');
+  pass('Bidirectional live group messages appear once; member settings list the members');
 
   const seededGroup = await bob.api.client.from('messages').insert(Array.from({ length: 55 }, (_, i) => ({ group_id: membership.group_id, sender_id: bob.user.id, body: `Group page ${i}` })));
   assert.equal(seededGroup.error, null);

@@ -54,10 +54,14 @@ export function createChatApi(
   }
   const withImage = <T extends { image_path: string | null }>(group: T) =>
     ({ ...group, image_url: group.image_path ? client.storage.from("group-images").getPublicUrl(group.image_path).data.publicUrl : null });
+  const photoUrl = (path: string | null) => path ? client.storage.from("venue-photos").getPublicUrl(path).data.publicUrl : null;
+  // An active place's own photo stands in for its group's image.
+  const withVenueImage = <T extends { image_path: string | null }>(group: T, place: { photo_path: string | null } | null | undefined) =>
+    place?.photo_path ? { ...withImage(group), image_url: photoUrl(place.photo_path) } : withImage(group);
   const menuUrl = (path: string | null) => path ? client.storage.from("venue-menus").getPublicUrl(path).data.publicUrl : null;
   const withMenu = <T extends { menu_path: string | null }>(place: T) => ({ ...place, menu_url: menuUrl(place.menu_path) });
   const withPlace = (place: Tables<"places">): Place =>
-    ({ ...withMenu(place), photo_url: place.photo_path ? client.storage.from("venue-photos").getPublicUrl(place.photo_path).data.publicUrl : null });
+    ({ ...withMenu(place), photo_url: photoUrl(place.photo_path) });
   const withProfiles = <T extends { profiles: { avatar_path?: string | null } | null }>(message: T) => ({ ...message, profiles: message.profiles && withAvatar(message.profiles) });
   const friendView = <T extends { user_a: { avatar_path?: string | null } | null; user_b: { avatar_path?: string | null } | null }>(friend: T) =>
     ({ ...friend, user_a: friend.user_a && withAvatar(friend.user_a), user_b: friend.user_b && withAvatar(friend.user_b) });
@@ -78,7 +82,7 @@ export function createChatApi(
       return {
         ...overview,
         profile: overview.profile && withAvatar(overview.profile),
-        memberships: overview.memberships.map((membership) => ({ ...membership, groups: membership.groups && withImage(membership.groups), place: membership.place && withMenu(membership.place), members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
+        memberships: overview.memberships.map((membership) => ({ ...membership, groups: membership.groups && withVenueImage(membership.groups, membership.place), place: membership.place && withMenu(membership.place), members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
         friends: overview.friends.map(friendView),
       };
     },
