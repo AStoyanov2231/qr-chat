@@ -115,3 +115,17 @@ test('database rate limits surface as RATE_LIMITED with the server notice', asyn
   await assert.rejects(api.sendGroupMessage(id, 'hello'), (error) => error.code === 'RATE_LIMITED' && error.message === notice);
   await assert.rejects(api.joinGroup('Room-a'), (error) => error.code === 'RATE_LIMITED' && /joined a lot of chats/.test(error.message));
 });
+
+test('an active place photo stands in for its group image; other groups keep theirs', async () => {
+  const url = (bucket, path) => ({ data: { publicUrl: `https://cdn.example/${bucket}/${path}` } });
+  const client = {
+    rpc: () => ({ then: (resolve) => resolve({ data: { userId: id, profile: null, friends: [], directPreviews: {}, unread: {}, memberships: [
+      { group_id: 'a', groups: { id: 'a', image_path: 'u/site.jpg' }, place: { owner_id: id, link_url: null, menu_path: null, photo_path: `${id}/p.jpg` }, members: [], preview: null },
+      { group_id: 'b', groups: { id: 'b', image_path: 'u/site.jpg' }, place: { owner_id: id, link_url: null, menu_path: null, photo_path: null }, members: [], preview: null },
+      { group_id: 'c', groups: { id: 'c', image_path: 'u/site.jpg' }, place: null, members: [], preview: null },
+    ] }, error: null }) }),
+    storage: { from: (bucket) => ({ getPublicUrl: (path) => url(bucket, path) }) },
+  };
+  const { memberships } = await createChatApi(client).overview();
+  assert.deepEqual(memberships.map((membership) => membership.groups.image_url), [`https://cdn.example/venue-photos/${id}/p.jpg`, 'https://cdn.example/group-images/u/site.jpg', 'https://cdn.example/group-images/u/site.jpg']);
+});
