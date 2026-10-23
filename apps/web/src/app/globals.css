@@ -1070,7 +1070,7 @@ body:has(.business-page) { position: fixed; inset: 0; height: 100dvh; min-height
 .business-form { gap: 20px; }
 .business-menu { display: grid; gap: 12px; }
 .business-form .scan-primary.business-download { margin-top: 8px; }
-.business-actions { position: sticky; bottom: 0; display: grid; gap: 8px; margin-top: 8px; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); background: var(--canvas); }
+.business-actions { display: grid; gap: 8px; margin-top: 8px; }
 .business-actions .scan-primary { width: 100%; }
 .business-form .scan-primary.business-download { width: 100%; min-height: 52px; }
 .business-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
