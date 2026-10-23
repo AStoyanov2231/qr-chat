@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PropsWithChildren } from 'react';
-import { Host, TextInput as NativeTextInput, type TextInputProps as NativeTextInputProps } from '@expo/ui';
+import { Host, TextInput as NativeTextInput, type TextInputProps as NativeTextInputProps, type TextInputRef } from '@expo/ui';
 import { Button as SwiftUIButton, Text as SwiftUIText, useNativeState } from '@expo/ui/swift-ui';
 import { accessibilityLabel as nativeAccessibilityLabel, buttonBorderShape, buttonStyle, controlSize, disabled as disabledModifier, font, foregroundStyle, frame, ignoreSafeArea, tint } from '@expo/ui/swift-ui/modifiers';
 import { Button as ComposeButton, Text as ComposeText } from '@expo/ui/jetpack-compose';
@@ -88,8 +88,19 @@ export function NativeInput({ value, accessibilityLabel, containerStyle, onChang
       modifiers={process.env.EXPO_OS === 'ios' ? [...(props.modifiers ?? []), nativeAccessibilityLabel(accessibilityLabel), ignoreSafeArea({ regions: 'keyboard' })] : props.modifiers} />
   </Host>;
 }
-export function Field({ label, containerStyle, ...props }: Omit<NativeInputProps, 'accessibilityLabel'> & { label: string }) {
-  return <View style={{ gap: 8 }}><Copy style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>{label}</Copy><View style={[styles.input, containerStyle]}><NativeInput accessibilityLabel={label} {...props} /></View></View>;
+/** Empties a text field in one tap; sits at the end of the field's box. */
+export function ClearButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+    style={{ position: 'absolute', right: 4, top: '50%', marginTop: -22, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="close" size={16} color={colors.muted} /></Pressable>;
+}
+export function Field({ label, containerStyle, value, onChangeText, ...props }: Omit<NativeInputProps, 'accessibilityLabel'> & { label: string }) {
+  const input = useRef<TextInputRef>(null);
+  const [focused, setFocused] = useState(false);
+  return <View style={{ gap: 8 }}><Copy style={{ fontSize: 14, lineHeight: 20, fontWeight: '700' }}>{label}</Copy>
+    <View style={[styles.input, { paddingRight: 52 }, containerStyle]}>
+      <NativeInput ref={input} accessibilityLabel={label} value={value} onChangeText={onChangeText} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} {...props} />
+      {focused && !!value && props.editable !== false && <ClearButton label={`Clear ${label.toLowerCase()}`} onPress={() => { onChangeText?.(''); input.current?.focus(); }} />}
+    </View></View>;
 }
 /** Marks the venue's owner in its group: a 24 tag on the primary tint. */
 export function OwnerTag() {

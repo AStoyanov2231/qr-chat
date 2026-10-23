@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ClearButton } from "@/components/clear-button";
 import { useEffect, useRef, useState } from "react";
 import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
@@ -89,7 +90,7 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
             <small>{preparing ? "Preparing photo…" : "Your photo appears in chats and profiles."}</small>
             {photoError && <p className="form-error" role="alert">{photoError}</p>}
           </div>
-          <label htmlFor="profile-name">Display name</label><input id="profile-name" maxLength={50} value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required />
+          <label htmlFor="profile-name">Display name</label><div className="clear-field"><input id="profile-name" maxLength={50} placeholder=" " value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required /><ClearButton label="Clear display name" inputId="profile-name" disabled={!ready || saving} onClear={() => setName("")} /></div>
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{saveFailed && <p className="form-error" role="alert">Could not save your profile. Please try again.</p>}
         </form>}
         {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={onSignOut}>Sign out<CaretRight size={18} /></button>

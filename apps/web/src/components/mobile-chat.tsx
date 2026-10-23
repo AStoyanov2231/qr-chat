@@ -26,6 +26,7 @@ import { ProfileView } from "@/components/profile-view";
 import { ChatsOverview } from "@/components/chats-overview";
 import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty, FriendRequestDecision, OutboxBubble } from "@/components/direct-message-parts";
 import { Avatar } from "@/components/avatar";
+import { ClearButton } from "@/components/clear-button";
 import { MemberProfile } from "@/components/member-profile";
 import { Icon } from "@/components/icon";
 import { resolveCode, type Venue } from "@/lib/chat-view";
@@ -585,7 +586,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                   void perform(async () => { await api.nameProductGroup(group.id, productName); setProductName(""); await backend.refresh(); });
                 }}>
                   <label htmlFor="product-name">We couldn’t find this product. Name it for everyone who scans it:</label>
-                  <input id="product-name" value={productName} maxLength={100} disabled={busy} autoComplete="off" onChange={(event) => setProductName(event.target.value)} />
+                  <div className="clear-field"><input id="product-name" value={productName} maxLength={100} placeholder=" " disabled={busy} autoComplete="off" onChange={(event) => setProductName(event.target.value)} /><ClearButton label="Clear product name" inputId="product-name" disabled={busy} onClear={() => setProductName("")} /></div>
                   <button type="submit" disabled={busy || !productName.trim()}>Save</button>
                 </form>
               )}

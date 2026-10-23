@@ -827,10 +827,6 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 .sidebar-close { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; z-index: 1; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--fill); flex-shrink: 0; }
 .group-sidebar-cover { flex-shrink: 0; width: calc(100% + 32px); height: auto; aspect-ratio: 4 / 3; margin: 0 -16px; display: grid; place-items: center; object-fit: cover; background: var(--avatar); color: var(--text); font-size: 48px; font-weight: 700; }
 .group-sidebar-heading { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 700; text-transform: uppercase; }
-.group-sidebar-identity { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0 18px; text-align: center; }
-.group-sidebar-identity canvas { width: min(180px, 100%); height: auto; border-radius: 24px; background: #fff; }
-.group-sidebar-identity h2 { font-size: 20px; line-height: 26px; font-weight: 700; overflow-wrap: anywhere; }
-.group-sidebar-identity p { color: var(--muted); font-size: 14px; }
 .group-sidebar-members .member-row { width: 100%; border: 0; padding: 8px 0; min-height: 60px; font-size: 16px; }
 .chat-date-divider { width: max-content; height: 24px; display: flex; align-items: center; margin: 8px auto; padding: 0 10px; border-radius: 999px; background: var(--fill); color: var(--muted); font-size: 12px; font-weight: 700; }
 
@@ -1032,16 +1028,22 @@ body:has(.business-page) { position: fixed; inset: 0; height: 100dvh; min-height
 .business-page p { color: var(--muted); }
 .business-page input { width: 100%; min-width: 0; }
 .business-page input[type="file"] { min-height: 44px; padding-block: 8px; font-size: 14px; }
-.business-photo { display: grid; justify-items: start; gap: 8px; }
-.business-photo label { position: relative; display: grid; place-items: center; width: 148px; height: 148px; border-radius: 14px; overflow: hidden; background: var(--fill); cursor: pointer; }
+.business-photo { display: grid; justify-items: center; gap: 8px; }
+.business-photo label { position: relative; display: grid; place-items: center; width: min(100%, 280px); aspect-ratio: 1; border-radius: 28px; overflow: hidden; background: var(--fill); cursor: pointer; }
 .business-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .business-photo label > span { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--floating); color: var(--text); box-shadow: var(--shadow-float); }
+.business-photo label:has(img) > span { position: absolute; right: 12px; bottom: 12px; }
 .business-photo .text-button { width: auto; margin: 0; padding: 0; }
 .business-page > form.profile-form { margin-top: 0; }
 .business-form label { font-size: 14px; font-weight: 700; margin-top: 4px; }
 .business-form label > span { color: var(--muted); font-weight: 400; }
-.float-field { position: relative; display: grid; }
-.business-page .float-field input:not([type="file"]) { height: 58px; padding: 20px 20px 4px; }
+.float-field, .clear-field { position: relative; display: grid; }
+.business-page .float-field input:not([type="file"]) { height: 58px; padding: 20px 52px 4px 20px; }
+.business-form .float-field input::placeholder { color: transparent; }
+.business-form .float-field input:focus::placeholder { color: var(--muted); }
+.clear-button { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: none; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: transparent; color: var(--muted); }
+:is(.float-field, .clear-field):focus-within input:not(:placeholder-shown) ~ .clear-button { display: grid; }
+.clear-field input:not([type="file"]) { padding-right: 52px; }
 .business-form .float-field label { position: absolute; left: 21px; top: 50%; margin: 0; transform: translateY(-50%); color: var(--muted); font-size: 16px; font-weight: 400; pointer-events: none; transition: top 160ms ease, font-size 160ms ease; }
 .business-form .float-field input:is(:focus, :not(:placeholder-shown)) + label { top: 16px; font-size: 12px; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .business-form .float-field label { transition: none; } }
@@ -1056,15 +1058,21 @@ body:has(.business-page) { position: fixed; inset: 0; height: 100dvh; min-height
 .business-form label.business-file > span { min-width: 0; overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
 .business-file svg { flex: none; color: var(--danger); }
 .business-form label.business-file.dragging { border-color: var(--text); }
+.business-file-row { position: relative; display: grid; }
+.business-form label.business-file:active { background: var(--line); }
+.business-form label.business-file.has-view { padding-right: 96px; }
+.business-file .business-file-upload { color: var(--muted); }
+.business-file-view { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; height: 38px; padding: 0 16px; border-radius: 999px; background: var(--canvas); color: var(--text); font-size: 14px; font-weight: 700; text-decoration: none; }
 #place-menu:focus-visible + .business-file { outline: 2px solid var(--text); outline-offset: 2px; }
 .business-form label.business-file > span > span { color: var(--muted); }
 #place-photo:focus-visible + label { outline: 2px solid var(--text); outline-offset: 2px; }
-.business-form .off { opacity: .4; }
-.business-form label.business-file.off { cursor: default; }
 .business-page .field-hint a { color: var(--text); font-weight: 700; text-decoration: underline; }
+.business-form { gap: 20px; }
+.business-menu { display: grid; gap: 12px; }
+.business-form .scan-primary.business-download { margin-top: 8px; }
 .business-actions { display: grid; gap: 8px; margin-top: 8px; }
 .business-actions .scan-primary { width: 100%; }
-.business-actions .scan-primary.business-download { width: 50%; justify-self: center; min-height: 44px; padding: 0 16px; font-size: 14px; }
+.business-form .scan-primary.business-download { width: 100%; min-height: 52px; }
 .business-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .business-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; width: 100%; padding: 10px 12px 10px 10px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--text); text-align: left; }
 .business-row img, .business-row .business-qr-placeholder { border-radius: 10px; object-fit: cover; }

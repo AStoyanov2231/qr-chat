@@ -30,6 +30,7 @@ const mocks = {
     export const Alert={alert: (...args) => globalThis.__qrChatNativeTest.alerts.push(args)};
     export const Linking={
       openSettings: async () => { globalThis.__qrChatNativeTest.settingsOpened=true; },
+      openURL: async (url) => { globalThis.__qrChatNativeTest.opened.push(url); },
       getInitialURL: async () => globalThis.__qrChatNativeTest.initialURL ?? null,
       addEventListener: (_event,callback) => { const listeners=globalThis.__qrChatNativeTest.linkListeners; listeners.add(callback); return {remove:()=>listeners.delete(callback)}; },
     };
@@ -185,7 +186,7 @@ registerHooks({
 export function reset() {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, {
-    params: {}, navigation: [], alerts: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
+    params: {}, navigation: [], alerts: [], opened: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
     auth: { userId: 'me', active: true, api: { resolveGroup: async () => null, isBusiness: async () => false } },
     chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, unread: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
     loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},groups:[],friends:[],directPreviews:{}}),

@@ -32,24 +32,22 @@ test('a link without https:// is refused before anything is saved', async (t) =>
   assert.deepEqual(calls[0][1], { name: 'My venue', link: 'https://example.com', menu: null, photo: undefined });
 });
 
-test('the menu is a link or a PDF: both inputs show and the toggle picks the active one', async (t) => {
+test('the menu is a link or a PDF: the toggle shows only the active option', async (t) => {
   reset(); process.env.EXPO_OS = 'ios';
   const calls = businessApi();
   const screen = await render(t, Business);
   await screen.press('Edit My venue');
-  const linkEditable = () => screen.root.findAllByType('NativeTextInput').find((node) => node.props.accessibilityLabel === 'Menu link').props.editable;
-  const pdfDisabled = () => screen.root.findAll((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Upload menu (PDF)')[0].props.disabled;
-  assert.match(screen.text(), /Select menu \(PDF\)/);
-  assert.equal(linkEditable(), true);
-  assert.equal(pdfDisabled(), true);
+  const shown = (label) => screen.root.findAll((node) => node.props?.accessibilityLabel === label).length > 0;
+  assert.equal(shown('Menu link'), true);
+  assert.equal(shown('Upload menu (PDF)'), false);
   await screen.type('Menu link', 'https://example.com');
   await screen.press('PDF');
-  assert.equal(linkEditable(), false);
-  assert.equal(pdfDisabled(), false);
-  assert.match(screen.text(), /Max file size 10 MB/);
+  assert.equal(shown('Menu link'), false);
+  assert.equal(shown('Upload menu (PDF)'), true);
+  assert.match(screen.text(), /max 10 MB/);
   await screen.press('Link');
-  assert.doesNotMatch(screen.text(), /Max file size 10 MB/);
-  assert.equal(linkEditable(), true);
+  assert.doesNotMatch(screen.text(), /max 10 MB/);
+  assert.equal(shown('Menu link'), true);
   await screen.press('PDF');
   await screen.type('Place name', 'My bar');
   await screen.press('Save changes');
@@ -88,11 +86,11 @@ test('a picked photo is passed when a place is created', async (t) => {
   const calls = businessApi();
   const screen = await render(t, Business);
   await screen.press('Add a place');
-  assert.match(screen.text(), /Add place photo \(optional\)/);
+  assert.doesNotMatch(screen.text(), /Remove photo/);
   await screen.type('Place name', 'New bar');
   state.pickerResult = { canceled: false, assets: [{ uri: 'file:///source.png', width: 1200, height: 800 }] };
   await screen.press('Add place photo');
-  assert.match(screen.text(), /Photo selected/);
+  assert.match(screen.text(), /Remove photo/);
   await screen.press('Create place');
   const { photo } = calls[0][1];
   assert.equal(photo.uploadId, '22222222-2222-4222-8222-222222222222');
@@ -106,7 +104,18 @@ test('removing an existing photo is only sent on Save changes', async (t) => {
   await screen.press('Edit My venue');
   assert.equal(calls.length, 0);
   await screen.press('Remove photo');
-  assert.match(screen.text(), /Add photo/);
+  assert.doesNotMatch(screen.text(), /Remove photo/);
   await screen.press('Save changes');
   assert.equal(calls[0][1].photo, null);
+});
+
+test('a saved PDF opens from the View button inside the Replace PDF pill', async (t) => {
+  reset(); process.env.EXPO_OS = 'ios';
+  const calls = businessApi([{ ...place, menu_path: 'me/m.pdf', menu_url: 'https://cdn.example/m.pdf' }]);
+  const screen = await render(t, Business);
+  await screen.press('Edit My venue');
+  assert.match(screen.text(), /Replace PDF/);
+  await screen.press('View current menu');
+  assert.deepEqual(state.opened, ['https://cdn.example/m.pdf']);
+  assert.equal(calls.length, 0);
 });

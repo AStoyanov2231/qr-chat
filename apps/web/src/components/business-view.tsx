@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { ArrowLeft, Camera, CaretRight, DownloadSimple, FilePdf, LinkSimple, Plus, Trash } from "@phosphor-icons/react";
+import { ArrowLeft, Camera, CaretRight, DownloadSimple, FilePdf, LinkSimple, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createChatApi, type ChatApi, type Place } from "@qr-chat/api";
 import { qrPayload } from "@qr-chat/domain";
+import { ClearButton } from "@/components/clear-button";
 import { errorMessage } from "@/hooks/use-chat-backend";
 import { appOrigin } from "@/lib/app-origin";
 import { prepareAvatar } from "@/lib/avatar";
@@ -106,6 +107,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   const [link, setLink] = useState(place?.link_url ?? "");
   const [menu, setMenu] = useState<File | undefined>();
   const isLink = kind === "link";
+  const viewable = !!place?.menu_url && !menu;
   const [dragging, setDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -131,13 +133,13 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   return <main className="business-page">
     <header>
       <button type="button" className="back-button" aria-label="Back to places" disabled={saving} onClick={onBack}><ArrowLeft size={20} weight="bold" /></button>
-      <h1>{place ? place.name : "New place"}</h1>
+      <h1>{place ? "Edit place" : "New place"}</h1>
     </header>
-    {/* One square for picking the photo; the camera sits on top of the current photo when there is one. */}
+    {/* A large square preview of the photo guests will see; the camera sits in its corner once there is one. */}
     {(!readOnly || shown) && <section className="business-photo" aria-label="Place photo">
       <input id="place-photo" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled} onChange={(event) => { void pickPhoto(event.target.files?.[0]); event.target.value = ""; }} />
       <label htmlFor="place-photo" aria-label={readOnly ? undefined : shown ? "Change place photo" : "Add place photo"}>
-        {shown && <Image src={shown} alt={`Photo of ${name || "your place"}`} width={148} height={148} unoptimized />}
+        {shown && <Image src={shown} alt={`Photo of ${name || "your place"}`} width={280} height={280} unoptimized />}
         {!readOnly && <span aria-hidden="true"><Camera size={24} weight="bold" /></span>}
       </label>
       {shown && !readOnly && <button type="button" className="text-button" disabled={saving} onClick={removePhoto}>Remove photo</button>}
@@ -158,32 +160,39 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
       <div className="float-field">
         <input id="place-name" value={name} maxLength={100} placeholder=" " disabled={disabled} onChange={(event) => setName(event.target.value)} required />
         <label htmlFor="place-name">Place name</label>
+        <ClearButton label="Clear place name" inputId="place-name" disabled={disabled} onClear={() => setName("")} />
       </div>
-      <div className="business-kind" data-kind={kind} role="group" aria-label="Menu type">
-        <button type="button" aria-pressed={kind === "link"} disabled={disabled} onClick={() => setKind("link")}><LinkSimple size={18} weight="bold" aria-hidden="true" />Link</button>
-        <button type="button" aria-pressed={kind === "pdf"} disabled={disabled} onClick={() => setKind("pdf")}><FilePdf size={18} weight="bold" aria-hidden="true" />PDF</button>
+      <div className="business-menu">
+        <div className="business-kind" data-kind={kind} role="group" aria-label="Menu type">
+          <button type="button" aria-pressed={kind === "link"} disabled={disabled} onClick={() => setKind("link")}><LinkSimple size={18} weight="bold" aria-hidden="true" />Link</button>
+          <button type="button" aria-pressed={kind === "pdf"} disabled={disabled} onClick={() => setKind("pdf")}><FilePdf size={18} weight="bold" aria-hidden="true" />PDF</button>
+        </div>
+        {isLink ? <>
+          {/* The label sits inside the field and moves up as a hint once it has focus or a value; needs placeholder=" " for :placeholder-shown. */}
+          <div className="float-field">
+            <input id="place-link" type="url" inputMode="url" value={link} maxLength={2048} placeholder="https://" pattern={HTTPS} title="Use a link that starts with https://" disabled={disabled} onChange={(event) => setLink(event.target.value)} />
+            <label htmlFor="place-link">Menu link <span>(optional)</span></label>
+            <ClearButton label="Clear menu link" inputId="place-link" disabled={disabled} onClear={() => setLink("")} />
+          </div>
+        </> : <>
+          <div className="business-file-row">
+            <input id="place-menu" className="sr-only" type="file" accept="application/pdf" disabled={disabled} onChange={(event) => { pick(event.target.files?.[0]); event.target.value = ""; }} />
+            <label htmlFor="place-menu" className={`business-file${dragging ? " dragging" : ""}${viewable ? " has-view" : ""}`}
+              onDragOver={(event) => { event.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)}
+              onDrop={(event) => { event.preventDefault(); setDragging(false); if (!disabled) pick(event.dataTransfer.files[0]); }}>
+              <FilePdf size={32} aria-hidden="true" />
+              <span>{menu ? menu.name : place?.menu_url ? "Replace PDF" : <>Select PDF <span>(max 10 MB)</span></>}</span>
+              {!viewable && <UploadSimple className="business-file-upload" size={20} aria-hidden="true" />}
+            </label>
+            {viewable && <a className="business-file-view" href={place.menu_url!} target="_blank" rel="noopener noreferrer" aria-label="View current menu">View</a>}
+          </div>
+          {menu && <button type="button" className="text-button" disabled={disabled} onClick={() => setMenu(undefined)}>Remove file</button>}
+        </>}
       </div>
-      {/* The label sits inside the field and moves up as a hint once it has focus or a value; needs placeholder=" " for :placeholder-shown. */}
-      <div className={`float-field${isLink ? "" : " off"}`}>
-        <input id="place-link" type="url" inputMode="url" value={link} maxLength={2048} placeholder=" " pattern={HTTPS} title="Use a link that starts with https://" aria-describedby="place-link-hint" disabled={disabled || !isLink} onChange={(event) => setLink(event.target.value)} />
-        <label htmlFor="place-link">Menu link <span>(optional)</span></label>
-      </div>
-      <small id="place-link-hint" className={`field-hint${isLink ? "" : " off"}`}>A link to your menu, starting with https://. Guests open it from the group chat.</small>
-      <input id="place-menu" className="sr-only" type="file" accept="application/pdf" aria-describedby="place-menu-hint" disabled={disabled || isLink} onChange={(event) => { pick(event.target.files?.[0]); event.target.value = ""; }} />
-      <label htmlFor="place-menu" className={`business-file${isLink ? " off" : ""}${dragging ? " dragging" : ""}`}
-        onDragOver={(event) => { event.preventDefault(); if (!disabled && !isLink) setDragging(true); }} onDragLeave={() => setDragging(false)}
-        onDrop={(event) => { event.preventDefault(); setDragging(false); if (!disabled && !isLink) pick(event.dataTransfer.files[0]); }}>
-        <FilePdf size={32} aria-hidden="true" />
-        <span>{menu ? menu.name : place?.menu_url ? "Replace PDF" : <>Select menu (PDF) <span>(optional)</span></>}</span>
-      </label>
-      {!isLink && <>
-        {menu && <button type="button" className="text-button" disabled={disabled} onClick={() => setMenu(undefined)}>Remove file</button>}
-        <small id="place-menu-hint" className="field-hint">Max file size 10 MB. Only PDF files are supported.{place?.menu_url && <> <a href={place.menu_url} target="_blank" rel="noopener noreferrer">View current menu</a></>}</small>
-      </>}
-      {(!readOnly || place) && <div className="business-actions">
+      {place && qr && <a className="scan-primary subtle business-download" href={qr} download={file}><DownloadSimple size={16} weight="bold" />Download QR</a>}
+      {!readOnly && <div className="business-actions">
         {error && <p className="form-error" role="alert">{error}</p>}
-        {!readOnly && <button className="scan-primary" disabled={saving || !name.trim() || !dirty}>{saving ? "Saving…" : place ? "Save changes" : "Create place"}</button>}
-        {place && qr && <a className="scan-primary subtle business-download" href={qr} download={file}><DownloadSimple size={16} weight="bold" />Download QR</a>}
+        <button className="scan-primary" disabled={saving || !name.trim() || !dirty}>{saving ? "Saving…" : place ? "Save changes" : "Create place"}</button>
       </div>}
     </form>
   </main>;

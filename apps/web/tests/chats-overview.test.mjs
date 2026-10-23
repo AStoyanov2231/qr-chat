@@ -42,6 +42,7 @@ async function loadTsxModule(relativePath) {
     if (specifier === './conversation-header') return conversationHeader;
     if (specifier === '@/components/avatar') return { Avatar };
     if (specifier === '@/components/icon') return { Icon };
+    if (specifier === '@/components/clear-button') return { ClearButton: () => null };
     if (specifier === '@/components/mobile-chat') return { default: () => null };
     if (specifier === '@/lib/avatar') return { prepareAvatar: async () => null };
     return requireFromTest(specifier);

@@ -48,6 +48,8 @@ async function loadResolver(db, fetches) {
     '@supabase/supabase-js': { createClient: () => db.client },
     '@qr-chat/domain': await import('@qr-chat/domain'),
     '@qr-chat/validation': await import('@qr-chat/validation'),
+    './page-meta': await import('../src/lib/page-meta.ts'),
+    'node:dns/promises': { lookup: async (host) => [{ address: host === 'internal.test' ? '10.0.0.5' : '93.184.216.34' }] },
   });
   return { resolveGroup: resolver.resolveGroup, restore: () => { globalThis.fetch = previous; } };
 }
@@ -73,13 +75,45 @@ test('product lookup names and photographs only an unnamed group the caller is a
   assert.deepEqual(write[2], { name: 'Fanta Orange', image_path: 'p/5449000006271.jpg' });
 });
 
-test('a QR group is named from its host and no site is ever fetched', async (t) => {
+test('a website QR takes the page title and og:image, and stores the image once per group', async (t) => {
   const db = fakeDb([activeMember(), { data: null, error: null }]);
-  const { resolveGroup, restore } = await loadResolver(db, []);
+  const seen = [];
+  const html = '<meta property="og:title" content="Happy Cafe"><meta property="og:image" content="/cover.png">';
+  const { resolveGroup, restore } = await loadResolver(db, [
+    (url) => { seen.push(url); return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } }); },
+    (url) => { seen.push(url); return new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } }); },
+  ]);
   t.after(restore);
-  assert.equal(await resolveGroup('user-1', 'https://www.happy.com/menu'), 'happy');
-  const write = db.log.filter(([table, method]) => table === 'groups' && method === 'update').at(-1);
-  assert.deepEqual(write[2], { name: 'happy', image_path: null });
+  assert.equal(await resolveGroup('user-1', 'https://www.happy.com/menu'), 'Happy Cafe');
+  assert.deepEqual(seen, ['https://www.happy.com/menu', 'https://www.happy.com/cover.png']);
+  const upload = db.log.find(([, method]) => method === 'upload');
+  assert.match(upload[2], /^u\/[0-9a-f]{64}\.png$/);
+  assert.deepEqual(db.log.filter(([table, method]) => table === 'groups' && method === 'update').at(-1)[2], { name: 'Happy Cafe', image_path: upload[2] });
+  assert.equal(db.log.find(([table, method]) => table === 'pages' && method === 'upsert')[2].failed, false);
+});
+
+test('a cached website is reused for a week, a failed one for an hour', async (t) => {
+  const row = (age, failed) => ({ data: { name: failed ? null : 'Happy Cafe', image_path: null, failed, fetched_at: new Date(Date.now() - age).toISOString() }, error: null });
+  const day = 24 * 60 * 60 * 1000;
+  for (const [cached, fetches, expected] of [[row(6 * day, false), [], 'Happy Cafe'], [row(60_000, true), [], 'happy'], [row(8 * day, false), [() => new Response('<title>New</title>', { headers: { 'content-type': 'text/html' } })], 'New'], [row(2 * 60 * 60 * 1000, true), [() => new Response('<title>Back</title>', { headers: { 'content-type': 'text/html' } })], 'Back']]) {
+    const db = fakeDb([activeMember(), cached]);
+    const { resolveGroup, restore } = await loadResolver(db, fetches);
+    t.after(restore);
+    assert.equal(await resolveGroup('user-1', 'https://www.happy.com/menu'), expected);
+    assert.equal(fetches.length, 0);
+  }
+});
+
+test('a website QR falls back to the host name when the page cannot be read or is not public', async (t) => {
+  for (const [code, fetches] of [['https://www.happy.com/menu', [() => new Response('nope', { status: 500 })]], ['https://internal.test/', []], ['http://169.254.169.254/latest', []]]) {
+    const db = fakeDb([activeMember(), { data: null, error: null }]);
+    const { resolveGroup, restore } = await loadResolver(db, fetches);
+    t.after(restore);
+    const name = await resolveGroup('user-1', code);
+    assert.equal(name, code.includes('happy') ? 'happy' : code.includes('internal') ? 'internal' : null);
+    assert.equal(fetches.length, 0);
+    if (name) assert.deepEqual(db.log.filter(([table, method]) => table === 'groups' && method === 'update').at(-1)[2], { name, image_path: null });
+  }
 });
 
 test('non-members, named groups and throttled groups never trigger a lookup', async (t) => {
