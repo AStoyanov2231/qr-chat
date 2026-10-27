@@ -13,6 +13,7 @@ function Navigation() {
   return <Stack screenOptions={{ statusBarStyle: 'dark', headerShadowVisible: false, contentStyle: { backgroundColor: colors.canvas }, headerTintColor: colors.text }}>
     <Stack.Protected guard={!!userId}><Stack.Screen name="(app)" options={{ headerShown: false }} /></Stack.Protected>
     <Stack.Protected guard={!userId}><Stack.Screen name="sign-in" options={{ headerShown: false }} /></Stack.Protected>
+    <Stack.Screen name="v/[id]" options={{ headerShown: false }} />
     <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
   </Stack>;
 }

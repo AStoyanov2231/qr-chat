@@ -5,7 +5,9 @@ import * as SecureStore from 'expo-secure-store';
 import { createSessionStorage } from './secure-storage';
 
 export const authCallback = 'qrchat://auth/callback';
-export const webOrigin = process.env.EXPO_PUBLIC_WEB_ORIGIN ?? '';
+export const webOrigin = (process.env.EXPO_PUBLIC_WEB_ORIGIN ?? '').trim().replace(/\/+$/u, '');
+// Without it, delete-account fails as "sign in again" and venue QRs print as raw v:xxxx.
+if (__DEV__ && !webOrigin) throw new Error('EXPO_PUBLIC_WEB_ORIGIN is not set. Add it to apps/mobile/.env.local (e.g. https://your-host) and restart Expo.');
 export const providers = {
   google: process.env.EXPO_PUBLIC_ENABLE_GOOGLE_AUTH === 'true',
 };
@@ -40,8 +42,8 @@ export function getNativeApi(observer?: RequestObserver) {
     storage, storageKey: 'qrchat.auth', persistSession: true, autoRefreshToken: true,
     detectSessionInUrl: false, flowType: 'pkce',
   } }), {
-    qrNameEndpoint: webOrigin ? `${webOrigin.replace(/\/+$/u, '')}/api/qr-name` : '',
-    accountEndpoint: webOrigin ? `${webOrigin.replace(/\/+$/u, '')}/api/account` : '',
+    qrNameEndpoint: webOrigin ? `${webOrigin}/api/qr-name` : '',
+    accountEndpoint: webOrigin ? `${webOrigin}/api/account` : '',
   });
   return api;
 }

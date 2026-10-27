@@ -5,6 +5,7 @@ import { createChatApi } from '../../../packages/api/src/index.ts';
 import { resolveCode } from '../../web/src/lib/chat-view.ts';
 
 const { default: Scan } = await import('../src/app/(app)/scan.tsx');
+const { default: VenueLink } = await import('../src/app/v/[id].tsx');
 const { default: Join } = await import('../src/app/(app)/join.tsx');
 const { default: Room } = await import('../src/app/(app)/room.tsx');
 const { roomRoute } = await import('../src/lib/room-route.ts');
@@ -37,6 +38,7 @@ for (const platform of ['ios', 'android']) {
       assert.ok(!room.text().includes(code), 'The opaque QR key is not shown as a room name');
       await room.press('Scan to rejoin');
       assert.deepEqual(state.navigation.at(-1), ['push', '/scan']);
+      state.params = {};
       const rescan = await render(t, Scan);
       await act(async () => { rescan.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data: code }); });
       assert.deepEqual(calls.at(-1), ['join_qr_group', { p_code_key: resolveCode(code, origin).codes[0] }]);
@@ -55,6 +57,7 @@ for (const platform of ['ios', 'android']) {
       await render(t, Join);
       assert.equal(joined, undefined);
       assert.deepEqual(state.navigation.at(-1), ['replace', '/scan']);
+      state.params = {};
       const scanner = await render(t, Scan);
       await act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data: `${origin}/chats?code=${encodeURIComponent(code)}` }); });
       assert.equal(joined, resolveCode(`${origin}/chats?code=${encodeURIComponent(code)}`, origin).codes[0]);
@@ -70,5 +73,63 @@ for (const platform of ['ios', 'android']) {
     await act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ type: 'upc_a', data: '049000006278' }); });
     assert.deepEqual(joined, ['gtin:0049000006278']);
     assert.deepEqual(state.navigation.at(-1), ['replace', roomRoute({ id: groupId, venue: { codes: ['gtin:0049000006278'], name: 'Product 0049000006278' } })]);
+  });
+
+  test(`${platform}: a bad scan locks the camera briefly, never throws, and a later join error is not hidden`, async (t) => {
+    process.env.EXPO_OS = platform;
+    reset();
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const calls = [];
+    state.auth.api = { joinGroup: async (code) => { calls.push(code); throw new Error('Join failed.'); }, resolveGroup: async () => null };
+    const scanner = await render(t, Scan);
+    const scan = (data) => act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data }); });
+    await scan('http://');
+    assert.ok(scanner.text().includes('This code is invalid'), 'A malformed URL is reported, not thrown');
+    t.mock.timers.tick(1200);
+    await scan('Room-A');
+    await scan('Room-A');
+    assert.deepEqual(calls, ['Room-A'], 'A failed join is not retried on every frame');
+    assert.ok(scanner.text().includes('Join failed.') && !scanner.text().includes('This code is invalid'), 'The stale scan error is cleared');
+    t.mock.timers.tick(1200);
+    await scan('Room-A');
+    assert.equal(calls.length, 2, 'The camera scans again after the lock');
+  });
+
+  test(`${platform}: Close falls back to home after a deep-link cold start, and a scan before the chat is ready says so`, async (t) => {
+    process.env.EXPO_OS = platform;
+    reset();
+    state.canGoBack = false;
+    state.chat.ready = false;
+    const scanner = await render(t, Scan);
+    assert.ok(scanner.text().includes('Getting your chats ready'));
+    const close = () => scanner.root.findByType('NativeStackScreen').props.options.headerRight().props.onPress();
+    close();
+    assert.deepEqual(state.navigation.at(-1), ['replace', '/']);
+    state.canGoBack = true;
+    close();
+    assert.deepEqual(state.navigation.at(-1), ['back']);
+  });
+
+  test(`${platform}: a venue link joins its venue once signed in, and waits at sign-in until then`, async (t) => {
+    process.env.EXPO_OS = platform;
+    reset();
+    state.params = { id: 'abcdefghij' };
+    state.auth.userId = null;
+    const signedOut = await render(t, VenueLink);
+    assert.deepEqual(state.navigation, [], 'The destination stays on this route while signed out');
+    assert.ok(signedOut.text().includes('Find your people'));
+    state.auth.userId = 'me';
+    await signedOut.update();
+    assert.deepEqual(state.navigation.at(-1), ['replace', { pathname: '/scan', params: { code: 'v:abcdefghij' } }]);
+
+    const joined = [];
+    state.auth.api = { joinGroup: async (code) => { joined.push(code); return { group_id: groupId }; }, resolveGroup: async () => 'Cafe' };
+    state.chat.ready = false;
+    navigate(state.navigation.at(-1)[1]);
+    const scanner = await render(t, Scan);
+    assert.deepEqual(joined, [], 'The link waits for the chat to be ready');
+    state.chat.ready = true;
+    await scanner.update();
+    assert.deepEqual(joined, ['v:abcdefghij']);
   });
 }
