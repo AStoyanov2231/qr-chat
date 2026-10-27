@@ -22,6 +22,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   const recoveries = new Set<string>();
   const olderPages = new Set<string>();
   const validations = new Set<string>();
+  // Conversations whose access was checked this session; later message reads rely on RLS alone.
+  const verified = new Set<string>();
   const pendingWrites = new Map<string, Row[]>();
   const writtenIds = new Map<string, Set<number>>();
   const directViews = new Map<string, number>();
@@ -112,7 +114,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   }
   function forgetConversation(key: string) {
     conversations.delete(key); pendingIds.delete(key); pendingWrites.delete(key); writtenIds.delete(key);
-    recoveries.delete(key); olderPages.delete(key); validations.delete(key);
+    recoveries.delete(key); olderPages.delete(key); validations.delete(key); verified.delete(key);
   }
   function prune(access: ChatAccess) {
     const allowed = new Set(access.acceptedConnectionIds);
@@ -131,7 +133,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!current(ticket)) return;
     generation++; controller.abort(); controller = new AbortController();
     // Cached private bodies are discarded when access cannot be checked.
-    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear();
+    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); verified.clear();
     publish({ snapshot: emptySnapshot, directs: {}, groupErrors: {}, ready: false, groupLoading: false, error: error instanceof Error ? error.message : 'Could not synchronize.', connection: 'reconnecting' });
     stopWatcher();
     clearTimeout(retry);
@@ -157,7 +159,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     watcherKey = key;
     if (watcher) { watcher.update(topics); return; }
     const ticket = generation;
-    watcher = watchChanges(api.client, topics, () => refresh('reconnect'), (connection) => { if (current(ticket)) publish({ connection }); }, {
+    // A (re)join compares head ids like a poll; validating the whole cached range is left to resume.
+    watcher = watchChanges(api.client, topics, () => refresh('subscribed'), (connection) => { if (current(ticket)) publish({ connection }); }, {
       onChange: event, random, coordinated: true,
       // Overview polling compares head ids, so unchanged conversations download nothing.
       fallbackMs: options.fallbackMs ?? 5000, onPoll: () => refresh('poll'),
@@ -295,6 +298,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
           const rows = key.startsWith('g:') ? await api.groupMessageIds(id, batch, signal) : await api.directMessageIds(id, batch, signal);
           for (const row of rows) next.rows.set(row.id, row);
         }
+        // An ID the server withholds may mean lost access.
+        const withheld = missing.some((id) => !next.rows.has(id));
         const needsRecovery = recoveries.delete(key);
         const needsOlder = olderPages.delete(key);
         const validateCachedRange = validations.delete(key);
@@ -311,13 +316,16 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
           next.rows = new Map([[latest.id, latest]]);
         }
         if (next.loaded) next.headIds = [...next.rows.keys()].sort((a, b) => b - a).slice(0, 50);
-        const access = await checkAccess(ticket);
-        if (!access || (key.startsWith('g:') ? !access.memberships.some((membership) => membership.group_id === id) : !access.acceptedConnectionIds.includes(id))) { updateWatcher(); return; }
+        if (needsRecovery || withheld || !verified.has(key)) {
+          const access = await checkAccess(ticket);
+          if (!access || (key.startsWith('g:') ? !access.memberships.some((membership) => membership.group_id === id) : !access.acceptedConnectionIds.includes(id))) { updateWatcher(); return; }
+          verified.add(key);
+        } else if (!current(ticket) || (key.startsWith('g:') ? !hasGroup(id) : !accepted().has(id))) return;
         conversations.set(key, next);
         for (const id of ids) pendingIds.get(key)?.delete(id);
         pendingWrites.set(key, (pendingWrites.get(key) ?? []).filter((row) => !writes.includes(row)));
         publishMessages(key); track(id, fresh);
-      } catch (error) { if (current(ticket)) conversationFailed(key, error); throw error; }
+      } catch (error) { verified.delete(key); if (current(ticket)) conversationFailed(key, error); throw error; }
     });
   }
   function event(change: ChangeEvent) {
@@ -350,7 +358,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   function resetIdentity(id: string | null) {
     generation++; controller.abort(); controller = new AbortController(); coordinator.cancel(); stopWatcher();
     clearTimeout(expiry); clearTimeout(retry); attempts = 0;
-    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); recoverOverview = false; identity = id;
+    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); verified.clear(); recoverOverview = false; identity = id;
     unreadAfter.clear(); readIds.clear();
     publish({ ...initialState });
   }
@@ -358,7 +366,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!active) return;
     active = false; generation++; controller.abort(); coordinator.cancel(); stopWatcher();
     // Loaded chats stay on screen; own sent rows stay pending for the next read.
-    pendingIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); recoverOverview = false;
+    pendingIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); verified.clear(); recoverOverview = false;
     clearTimeout(safety); clearTimeout(expiry); clearTimeout(retry);
     publish({ connection: 'reconnecting' });
   }
