@@ -6,11 +6,14 @@ import { messageDayLabel, type Message } from '@qr-chat/domain';
 import { Copy, ErrorNotice, Icon, NativeInput, Skeleton, TextButton, colors, styles, useAction, OwnerTag } from './chat-ui';
 import { Avatar } from './avatar';
 import { useChatKeyboard } from '@/hooks/use-chat-keyboard';
-import { useOutbox, type OutboxItem } from '@/hooks/use-outbox';
+import type { OutboxItem } from '@/hooks/use-outbox';
+import { useChat } from '@/providers/chat-provider';
 
 type Row = Message & { outbox?: OutboxItem };
 
 type Props = {
+  /** Outbox key: `g:<group id>` or `d:<connection id>`, as on web. */
+  conversation: string;
   messages: Message[];
   userId: string;
   loading?: boolean;
@@ -19,7 +22,7 @@ type Props = {
   nextCursor: number | null;
   loadOlder: () => Promise<void>;
   refresh: () => Promise<void>;
-  send: (body: string) => Promise<unknown>;
+  send: (body: string, clientId: string) => Promise<unknown>;
   unavailable: string;
   avatars?: boolean;
   emptyState?: ReactElement | null;
@@ -30,21 +33,21 @@ type Props = {
   ownerId?: string;
 };
 
-export function Conversation({ messages, userId, loading, error, available, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, emptyState, composerLabel = 'Message', endedAction, openProfile, canOpenProfile, ownerId }: Props) {
+export function Conversation({ conversation, messages, userId, loading, error, available, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, emptyState, composerLabel = 'Message', endedAction, openProfile, canOpenProfile, ownerId }: Props) {
   const [draft, setDraft] = useState('');
   const action = useAction();
-  const outbox = useOutbox();
+  const { outbox } = useChat();
   const list = useRef<FlatList<Row>>(null);
   const insets = useSafeAreaInsets();
   const keyboard = useChatKeyboard();
   const bottomPadding = Math.max(insets.bottom, 12);
   const composer = useAnimatedStyle(() => ({ paddingBottom: Math.max(keyboard.height.value + 8, bottomPadding) }));
   const sendDisabled = loading || !!error || !draft.trim();
-  const pending: Row[] = outbox.visible(messages.map((message) => message.id))
+  const pending: Row[] = outbox.visible(conversation, messages.map((message) => message.id))
     .map((item) => ({ id: item.key, user: userId, name: '', text: item.text, time: item.time, outbox: item }));
   const rows: Row[] = available ? [...messages, ...pending].reverse() : [];
-  const deliver = async (body: string) => {
-    const message = await send(body);
+  const deliver = async (body: string, clientId: string) => {
+    const message = await send(body, clientId);
     void refresh().catch(() => {});
     return message;
   };
@@ -52,7 +55,7 @@ export function Conversation({ messages, userId, loading, error, available, next
   // The draft clears and the message shows at once; the field stays editable so the keyboard stays open.
   function submit() {
     if (sendDisabled) return;
-    outbox.send(draft, deliver);
+    outbox.send(conversation, draft, deliver);
     setDraft('');
     list.current?.scrollToOffset({ offset: 0, animated: true });
   }

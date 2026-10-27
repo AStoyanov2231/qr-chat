@@ -58,6 +58,7 @@ export default function DirectScreen() {
     <ChatBar title={peerName} />
     <Conversation
       key={id}
+      conversation={`d:${id}`}
       avatars
       messages={messages}
       userId={userId!}
@@ -67,7 +68,7 @@ export default function DirectScreen() {
       nextCursor={direct.nextCursor}
       loadOlder={direct.loadOlder}
       refresh={refresh}
-      send={(body) => api!.sendDirectMessage(id, body)}
+      send={(body, clientId) => api!.sendDirectMessage(id, body, clientId)}
       unavailable={chat.error ? 'Reconnect to open this conversation.' : 'This friendship is no longer available.'}
       emptyState={emptyState}
       composerLabel={`Message ${peerName}`}

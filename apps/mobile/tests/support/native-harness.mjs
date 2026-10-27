@@ -131,11 +131,14 @@ const mocks = {
   'expo-symbols': "export const SymbolView='SymbolView';",
   'expo-camera': `export const CameraView='CameraView'; const request=async()=>{globalThis.__qrChatNativeTest.permissionRequested=true;}; const get=async()=>{globalThis.__qrChatNativeTest.permissionChecked=true;}; export const useCameraPermissions=()=>[globalThis.__qrChatNativeTest.permission,request,get];`,
   '@/providers/auth-provider': 'export const useAuth=()=>globalThis.__qrChatNativeTest.auth;',
-  '@/providers/chat-provider': 'export const useChat=()=>globalThis.__qrChatNativeTest.chat; export const ChatProvider=({children})=>children; export const errorMessage=error=>error.message || "Could not connect. Please try again.";',
+  // The real outbox hook, so conversations exercise send, retry and placeholder hand-off.
+  '@/providers/chat-provider': `import {useOutbox} from '${new URL('../../src/hooks/use-outbox.ts', import.meta.url).href}'; export const useChat=()=>{const chat=globalThis.__qrChatNativeTest.chat; chat.outbox=useOutbox(); return chat;}; export const ChatProvider=({children})=>children; export const errorMessage=error=>error.message || "Could not connect. Please try again.";`,
   '@/lib/supabase': 'export const webOrigin="https://chat.example"; export const authCallback="qrchat://auth/callback"; export const providers={google:true}; export const getNativeApi=()=>globalThis.__qrChatNativeTest.nativeApi ?? null;',
   '@/lib/oauth': 'export const completeSignIn=(...args)=>globalThis.__qrChatNativeTest.completeSignIn(...args);',
   '@qr-chat/api': `
     export {getChatStore} from '${new URL('./chat-store.mjs', import.meta.url).href}';
+    export {createOutbox, visibleOutbox} from '${new URL('../../../../packages/api/src/outbox.ts', import.meta.url).href}';
+    export {errorMessage} from '${new URL('../../../../packages/api/src/error-message.ts', import.meta.url).href}';
     export const loadDirectSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadDirectSnapshot(...args);
     export const loadChatSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadChatSnapshot(...args);
     export const emptySnapshot={session:null,groups:[],friends:[],directPreviews:{},unread:{}};

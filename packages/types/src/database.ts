@@ -134,6 +134,7 @@ export type Database = {
       messages: {
         Row: {
           body: string
+          client_id: string | null
           created_at: string
           group_id: string
           id: number
@@ -141,6 +142,7 @@ export type Database = {
         }
         Insert: {
           body: string
+          client_id?: string | null
           created_at?: string
           group_id: string
           id?: never
@@ -148,6 +150,7 @@ export type Database = {
         }
         Update: {
           body?: string
+          client_id?: string | null
           created_at?: string
           group_id?: string
           id?: never

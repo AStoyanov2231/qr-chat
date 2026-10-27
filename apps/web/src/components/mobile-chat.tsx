@@ -452,13 +452,13 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     });
   }
 
-  const sendGroup = (groupId: string) => async (body: string) => {
-    const message = await api.sendGroupMessage(groupId, body);
+  const sendGroup = (groupId: string) => async (body: string, clientId: string) => {
+    const message = await api.sendGroupMessage(groupId, body, clientId);
     void backend.refreshGroup(groupId).catch(() => {});
     return message;
   };
-  const sendDirect = (connectionId: string) => async (body: string) => {
-    const message = await api.sendDirectMessage(connectionId, body);
+  const sendDirect = (connectionId: string) => async (body: string, clientId: string) => {
+    const message = await api.sendDirectMessage(connectionId, body, clientId);
     void direct.refresh().catch(() => {});
     return message;
   };

@@ -4,6 +4,9 @@ import { codeKeySchema, productNameSchema, placeNameSchema, placeLinkSchema, men
 import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage, Friend, Profile } from "./overview.ts";
 export { getChatStore, createChatStore } from "./store.ts";
 export { createObservedFetch } from "./requests.ts";
+export { createOutbox, visibleOutbox } from "./outbox.ts";
+export type { OutboxItem, OutboxSend } from "./outbox.ts";
+export { errorMessage } from "./error-message.ts";
 export type { RequestObservation, RequestObserver } from "./requests.ts";
 export type { ChatOverview, ChatAccess } from "./overview.ts";
 export type AvatarUpload = { uploadId: string; data: ArrayBuffer };
@@ -37,6 +40,9 @@ async function result<T>(request: PromiseLike<{ data: T; error: { message: strin
   if (data === null || data === undefined) throw new ChatApiError("The requested data is no longer available.", "NOT_AVAILABLE");
   return data;
 }
+
+// A send repeated with the same client_id hits the unique key and inserts nothing; the caller then reads the first row back.
+const sendOnce = { onConflict: "sender_id,client_id", ignoreDuplicates: true };
 
 /** Inject an authenticated public client. Session storage and auth lifecycle belong to the host platform. */
 export function createChatApi(
@@ -186,11 +192,15 @@ export function createChatApi(
       if (signal) query = query.abortSignal(signal);
       return result(query);
     },
-    async sendGroupMessage(groupId: string, body: unknown) {
+    /** clientId makes the send idempotent: a retry with the same id returns the first stored row instead of a second one. */
+    async sendGroupMessage(groupId: string, body: unknown, clientId?: string) {
       const group_id = userIdSchema.parse(groupId);
       const content = messageBodySchema.parse(body);
+      const client_id = clientId === undefined ? undefined : userIdSchema.parse(clientId);
       const id = await userId();
-      const message = withProfiles(await result(client.from("messages").insert({ group_id, body: content, sender_id: id }).select("*, profiles(display_name, avatar_path)").single()));
+      const columns = "*, profiles(display_name, avatar_path)";
+      const message = withProfiles(await nullableResult(client.from("messages").upsert({ group_id, body: content, sender_id: id, client_id }, sendOnce).select(columns).maybeSingle())
+        ?? await result(client.from("messages").select(columns).eq("sender_id", id).eq("client_id", client_id!).single()));
       emit({ kind: "group", userId: id, message });
       return message;
     },
@@ -226,11 +236,13 @@ export function createChatApi(
       const items = rows.slice(0, limit);
       return { items, nextCursor: rows.length > limit ? items.at(-1)!.id : null };
     },
-    async sendDirectMessage(connectionId: string, body: unknown) {
+    async sendDirectMessage(connectionId: string, body: unknown, clientId?: string) {
       const group_id = userIdSchema.parse(connectionId);
       const content = messageBodySchema.parse(body);
+      const client_id = clientId === undefined ? undefined : userIdSchema.parse(clientId);
       const id = await userId();
-      const message = await result(client.from("messages").insert({ group_id, body: content, sender_id: id }).select().single());
+      const message = await nullableResult(client.from("messages").upsert({ group_id, body: content, sender_id: id, client_id }, sendOnce).select().maybeSingle())
+        ?? await result(client.from("messages").select().eq("sender_id", id).eq("client_id", client_id!).single());
       emit({ kind: "direct", userId: id, message });
       return message;
     },
@@ -298,8 +310,9 @@ export function createChatApi(
     },
     /** Permanently erases the signed-in account on the server, then clears the local session. */
     async deleteAccount() {
+      if (!accountEndpoint) throw new ChatApiError("Account deletion isn't available: this app's account endpoint isn't configured.", "NOT_CONFIGURED");
       const { data } = await client.auth.getSession();
-      if (!accountEndpoint || !data.session) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
+      if (!data.session) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
       const response = await fetcher(accountEndpoint, { method: "DELETE", credentials: "same-origin", headers: { authorization: `Bearer ${data.session.access_token}` } });
       if (!response.ok) throw new ChatApiError("Could not delete your account. Please try again.");
       await client.auth.signOut({ scope: "local" }).catch(() => {});
