@@ -167,6 +167,12 @@ function finiteTimestamp(value: string | null): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+/** Owner groups expire at "infinity", which has no start time. */
+function groupStartTime(expiresAt: string | null): number | null {
+  const expiry = finiteTimestamp(expiresAt);
+  return expiry === null ? null : expiry - GROUP_ACCESS_DURATION_MS;
+}
+
 /** Sort conversations by latest message, then friendship acceptance, then request time. */
 export function directConversationTime(
   message: { created_at: string } | null,
@@ -188,7 +194,7 @@ export type ChatRow<F extends ChatFriend> =
 export function chatRows<F extends ChatFriend>(groups: Group[], friends: F[], previews: Record<string, ChatPreview>): ChatRow<F>[] {
   const preview = (id: string) => { const value = previews[id]; return value?.status === "ready" ? value.message : null; };
   return [
-    ...groups.map((group): ChatRow<F> => ({ kind: "group", id: group.id, group, time: group.messages.at(-1)?.time ?? (group.expiresAt ? Date.parse(group.expiresAt) - GROUP_ACCESS_DURATION_MS : 0) })),
+    ...groups.map((group): ChatRow<F> => ({ kind: "group", id: group.id, group, time: group.messages.at(-1)?.time ?? (groupStartTime(group.expiresAt) ?? 0) })),
     ...friends.map((friend): ChatRow<F> => ({ kind: friend.accepted_at ? "direct" : "request", id: friend.id, friend, time: directConversationTime(friend.accepted_at ? preview(friend.id) : null, friend.accepted_at, friend.requested_at) })),
   ].sort((left, right) => right.time - left.time);
 }
@@ -197,4 +203,12 @@ export function chatRows<F extends ChatFriend>(groups: Group[], friends: F[], pr
 export function groupInitials(name: string): string {
   const words = name.match(/[\p{L}\p{N}]+/gu) ?? [];
   return words.slice(0, 2).map((word) => (Array.from(word)[0] ?? "").toUpperCase()).join("");
+}
+
+/** First two characters of a name, uppercased, without splitting emoji or other multi-code-point characters. */
+export function initials(name: string): string {
+  const chars = typeof Intl.Segmenter === "function"
+    ? Array.from(new Intl.Segmenter().segment(name), (part) => part.segment)
+    : Array.from(name);
+  return chars.slice(0, 2).join("").toUpperCase();
 }
