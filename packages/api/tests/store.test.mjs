@@ -50,24 +50,24 @@ test('idle overview does not read history or individual friends; pause stops wor
   await store.start();await new Promise(resolve=>setTimeout(resolve,65));
   assert.ok(calls.filter(call=>call==='overview').length>=3);
   assert.ok(calls.every(call=>call==='overview'));
-  store.pause();assert.equal(store.getState().ready,false);assert.deepEqual(store.getState().snapshot.groups,[]);const paused=calls.length;await new Promise(resolve=>setTimeout(resolve,50));assert.equal(calls.length,paused);
+  store.pause();assert.equal(store.getState().ready,true,'pausing keeps loaded chats');assert.equal(store.getState().snapshot.groups.length,1);assert.equal(store.getState().connection,'reconnecting');const paused=calls.length;await new Promise(resolve=>setTimeout(resolve,50));assert.equal(calls.length,paused);
   await store.start();assert.equal(calls.at(-1),'overview');
 });
 test('only displayed conversations load history and pagination downloads one next page', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.setGroup(Array.from({length:120},(_,i)=>row(120-i)));
   const close=f.store.openGroup(room);await f.store.start();
   assert.equal(f.store.getState().snapshot.groups[0].messages.length,50);f.calls.length=0;
-  await f.store.loadOlderGroup(room);assert.deepEqual(f.calls,['group:71','access']);assert.equal(f.store.getState().snapshot.groups[0].messages.length,100);
+  await f.store.loadOlderGroup(room);assert.deepEqual(f.calls,['group:71']);assert.equal(f.store.getState().snapshot.groups[0].messages.length,100);
   close();f.calls.length=0;await f.store.refresh('safety');assert.deepEqual(f.calls,['overview']);
 });
 test('message bursts fetch authorized IDs without rereading profile, contacts or history', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();f.calls.length=0;
   f.setGroup([row(4),row(3),row(2),row(1)]);f.event('group',3);f.event('group',4);await tick();
-  assert.deepEqual(f.calls,['group:ids','access']);assert.deepEqual(f.store.getState().snapshot.groups[0].messages.map(row=>row.id),['1','2','3','4']);
+  assert.deepEqual(f.calls,['group:ids']);assert.deepEqual(f.store.getState().snapshot.groups[0].messages.map(row=>row.id),['1','2','3','4']);
 });
 test('mutation plus matching event and composer refresh share the returned row', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();f.calls.length=0;
-  f.write(row(3));f.event('group',3);await f.store.refreshGroup(room);assert.deepEqual(f.calls,['access']);
+  f.write(row(3));f.event('group',3);await f.store.refreshGroup(room);assert.deepEqual(f.calls,[]);
   assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'3');
 });
 test('a DM event updates its preview without downloading an unopened conversation', async t => {
@@ -78,7 +78,7 @@ test('a DM event updates its preview without downloading an unopened conversatio
 test('active DM and preview reuse one authorized read', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openDirect(friend);await f.store.start();f.calls.length=0;
   f.setDirect([row(3,true),row(2,true),row(1,true)]);f.event('direct',3);await tick();
-  assert.deepEqual(f.calls,['direct:ids','access']);assert.equal(f.store.getDirect(friend).messages.at(-1).id,3);
+  assert.deepEqual(f.calls,['direct:ids']);assert.equal(f.store.getDirect(friend).messages.at(-1).id,3);
 });
 test('overlap recovery includes missed messages below the previous maximum', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);f.setGroup([row(4),row(2),row(1)]);await f.store.start();
@@ -90,15 +90,18 @@ test('long reconnect gaps paginate until overlapping cached history without rere
   f.setGroup(Array.from({length:120},(_,i)=>row(120-i)));f.calls.length=0;await f.store.start();
   assert.deepEqual(f.calls,['overview','group:head','group:71','group:21','access']);assert.equal(f.store.getState().snapshot.groups[0].messages.length,120);
 });
-test('access revoked during message loading clears the conversation before publication', async t => {
+test('a row withheld after access was revoked triggers a check that clears the conversation', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();
-  f.api.groupMessageIds=async()=>{f.access.memberships=[];return[row(3)];};f.event('group',3);await tick();
+  f.api.groupMessageIds=async()=>{f.access.memberships=[];return[];};f.event('group',3);await tick();
   assert.deepEqual(f.store.getState().snapshot.groups,[]);
 });
-test('failed access check hides private data without claiming membership expired', async t => {
-  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();
-  f.api.access=async()=>{throw new Error('Offline');};f.event('group',3);await tick();
-  assert.equal(f.store.getState().ready,false);assert.deepEqual(f.store.getState().snapshot.groups,[]);assert.equal(f.store.getState().hasObservedGroup,true);assert.equal(f.store.getState().error,'Offline');
+test('a failed access check stays with the open conversation and publishes no unchecked rows', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);f.store.openDirect(friend);await f.store.start();
+  f.setGroup([row(3),row(2),row(1)]);f.api.access=async()=>{throw new Error('Offline');};f.store.openGroup(room);await tick();
+  const state=f.store.getState();
+  assert.equal(state.ready,true);assert.equal(state.error,'');assert.equal(state.groupErrors[room],'Offline');assert.equal(state.groupLoading,false);
+  assert.deepEqual(state.snapshot.groups[0].messages.map(row=>row.id),['1','2'],'the unchecked row is not published');
+  assert.equal(f.store.getDirect(friend).messages.length,2,'other chats are untouched');assert.equal(f.store.getDirect(friend).error,'');
 });
 test('removed friendship clears messages, previews and subscriptions on the safety check', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openDirect(friend);await f.store.start();
@@ -125,8 +128,10 @@ test('missed deletes are removed from newest and older cached pages on reconnect
 });
 test('manual retry after failed access restores the overview and displayed history', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();const original=f.api.access;
-  f.api.access=async()=>{throw new Error('Offline');};f.event('group',3);await tick();assert.equal(f.store.getState().ready,false);
-  f.api.access=original;await f.store.refreshGroup(room);assert.equal(f.store.getState().ready,true);assert.equal(f.store.getState().snapshot.groups[0].messages.length,2);
+  f.api.access=async()=>{throw new Error('Offline');};f.store.openGroup(room);await tick();
+  f.setGroup([row(3),row(2),row(1)]);f.event('group',3);await tick();assert.equal(f.store.getState().groupErrors[room],'Offline');
+  f.api.access=original;f.calls.length=0;await f.store.refreshGroup(room);assert.deepEqual(f.calls,['group:ids','access'],'the missed id is fetched again');
+  assert.deepEqual(f.store.getState().groupErrors,{});assert.equal(f.store.getState().snapshot.groups[0].messages.length,3);
 });
 test('rapid lifecycle changes cannot publish a previous request or its failure', async t => {
   const f=fixture();t.after(()=>f.store.dispose());await f.store.start();let reject;
@@ -163,8 +168,8 @@ test('30-minute idle benchmark reduces Auth/Data API requests by over 80 percent
 test('matching mutation events arriving during access verification do not add a trailing read', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();f.calls.length=0;
   let finish;f.api.access=()=>{f.calls.push('access');return new Promise(resolve=>{finish=()=>resolve(f.access);});};
-  f.write(row(3));const request=f.store.refreshGroup(room);await tick();f.event('group',3);finish();await request;await tick();
-  assert.deepEqual(f.calls,['access']);assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'3');
+  f.setGroup([row(3),row(2),row(1)]);f.write(row(3));f.store.openGroup(room);await tick();f.event('group',3);finish();await tick();
+  assert.deepEqual(f.calls,['group:head','access']);assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'3');
 });
 test('an account switch clears cached identity and discards previous-account results', async t => {
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();let finish;
@@ -183,16 +188,26 @@ test('overview includes a group preview and group events never download unopened
   assert.deepEqual(f.calls,['group:ids','access']);assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'3');
   f.calls.length=0;f.store.openGroup(room);await tick();assert.deepEqual(f.calls,['group:head','access']);assert.equal(f.store.getState().snapshot.groups[0].messages.length,3);
 });
+test('blocked people fill session.hidden and their group messages and previews are left out', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());const peer='44444444-4444-4444-8444-444444444444';
+  f.overview.blocked=[{id:peer,display_name:'Sam',avatar_url:null}];f.overview.memberships[0].preview={...row(3),sender_id:peer};
+  f.setGroup([{...row(3),sender_id:peer},row(2),row(1)]);await f.store.start();
+  const {snapshot}=f.store.getState();
+  assert.deepEqual(snapshot.session.hidden,[peer]);assert.deepEqual(snapshot.blocked,[{id:peer,name:'Sam',avatarUrl:null}]);
+  assert.equal(snapshot.groups[0].messages.length,0,'a blocked sender is not the chat-list preview');
+  f.store.openGroup(room);await tick();
+  assert.deepEqual(f.store.getState().snapshot.groups[0].messages.map(message=>message.id),['1','2']);
+});
 test('reconnect restores a late-committed ID below the newest window in previously loaded history', async t => {
   const f=fixture();t.after(()=>f.store.dispose());const rows=Array.from({length:150},(_,i)=>row(150-i));
   f.store.openGroup(room);f.setGroup(rows.filter(row=>row.id!==25));await f.store.start();await f.store.loadOlderGroup(room);await f.store.loadOlderGroup(room);
   f.store.pause();f.setGroup(rows);await f.store.start();assert.ok(f.store.getState().snapshot.groups[0].messages.some(row=>row.id==='25'));
 });
 
-test('repeated message-access failures retain exponential backoff until full recovery', async t => {
+test('repeated session failures retain exponential backoff until full recovery', async t => {
   const timeout=setTimeout;const delays=[];
   t.mock.method(globalThis,'setTimeout',(fn,ms,...args)=>{if(ms>=800&&ms<=30000) delays.push(ms);return timeout(fn,ms,...args);});
-  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);f.api.access=async()=>{throw new Error('Offline');};
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);f.api.overview=async()=>{throw new Error('Offline');};
   await f.store.start();await assert.rejects(f.store.refresh('retry'),/Offline/);await assert.rejects(f.store.refresh('retry'),/Offline/);
   assert.deepEqual(delays,[1000,2000,4000]);assert.equal(f.store.getState().ready,false);
 });
@@ -331,4 +346,62 @@ test('messages arriving in an open chat are marked read instead of counted', asy
   const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();
   f.setGroup([{...row(3),sender_id:'peer'},row(2),row(1)]);f.event('group',3);await tick();
   assert.deepEqual(f.store.getState().snapshot.unread,{});assert.deepEqual(f.reads.at(-1),[room,3]);
+});
+test('a failed older page or DM read stays local and sets that DM\'s error', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);f.store.openDirect(friend);
+  f.setDirect(Array.from({length:60},(_,i)=>row(60-i,true)));await f.store.start();
+  const original=f.api.directMessages;f.api.directMessages=async()=>{throw new Error('Offline');};
+  await assert.rejects(f.store.loadOlderDirect(friend),/Offline/);
+  const state=f.store.getState();
+  assert.equal(state.ready,true);assert.equal(state.error,'');assert.equal(state.snapshot.groups[0].messages.length,2);
+  assert.equal(f.store.getDirect(friend).error,'Offline');assert.equal(f.store.getDirect(friend).messages.length,50);assert.equal(f.store.getDirect(friend).loading,false);
+  f.api.directMessages=original;await f.store.loadOlderDirect(friend);
+  assert.equal(f.store.getDirect(friend).error,'');assert.equal(f.store.getDirect(friend).messages.length,60);
+});
+test('a different identity in the access check still fails the whole session', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();
+  f.access.userId='44444444-4444-4444-8444-444444444444';f.event('group',3);await tick();
+  assert.equal(f.store.getState().ready,false);assert.deepEqual(f.store.getState().snapshot.groups,[]);assert.equal(f.store.getState().error,'Please sign in again.');
+});
+test('pause and resume keep the open chat on screen without a loading state', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();
+  const seen=[];f.store.subscribe(()=>{const state=f.store.getState();seen.push([state.ready,state.groupLoading,state.snapshot.groups[0]?.messages.length]);});
+  f.store.pause();await f.store.start();
+  assert.ok(seen.length>0);assert.ok(seen.every(([ready,loading,count])=>ready&&!loading&&count===2),JSON.stringify(seen));
+});
+test('a DM first seen through a realtime event loads fully when opened', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.setDirect(Array.from({length:60},(_,i)=>row(60-i,true)));await f.store.start();
+  f.event('direct',60);await tick();
+  assert.equal(f.store.getState().snapshot.directPreviews[friend].message.id,60);
+  assert.equal(f.store.getDirect(friend).loading,true,'not a one-row conversation');assert.equal(f.store.getDirect(friend).messages.length,0);
+  f.store.openDirect(friend);await tick();
+  assert.equal(f.store.getDirect(friend).messages.length,50);assert.notEqual(f.store.getDirect(friend).nextCursor,null);
+});
+test('an own sent row survives a failed read and appears on the next one', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();const original=f.api.access;
+  f.api.access=async()=>{throw new Error('Offline');};f.store.openGroup(room);f.write(row(3));f.event('group',3);await tick();
+  assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'2');
+  f.api.access=original;f.calls.length=0;await f.store.refreshGroup(room);
+  assert.deepEqual(f.calls,['access'],'the written row is reused, not downloaded');assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'3');
+});
+test('messages on an open chat reuse its access check instead of repeating it per message', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());f.store.openGroup(room);await f.store.start();
+  const rows=[row(2),row(1)];
+  for(let id=3;id<=7;id++) {rows.unshift(row(id));f.setGroup(rows);f.event('group',id);await tick();}
+  assert.equal(f.store.getState().snapshot.groups[0].messages.length,7);
+  assert.equal(f.calls.filter(call=>call==='access').length,1,'one check when the chat opened, none for the five messages');
+  f.calls.length=0;f.store.openGroup(room);await tick();assert.deepEqual(f.calls,['group:head','access'],'reopening checks again');
+});
+test('a re-subscribe reads only the newest page down to cached history, not the whole cached range', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());const rows=Array.from({length:120},(_,i)=>row(120-i));
+  f.store.openGroup(room);f.setGroup(rows);await f.store.start();await f.store.loadOlderGroup(room);
+  f.live();await tick();await tick();f.calls.length=0;
+  f.channels.find(channel=>!channel.removed&&channel.name===`group:${room}`).status('CHANNEL_ERROR');
+  f.setGroup([row(122),row(121),...rows]);
+  await new Promise(resolve=>setTimeout(resolve,1100));f.live();await tick();await tick();
+  assert.deepEqual(f.calls,['overview','group:head','access']);
+  assert.equal(f.store.getState().snapshot.groups[0].messages.length,102);assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'122');
+  f.calls.length=0;f.channels.find(channel=>!channel.removed&&channel.name===`group:${room}`).status('CHANNEL_ERROR');
+  await new Promise(resolve=>setTimeout(resolve,1100));f.live();await tick();await tick();
+  assert.deepEqual(f.calls,['overview'],'an unchanged chat reads no messages');
 });

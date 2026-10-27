@@ -134,6 +134,7 @@ export type Database = {
       messages: {
         Row: {
           body: string
+          client_id: string | null
           created_at: string
           group_id: string
           id: number
@@ -141,6 +142,7 @@ export type Database = {
         }
         Insert: {
           body: string
+          client_id?: string | null
           created_at?: string
           group_id: string
           id?: never
@@ -148,6 +150,7 @@ export type Database = {
         }
         Update: {
           body?: string
+          client_id?: string | null
           created_at?: string
           group_id?: string
           id?: never
@@ -295,6 +298,44 @@ export type Database = {
           id?: string
         }
         Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          group_id: string | null
+          id: number
+          reason: string
+          reported_user_id: string | null
+          reporter_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          group_id?: string | null
+          id?: never
+          reason: string
+          reported_user_id?: string | null
+          reporter_id?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          group_id?: string | null
+          id?: never
+          reason?: string
+          reported_user_id?: string | null
+          reporter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_permissions: {
         Row: {
@@ -446,6 +487,7 @@ export type Database = {
         Args: { p_connection_id: string }
         Returns: boolean
       }
+      block_user: { Args: { p_user_id: string }; Returns: boolean }
       expires_at: {
         Args: { "": Database["public"]["Tables"]["group_members"]["Row"] }
         Returns: {

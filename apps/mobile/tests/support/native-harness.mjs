@@ -83,7 +83,7 @@ const mocks = {
   'expo-router': `
     import React, {useEffect} from 'react';
     export const router=Object.fromEntries(['push','replace','dismissTo','back'].map(method => [method,(...args) => globalThis.__qrChatNativeTest.navigation.push([method,...args])]));
-    router.canGoBack=()=>true;
+    router.canGoBack=()=>globalThis.__qrChatNativeTest.canGoBack ?? true;
     export {useLocalSearchParams} from 'expo-router/build/hooks/useLocalSearchParams.js';
     export {useRoute} from 'expo-router/build/react-navigation/core/useRoute.js';
     export const useFocusEffect=callback=>useEffect(callback,[callback]);
@@ -91,7 +91,10 @@ const mocks = {
     export const Stack=({children,...props})=>React.createElement('NativeStack',props,children);
     Stack.Screen=props=>React.createElement('NativeStackScreen',props);`,
   'expo-router/react-navigation': 'export const useHeaderHeight=()=>64;',
-  'react-native-safe-area-context': 'export const useSafeAreaInsets=()=>({top:24,right:0,bottom:24,left:0});',
+  'react-native-safe-area-context': `
+    import {createContext, useContext} from 'react';
+    export const SafeAreaInsetsContext=createContext(null);
+    export const useSafeAreaInsets=()=>useContext(SafeAreaInsetsContext) ?? {top:24,right:0,bottom:24,left:0};`,
   'react-native-screens/experimental': "export const SafeAreaView='NativeSafeAreaView';",
   'react-native-reanimated': `
     export const useReducedMotion=()=>true;
@@ -102,6 +105,7 @@ const mocks = {
     export const useSharedValue=value=>({value});
     export const useDerivedValue=compute=>({value:compute()});
     export const withTiming=value=>value;
+    export const withRepeat=value=>value;
     export const useAnimatedStyle=compute=>compute();
     export const useAnimatedReaction=()=>{};`,
   'react-native-worklets': 'export const scheduleOnRN=(fn,...args)=>fn(...args);',
@@ -130,14 +134,17 @@ const mocks = {
   'expo-symbols': "export const SymbolView='SymbolView';",
   'expo-camera': `export const CameraView='CameraView'; const request=async()=>{globalThis.__qrChatNativeTest.permissionRequested=true;}; const get=async()=>{globalThis.__qrChatNativeTest.permissionChecked=true;}; export const useCameraPermissions=()=>[globalThis.__qrChatNativeTest.permission,request,get];`,
   '@/providers/auth-provider': 'export const useAuth=()=>globalThis.__qrChatNativeTest.auth;',
-  '@/providers/chat-provider': 'export const useChat=()=>globalThis.__qrChatNativeTest.chat; export const ChatProvider=({children})=>children; export const errorMessage=error=>error.message || "Could not connect. Please try again.";',
+  // The real outbox hook, so conversations exercise send, retry and placeholder hand-off.
+  '@/providers/chat-provider': `import {useOutbox} from '${new URL('../../src/hooks/use-outbox.ts', import.meta.url).href}'; export const useChat=()=>{const chat=globalThis.__qrChatNativeTest.chat; chat.outbox=useOutbox(); return chat;}; export const ChatProvider=({children})=>children; export const errorMessage=error=>error.message || "Could not connect. Please try again.";`,
   '@/lib/supabase': 'export const webOrigin="https://chat.example"; export const authCallback="qrchat://auth/callback"; export const providers={google:true}; export const getNativeApi=()=>globalThis.__qrChatNativeTest.nativeApi ?? null;',
   '@/lib/oauth': 'export const completeSignIn=(...args)=>globalThis.__qrChatNativeTest.completeSignIn(...args);',
   '@qr-chat/api': `
     export {getChatStore} from '${new URL('./chat-store.mjs', import.meta.url).href}';
+    export {createOutbox, visibleOutbox} from '${new URL('../../../../packages/api/src/outbox.ts', import.meta.url).href}';
+    export {errorMessage} from '${new URL('../../../../packages/api/src/error-message.ts', import.meta.url).href}';
     export const loadDirectSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadDirectSnapshot(...args);
     export const loadChatSnapshot=(...args)=>globalThis.__qrChatNativeTest.loadChatSnapshot(...args);
-    export const emptySnapshot={session:null,groups:[],friends:[],directPreviews:{},unread:{}};
+    export const emptySnapshot={session:null,groups:[],friends:[],directPreviews:{},unread:{},blocked:[]};
     export function watchChanges(client,filters,refresh,onState) {
       const watcher={filters,refresh,onState,stopped:false,stop(){this.stopped=true;}};
       globalThis.__qrChatNativeTest.watchers.push(watcher);onState('connected');return watcher;
@@ -187,8 +194,8 @@ export function reset() {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], opened: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
-    auth: { userId: 'me', active: true, api: { resolveGroup: async () => null, isBusiness: async () => false } },
-    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, unread: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
+    auth: { userId: 'me', active: true, api: { resolveGroup: async () => null, isBusiness: async () => false, places: async () => [] } },
+    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, unread: {}, blocked: [], connection: 'connected', groupErrors: {}, refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
     loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},groups:[],friends:[],directPreviews:{}}),
   });
 }

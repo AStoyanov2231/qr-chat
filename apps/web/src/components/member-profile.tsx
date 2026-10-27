@@ -12,6 +12,8 @@ type Props = {
   friend?: ChatSnapshot["friends"][number];
   userId: string;
   canRequest: boolean;
+  /** The current user blocked this person. */
+  blocked: boolean;
   busy: boolean;
   error: string;
   onClose: () => void;
@@ -19,9 +21,12 @@ type Props = {
   onAccept: () => void;
   onRemove: () => void;
   onMessage: () => void;
+  onBlock: () => void;
+  onUnblock: () => void;
+  onReport: () => void;
 };
 
-export function MemberProfile({ person, friend, userId, canRequest, busy, error, onClose, onRequest, onAccept, onRemove, onMessage }: Props) {
+export function MemberProfile({ person, friend, userId, canRequest, blocked, busy, error, onClose, onRequest, onAccept, onRemove, onMessage, onBlock, onUnblock, onReport }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
   const relationship = friendshipState(friend, userId);
@@ -29,12 +34,15 @@ export function MemberProfile({ person, friend, userId, canRequest, busy, error,
     <div className="entry-panel member-profile">
       <button className="modal-close" aria-label="Close profile" disabled={busy} onClick={onClose}><Icon name="close" size={20} /></button>
       {person ? <>
-        <div className="member-hero" style={person.avatarUrl ? { backgroundImage: `linear-gradient(rgba(10,20,30,.2),rgba(10,20,30,.38)),url(${JSON.stringify(person.avatarUrl)})` } : undefined}>
+        <div className="member-hero" style={person.avatarUrl ? { backgroundImage: `linear-gradient(var(--photo-scrim-top),var(--photo-scrim-bottom)),url(${JSON.stringify(person.avatarUrl)})` } : undefined}>
           {!person.avatarUrl && <Avatar name={person.name} url={null} size={96} />}
           <h2>{person.name}</h2>
           <p>{relationship === "accepted" ? "Friend" : "QR Chat member"}</p>
         </div>
-        {relationship === "accepted" ? <button className="scan-primary" disabled={busy} onClick={onMessage}>Message</button>
+        {blocked ? <>
+          <p>You blocked {person.name}. Their messages are hidden and they can’t send you friend requests.</p>
+          <button className="scan-primary" disabled={busy} onClick={onUnblock}>{busy ? "Updating…" : "Unblock"}</button>
+        </> : relationship === "accepted" ? <button className="scan-primary" disabled={busy} onClick={onMessage}>Message</button>
           : relationship === "incoming" ? <>
             <p>{person.name} wants to be friends. Accept to start a private conversation.</p>
             <button className="scan-primary" disabled={busy} onClick={onAccept}>{busy ? "Updating…" : "Accept"}</button>
@@ -46,6 +54,10 @@ export function MemberProfile({ person, friend, userId, canRequest, busy, error,
             <button className="scan-primary" disabled={busy} onClick={onRequest}>{busy ? "Sending…" : "Add friend"}</button>
             <p>You can message privately after they accept.</p>
           </> : <p>Scan the same venue QR code to connect.</p>}
+        <div className="member-safety">
+          <button type="button" className="request-block" disabled={busy} onClick={onReport}>Report</button>
+          {!blocked && <button type="button" className="request-block" disabled={busy} onClick={onBlock}>Block</button>}
+        </div>
       </> : <p>This profile is no longer available.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
     </div>

@@ -10,7 +10,9 @@ export type Topic = `group:${string}` | `user:${string}`;
 export type ChangeEvent = { table: string; eventType: string; id: number | null; filterId?: string };
 // Supabase Realtime quota refusals; polling starts on the first one instead of the second failure.
 const REFUSED = /too_many_connections|too_many_joins|tenant_events/i;
-/** Supabase allows 100 channels per connection; the client keeps one socket for all of them. */
+/** Supabase allows 100 channels per connection; the client keeps one socket for all of them.
+ * ponytail: topics past the cap get no events and rely on overview polling; a second socket
+ * (own RealtimeClient + token refresh) lifts it if users ever hold 100+ groups. */
 export const MAX_TOPICS = 100;
 
 export function topic(kind: "group" | "user", id: string): Topic {
@@ -87,12 +89,13 @@ export function watchChanges(
     ready.delete(name);
     if (channel) void client.removeChannel(channel);
   }
-  function reconnect(reason = "") {
+  /** Rejoins only the failed topic; a socket drop errors every channel, but one retry covers them all. */
+  function reconnect(name: string, reason = "") {
     if (stopped) return;
-    if (REFUSED.test(reason) || attempt > 0) startPolling();
+    close(name);
+    if (!retry && (REFUSED.test(reason) || attempt > 0)) startPolling();
     report("reconnecting");
-    for (const name of [...channels.keys()]) close(name);
-    clearTimeout(retry);
+    if (retry) return;
     retry = setTimeout(connect, Math.min((options.retryMs ?? 1000) * 2 ** attempt++, 30000) * (0.8 + random() * 0.2));
   }
   function open(name: string) {
@@ -112,7 +115,7 @@ export function watchChanges(
         // Refetch once every topic is live, closing the gap between the last read and the join.
         if (subscribed()) { attempt = 0; stopPolling(); void reconcile(); }
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-        reconnect(error?.message);
+        reconnect(name, error?.message);
       }
     });
   }

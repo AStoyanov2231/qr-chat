@@ -1,9 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
-import { codeKeySchema, productNameSchema, placeNameSchema, placeLinkSchema, menuUploadSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
+import { codeKeySchema, productNameSchema, placeNameSchema, placeLinkSchema, menuUploadSchema, qrNameLookupResponseSchema, profileSchema, reportSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
 import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage, Friend, Profile } from "./overview.ts";
 export { getChatStore, createChatStore } from "./store.ts";
 export { createObservedFetch } from "./requests.ts";
+export { createOutbox, visibleOutbox } from "./outbox.ts";
+export type { OutboxItem, OutboxSend } from "./outbox.ts";
+export { errorMessage } from "./error-message.ts";
 export type { RequestObservation, RequestObserver } from "./requests.ts";
 export type { ChatOverview, ChatAccess } from "./overview.ts";
 export type AvatarUpload = { uploadId: string; data: ArrayBuffer };
@@ -37,6 +40,9 @@ async function result<T>(request: PromiseLike<{ data: T; error: { message: strin
   if (data === null || data === undefined) throw new ChatApiError("The requested data is no longer available.", "NOT_AVAILABLE");
   return data;
 }
+
+// A send repeated with the same client_id hits the unique key and inserts nothing; the caller then reads the first row back.
+const sendOnce = { onConflict: "sender_id,client_id", ignoreDuplicates: true };
 
 /** Inject an authenticated public client. Session storage and auth lifecycle belong to the host platform. */
 export function createChatApi(
@@ -84,6 +90,7 @@ export function createChatApi(
         profile: overview.profile && withAvatar(overview.profile),
         memberships: overview.memberships.map((membership) => ({ ...membership, groups: membership.groups && withVenueImage(membership.groups, membership.place), place: membership.place && withMenu(membership.place), members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
         friends: overview.friends.map(friendView),
+        blocked: (overview.blocked ?? []).map(withAvatar),
       };
     },
     async access(signal?: AbortSignal): Promise<ChatAccess> {
@@ -186,11 +193,15 @@ export function createChatApi(
       if (signal) query = query.abortSignal(signal);
       return result(query);
     },
-    async sendGroupMessage(groupId: string, body: unknown) {
+    /** clientId makes the send idempotent: a retry with the same id returns the first stored row instead of a second one. */
+    async sendGroupMessage(groupId: string, body: unknown, clientId?: string) {
       const group_id = userIdSchema.parse(groupId);
       const content = messageBodySchema.parse(body);
+      const client_id = clientId === undefined ? undefined : userIdSchema.parse(clientId);
       const id = await userId();
-      const message = withProfiles(await result(client.from("messages").insert({ group_id, body: content, sender_id: id }).select("*, profiles(display_name, avatar_path)").single()));
+      const columns = "*, profiles(display_name, avatar_path)";
+      const message = withProfiles(await nullableResult(client.from("messages").upsert({ group_id, body: content, sender_id: id, client_id }, sendOnce).select(columns).maybeSingle())
+        ?? await result(client.from("messages").select(columns).eq("sender_id", id).eq("client_id", client_id!).single()));
       emit({ kind: "group", userId: id, message });
       return message;
     },
@@ -216,6 +227,22 @@ export function createChatApi(
       const blocked = await result(client.rpc("block_friend_connection", { p_connection_id: userIdSchema.parse(connectionId) }));
       if (!blocked) throw new ChatApiError("This connection is no longer available.", "NOT_AVAILABLE");
     },
+    /** Blocks anyone by id and ends any friendship or request between you. */
+    async blockUser(personId: string) {
+      await result(client.rpc("block_user", { p_user_id: userIdSchema.parse(personId) }));
+    },
+    async unblockUser(personId: string) {
+      const blocked_id = userIdSchema.parse(personId);
+      await nullableResult(client.from("user_blocks").delete().eq("blocker_id", await userId()).eq("blocked_id", blocked_id));
+    },
+    /** Files a report on a user or a group. Reports are write-only: nobody can read them back from the app. */
+    async report(target: { userId: string } | { groupId: string }, input: { reason: unknown; details: unknown }) {
+      const { reason, details } = reportSchema.parse(input);
+      await nullableResult(client.from("reports").insert({
+        ...("userId" in target ? { reported_user_id: userIdSchema.parse(target.userId) } : { group_id: userIdSchema.parse(target.groupId) }),
+        reason, details: details || null,
+      }));
+    },
     async directMessages(connectionId: string, options: { before?: number; limit?: number } = {}, signal?: AbortSignal) {
       const { before, limit } = pageSchema.parse(options);
       let query = client.from("messages").select("*")
@@ -226,11 +253,13 @@ export function createChatApi(
       const items = rows.slice(0, limit);
       return { items, nextCursor: rows.length > limit ? items.at(-1)!.id : null };
     },
-    async sendDirectMessage(connectionId: string, body: unknown) {
+    async sendDirectMessage(connectionId: string, body: unknown, clientId?: string) {
       const group_id = userIdSchema.parse(connectionId);
       const content = messageBodySchema.parse(body);
+      const client_id = clientId === undefined ? undefined : userIdSchema.parse(clientId);
       const id = await userId();
-      const message = await result(client.from("messages").insert({ group_id, body: content, sender_id: id }).select().single());
+      const message = await nullableResult(client.from("messages").upsert({ group_id, body: content, sender_id: id, client_id }, sendOnce).select().maybeSingle())
+        ?? await result(client.from("messages").select().eq("sender_id", id).eq("client_id", client_id!).single());
       emit({ kind: "direct", userId: id, message });
       return message;
     },
@@ -252,34 +281,55 @@ export function createChatApi(
       const name = placeNameSchema.parse(input.name);
       const link = placeLinkSchema.parse(input.link) || null;
       const upload = input.menu ? menuUploadSchema.parse(input.menu) : input.menu;
-      const bucket = client.storage.from("venue-menus");
-      let menu_path = place.menu_path;
-      if (upload) {
-        menu_path = `${await userId()}/${upload.uploadId}.pdf`;
-        await result(bucket.upload(menu_path, upload.data, { contentType: "application/pdf", cacheControl: "31536000", upsert: false }));
-      } else if (upload === null) menu_path = null;
       const photo = input.photo ? avatarUploadSchema.parse(input.photo) : input.photo;
+      const id = await userId();
+      const placeId = userIdSchema.parse(place.id);
+      const menus = client.storage.from("venue-menus");
       const photos = client.storage.from("venue-photos");
-      let photo_path = place.photo_path;
-      if (photo) {
-        photo_path = `${await userId()}/${photo.uploadId}.jpg`;
-        await result(photos.upload(photo_path, photo.data, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));
-      } else if (photo === null) photo_path = null;
-      const saved = withPlace(await result(client.rpc("update_place", { p_place_id: userIdSchema.parse(place.id), p_name: name, p_link_url: link, p_menu_path: menu_path, p_photo_path: photo_path })));
-      if (place.menu_path && place.menu_path !== menu_path) {
-        try { await bucket.remove([place.menu_path]); } catch { /* best effort */ }
+      // undefined keeps the stored file, null removes it, a string is this save's upload.
+      const menuPath = upload ? `${id}/${upload.uploadId}.pdf` : upload;
+      const photoPath = photo ? `${id}/${photo.uploadId}.jpg` : photo;
+      let calling = false;
+      try {
+        if (upload && menuPath) await result(menus.upload(menuPath, upload.data, { contentType: "application/pdf", cacheControl: "31536000", upsert: false }));
+        if (photo && photoPath) await result(photos.upload(photoPath, photo.data, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));
+        // Files this save leaves alone keep what is stored now, not the editor's snapshot, so a newer save from another device survives.
+        // ponytail: read-then-write; a save landing within this one round trip can still be overwritten. Move keep-semantics into update_place if that matters.
+        const current = await result(client.from("places").select("menu_path, photo_path").eq("id", placeId).single());
+        const menu_path = menuPath === undefined ? current.menu_path : menuPath;
+        const photo_path = photoPath === undefined ? current.photo_path : photoPath;
+        calling = true;
+        const saved = withPlace(await result(client.rpc("update_place", { p_place_id: placeId, p_name: name, p_link_url: link, p_menu_path: menu_path, p_photo_path: photo_path })));
+        // Cleanup failure must not turn a committed save into a failed form.
+        if (current.menu_path && current.menu_path !== menu_path) await menus.remove([current.menu_path]).catch(() => {});
+        if (current.photo_path && current.photo_path !== photo_path) await photos.remove([current.photo_path]).catch(() => {});
+        emit({ kind: "overview" });
+        return saved;
+      } catch (error) {
+        // A lost response can follow a committed update, so uploads are dropped only when the place can't reference them:
+        // the failure came before the RPC, or the server answered with an error (a network failure has an empty code).
+        if (!calling || (error instanceof ChatApiError && error.code)) {
+          if (menuPath) await menus.remove([menuPath]).catch(() => {});
+          if (photoPath) await photos.remove([photoPath]).catch(() => {});
+        }
+        throw error;
       }
-      if (place.photo_path && place.photo_path !== photo_path) {
-        try { await photos.remove([place.photo_path]); } catch { /* best effort */ }
-      }
-      emit({ kind: "overview" });
-      return saved;
     },
-    deletePlace: async (placeId: string) => { await nullableResult(client.rpc("delete_place", { p_place_id: userIdSchema.parse(placeId) })); emit({ kind: "overview" }); },
+    /** Soft-deletes the place (its QR stops accepting joins), then removes its menu and photo files. */
+    async deletePlace(placeId: string) {
+      const id = userIdSchema.parse(placeId);
+      const files = await result(client.from("places").select("menu_path, photo_path").eq("id", id).single());
+      await nullableResult(client.rpc("delete_place", { p_place_id: id }));
+      emit({ kind: "overview" });
+      // A deleted place is never shown again, so its files are unused; cleanup failure must not fail the delete.
+      if (files.menu_path) await client.storage.from("venue-menus").remove([files.menu_path]).catch(() => {});
+      if (files.photo_path) await client.storage.from("venue-photos").remove([files.photo_path]).catch(() => {});
+    },
     /** Permanently erases the signed-in account on the server, then clears the local session. */
     async deleteAccount() {
+      if (!accountEndpoint) throw new ChatApiError("Account deletion isn't available: this app's account endpoint isn't configured.", "NOT_CONFIGURED");
       const { data } = await client.auth.getSession();
-      if (!accountEndpoint || !data.session) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
+      if (!data.session) throw new ChatApiError("Please sign in again.", "AUTH_REQUIRED");
       const response = await fetcher(accountEndpoint, { method: "DELETE", credentials: "same-origin", headers: { authorization: `Bearer ${data.session.access_token}` } });
       if (!response.ok) throw new ChatApiError("Could not delete your account. Please try again.");
       await client.auth.signOut({ scope: "local" }).catch(() => {});

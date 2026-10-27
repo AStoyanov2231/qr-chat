@@ -7,11 +7,13 @@ import { ArrowLeft, Camera, CaretRight, DownloadSimple, FilePdf, LinkSimple, Plu
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createChatApi, type ChatApi, type Place } from "@qr-chat/api";
 import { qrPayload } from "@qr-chat/domain";
+import { avatarUploadSchema, menuUploadSchema, placeLinkSchema } from "@qr-chat/validation";
 import { ClearButton } from "@/components/clear-button";
 import { errorMessage } from "@/hooks/use-chat-backend";
 import { appOrigin } from "@/lib/app-origin";
 import { prepareAvatar } from "@/lib/avatar";
 import { SwipeRow } from "./chats-overview";
+import { AccountActions } from "./profile-view";
 import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,7 +22,7 @@ let client: ReturnType<typeof createChatApi> | undefined;
 const live = () => client ??= createChatApi(createClient());
 const HTTPS = "https://\\S+";
 /** What the screen needs; the local design preview passes an in-memory stand-in. */
-export type BusinessApi = Pick<ChatApi, "isBusiness" | "places" | "createPlace" | "updatePlace" | "deletePlace">;
+export type BusinessApi = Pick<ChatApi, "isBusiness" | "places" | "createPlace" | "updatePlace" | "deletePlace" | "signOut" | "deleteAccount">;
 
 /** Business owners manage their places here, on desktop or phone. Without the plan, places are read-only. */
 export function BusinessView({ preview }: { preview?: BusinessApi }) {
@@ -30,6 +32,13 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
   // The list is the home; "new" or a place opens the editor, which returns to the list when done.
   const [editing, setEditing] = useState<Place | "new" | null>(null);
   const [revealedId, setRevealedId] = useState<string | null>(null);
+  // The auth listener also redirects on SIGNED_OUT; leaving it to this flow keeps a stale ?next=/business from reaching the next account.
+  const leaving = useRef(false);
+  const leave = async (action: () => Promise<unknown>) => {
+    leaving.current = true;
+    try { await action(); if (!preview) window.location.replace("/sign-in"); return ""; }
+    catch (reason) { leaving.current = false; return errorMessage(reason); }
+  };
   const load = useCallback(async () => {
     const [business, places] = await Promise.all([api().isBusiness(), api().places()]);
     setState({ business, places });
@@ -40,9 +49,14 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
       if (!ok) window.location.replace(signInPath("/business"));
       else load().catch((reason) => setError(errorMessage(reason)));
     });
+    if (preview) return;
+    // auth-js relays a sign-out in another tab as SIGNED_OUT here.
+    const { data } = live().client.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT" && !leaving.current) window.location.replace(signInPath("/business")); });
+    return () => data.subscription.unsubscribe();
   }, [load, preview]);
   const retry = () => { setError(""); load().catch((reason) => setError(errorMessage(reason))); };
-  const done = async () => { await load(); setEditing(null); };
+  // The save already committed, so the editor closes even if reloading the list fails; the list then offers a retry.
+  const done = async () => { setEditing(null); retry(); };
 
   if (editing && state) return <PlaceEditor place={editing === "new" ? null : editing} readOnly={!state.business} api={api()} onDone={done} onBack={() => setEditing(null)} />;
   const hasPlaces = !!state?.places.length;
@@ -52,7 +66,7 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
       <h1>Business</h1>
       {state?.business && <button type="button" className="back-button" aria-label="Add a place" onClick={() => setEditing("new")}><Plus size={20} weight="bold" /></button>}
     </header>
-    {error && <div className="business-error" role="alert"><p>{error}</p>{!state && <button type="button" className="text-button" onClick={retry}>Try again</button>}</div>}
+    {error && <div className="business-error" role="alert"><p>{error}</p><button type="button" className="text-button" onClick={retry}>Retry</button></div>}
     {!state ? !error && <p role="status">Loading your places…</p>
       : !state.business && !hasPlaces ? <section className="business-intro">
         <h2>This page is for business accounts.</h2>
@@ -82,14 +96,18 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
             : <button type="button" className="business-row" onClick={() => setEditing(place)}>{row}</button>}</li>;
         })}</ul>}
       </>}
+    <section className="settings-actions business-account" aria-label="Account">
+      <AccountActions busy={false} onSignOut={() => leave(() => api().signOut())} onDeleteAccount={() => leave(() => api().deleteAccount())} />
+    </section>
   </main>;
 }
 
+/** "" while generating, null if it failed. */
 function useQr(url: string) {
-  const [qr, setQr] = useState("");
+  const [qr, setQr] = useState<string | null>("");
   useEffect(() => {
     let active = true;
-    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" }).then((data) => { if (active) setQr(data); }, () => {});
+    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" }).then((data) => { if (active) setQr(data); }, () => { if (active) setQr(null); });
     return () => { active = false; };
   }, [url]);
   return qr;
@@ -111,16 +129,18 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   const [dragging, setDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // A new place is created before its link and menu are saved; if that second step fails, a retry must not create it twice.
+  // A new place is created before its link and menu are saved; if that second step fails, a retry must not create it twice,
+  // and Back reloads the list so the place shows there instead of being created again.
   const created = useRef<Place | null>(null);
   // undefined keeps the current photo, null removes it, a Blob replaces it; nothing is saved until the form is.
   const [photo, setPhoto] = useState<Blob | null | undefined>();
   const [preview, setPreview] = useState("");
   const [photoError, setPhotoError] = useState("");
   const shown = photo === undefined ? place?.photo_url ?? null : photo === null ? null : preview;
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const qr = useQr(place ? qrPayload(`v:${place.code}`, appOrigin()) : "");
   const disabled = readOnly || saving;
-  const file = `${name.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/gu, "") || "place"}-qr.png`;
+  const file = `${(place?.name ?? "").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/gu, "") || "place"}-qr.png`;
   const dirty = !place || name.trim() !== place.name || (kind === "link" ? link.trim() : "") !== (place.link_url ?? "") || (kind === "pdf" ? !!menu : !!place.menu_path) || photo !== undefined;
   const pick = (picked: File | undefined) => { if (picked?.type === "application/pdf") setMenu(picked); };
   const pickPhoto = async (picked: File | undefined) => {
@@ -132,7 +152,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   const removePhoto = () => { setPreview(""); setPhoto(place?.photo_url ? null : undefined); };
   return <main className="business-page">
     <header>
-      <button type="button" className="back-button" aria-label="Back to places" disabled={saving} onClick={onBack}><ArrowLeft size={20} weight="bold" /></button>
+      <button type="button" className="back-button" aria-label="Back to places" disabled={saving} onClick={() => { if (created.current) void onDone(); else onBack(); }}><ArrowLeft size={20} weight="bold" /></button>
       <h1>{place ? "Edit place" : "New place"}</h1>
     </header>
     {/* A large square preview of the photo guests will see; the camera sits in its corner once there is one. */}
@@ -147,12 +167,17 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
     </section>}
     <form className="profile-form business-form" aria-busy={saving} onSubmit={async (event) => {
       event.preventDefault();
+      // Saving the PDF option with no file would silently drop the place's link.
+      if (kind === "pdf" && !menu && !place?.menu_path) { setError("Choose a PDF menu, or switch back to Link."); return; }
       setSaving(true); setError("");
       try {
-        const target = place ?? created.current ?? (created.current = await api.createPlace(name));
         const upload = menu && { uploadId: crypto.randomUUID(), data: await menu.arrayBuffer() };
         const photoUpload = photo ? { uploadId: crypto.randomUUID(), data: await photo.arrayBuffer() } : photo;
-        const input = { ...(kind === "link" ? { name, link, menu: null } : { name, link: "", menu: upload }), photo: photoUpload };
+        // On the Link option a PDF is removed only when this editor showed one or a link replaces it, so another device's new PDF survives.
+        const input = { ...(kind === "link" ? { name, link, menu: place?.menu_path || link.trim() ? null : undefined } : { name, link: "", menu: upload }), photo: photoUpload };
+        // Checked before a new place exists, so a bad link or file never leaves a half-made place behind.
+        placeLinkSchema.parse(input.link); if (input.menu) menuUploadSchema.parse(input.menu); if (input.photo) avatarUploadSchema.parse(input.photo);
+        const target = place ?? created.current ?? (created.current = await api.createPlace(name));
         if (place || input.link || input.menu || input.photo) await api.updatePlace(target, input);
         await onDone();
       } catch (reason) { setError(errorMessage(reason)); setSaving(false); }
@@ -190,9 +215,15 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
         </>}
       </div>
       {place && qr && <a className="scan-primary subtle business-download" href={qr} download={file}><DownloadSimple size={16} weight="bold" />Download QR</a>}
+      {place && qr === null && <p className="form-error" role="alert">Couldn’t create the QR code image. Reload and try again.</p>}
       {!readOnly && <div className="business-actions">
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="scan-primary" disabled={saving || !name.trim() || !dirty}>{saving ? "Saving…" : place ? "Save changes" : "Create place"}</button>
+        {place && <button type="button" className="text-button" style={{ color: "var(--danger)" }} disabled={saving} onClick={async () => {
+          if (!window.confirm(`Delete ${place.name}? Its QR code stops working and guests can no longer join.`)) return;
+          setSaving(true); setError("");
+          try { await api.deletePlace(place.id); await onDone(); } catch (reason) { setError(errorMessage(reason)); setSaving(false); }
+        }}>Delete place</button>}
       </div>}
     </form>
   </main>;

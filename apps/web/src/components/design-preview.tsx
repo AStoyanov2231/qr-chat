@@ -42,14 +42,15 @@ function sampleSnapshot(now: number): ChatSnapshot {
     })),
     directPreviews: {},
     unread: { [groupId]: 2, [connectionId(0)]: 1 },
+    blocked: [],
   };
 }
 
 function sampleDirectMessages(now: number): Tables<"messages">[] {
   return [0, 1, 2].flatMap((index) => [
-    { id: index * 10 + 1, group_id: connectionId(index), sender_id: peerId(index), body: "Hey, how are you? 😊", created_at: new Date(now - 8 * 60000).toISOString() },
-    { id: index * 10 + 2, group_id: connectionId(index), sender_id: localUserId, body: "All good! What are you up to these days?", created_at: new Date(now - 7 * 60000).toISOString() },
-    { id: index * 10 + 3, group_id: connectionId(index), sender_id: peerId(index), body: "Just working and chilling. You?", created_at: new Date(now - 6 * 60000).toISOString() },
+    { id: index * 10 + 1, group_id: connectionId(index), sender_id: peerId(index), body: "Hey, how are you? 😊", client_id: null, created_at: new Date(now - 8 * 60000).toISOString() },
+    { id: index * 10 + 2, group_id: connectionId(index), sender_id: localUserId, body: "All good! What are you up to these days?", client_id: null, created_at: new Date(now - 7 * 60000).toISOString() },
+    { id: index * 10 + 3, group_id: connectionId(index), sender_id: peerId(index), body: "Just working and chilling. You?", client_id: null, created_at: new Date(now - 6 * 60000).toISOString() },
   ]);
 }
 
@@ -92,7 +93,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
     },
     async sendDirectMessage(id, input) {
       const body = messageBodySchema.parse(input);
-      setDirectRows((rows) => [...rows, { id: Math.max(0, ...rows.map((row) => row.id)) + 1, group_id: id, sender_id: localUserId, body, created_at: new Date().toISOString() }]);
+      setDirectRows((rows) => [...rows, { id: Math.max(0, ...rows.map((row) => row.id)) + 1, group_id: id, sender_id: localUserId, body, client_id: null, created_at: new Date().toISOString() }]);
     },
     async leaveGroup(id) { setSnapshot((current) => ({ ...current, groups: current.groups.filter((group) => group.id !== id) })); },
     async acceptFriend(id) { setSnapshot((current) => ({ ...current, friends: current.friends.map((friend) => friend.id === id ? { ...friend, accepted_at: new Date().toISOString() } : friend) })); },
@@ -102,6 +103,16 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
       if (friend) blockedPeers.current.add(friend.user_b_id);
       setSnapshot((current) => ({ ...current, friends: current.friends.filter((friend) => friend.id !== id) }));
     },
+    async blockUser(id) {
+      blockedPeers.current.add(id);
+      const member = snapshot.groups.flatMap((group) => group.members).find((member) => member.id === id);
+      setSnapshot((current) => ({ ...current, friends: current.friends.filter((friend) => friend.user_b_id !== id), blocked: [...current.blocked, { id, name: member?.name ?? "Participant", avatarUrl: member?.avatarUrl ?? null }], session: current.session && { ...current.session, hidden: [...current.session.hidden, id] } }));
+    },
+    async unblockUser(id) {
+      blockedPeers.current.delete(id);
+      setSnapshot((current) => ({ ...current, blocked: current.blocked.filter((person) => person.id !== id), session: current.session && { ...current.session, hidden: current.session.hidden.filter((hidden) => hidden !== id) } }));
+    },
+    async report() {},
     async requestFriend(id) {
       if (blockedPeers.current.has(id)) throw new Error("This friendship is unavailable.");
       const member = snapshot.groups.flatMap((group) => group.members).find((member) => member.id === id);
@@ -133,7 +144,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
   }
   const backend: ChatViewBackend = {
     ...snapshot, directPreviews, api, ready: true, error: "", connection: "connected", hasObservedGroup: true,
-    refresh: idle, refreshGroup: idle, openGroup: () => () => {}, groupLoading: false, loadOlder: idle,
+    refresh: idle, refreshGroup: idle, openGroup: () => () => {}, groupLoading: false, groupErrors: {}, loadOlder: idle,
   };
   return <ChatView view={view} backend={backend} directId={directId} setDirectId={setDirectId} business direct={{
     messages: directRows.filter((row) => row.group_id === directId), nextCursor: null, loading: false, error: "", connection: "connected", refresh: idle, loadOlder: idle,
@@ -166,6 +177,8 @@ export function BusinessPreview({ initialTime }: { initialTime: number }) {
       places.current = places.current.map((item) => item.id === place.id ? saved : item);
       return saved;
     },
+    async signOut() {},
+    async deleteAccount() {},
     async deletePlace(id) { places.current = places.current.map((place) => place.id === id ? { ...place, deleted_at: new Date().toISOString() } : place); },
   }));
   return <BusinessView preview={api} />;

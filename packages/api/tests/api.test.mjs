@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createChatApi } from '../src/index.ts';
-import { displayNameSchema, messageBodySchema } from '@qr-chat/validation';
+import { createChatApi, errorMessage } from '../src/index.ts';
+import { avatarUploadSchema, displayNameSchema, menuUploadSchema, messageBodySchema } from '@qr-chat/validation';
 
 const id = '11111111-1111-4111-8111-111111111111';
 test('hostile inputs are rejected before any network request', async () => {
@@ -63,10 +63,44 @@ test('writes derive the sender from auth and exclude arbitrary write fields', as
   let inserted;
   const api = createChatApi({
     auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
-    from: () => ({ insert: (row) => { inserted = row; return { select: () => ({ single: async () => ({ data: row, error: null }) }) }; } }),
+    from: () => ({ upsert: (row) => { inserted = row; return { select: () => ({ maybeSingle: async () => ({ data: row, error: null }) }) }; } }),
   });
   await api.sendGroupMessage(id, ' hello ');
-  assert.deepEqual(inserted, { group_id: id, sender_id: id, body: 'hello' });
+  assert.deepEqual(inserted, { group_id: id, sender_id: id, body: 'hello', client_id: undefined });
+});
+
+test('a retried send reuses its client id and gets the first stored row back instead of a duplicate', async () => {
+  const clientId = '33333333-3333-4333-8333-333333333333';
+  const stored = { id: 9, group_id: id, sender_id: id, body: 'hello', client_id: clientId, profiles: null };
+  const calls = [];
+  const api = createChatApi({
+    auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
+    storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
+    from: () => ({
+      // The unique (sender_id, client_id) key turned the insert into a no-op, so nothing comes back.
+      upsert: (row, options) => { calls.push(['upsert', row.client_id, options]); return { select: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }; },
+      select: () => { const query = { eq: (column, value) => { calls.push(['eq', column, value]); return query; }, single: async () => ({ data: stored, error: null }) }; return query; },
+    }),
+  });
+  assert.equal((await api.sendGroupMessage(id, 'hello', clientId)).id, 9);
+  assert.equal((await api.sendDirectMessage(id, 'hello', clientId)).id, 9);
+  const upsert = ['upsert', clientId, { onConflict: 'sender_id,client_id', ignoreDuplicates: true }];
+  const lookup = [['eq', 'sender_id', id], ['eq', 'client_id', clientId]];
+  assert.deepEqual(calls, [upsert, ...lookup, upsert, ...lookup]);
+  await assert.rejects(api.sendGroupMessage(id, 'hello', 'not-a-uuid'));
+});
+
+test('validation errors show their first issue; transport errors show connection guidance', () => {
+  assert.equal(errorMessage(menuUploadSchema.safeParse({ uploadId: id, data: new ArrayBuffer(11 * 1024 * 1024) }).error), 'Choose a PDF smaller than 10 MB.');
+  assert.equal(errorMessage(avatarUploadSchema.safeParse({ uploadId: id, data: new ArrayBuffer(3 * 1024 * 1024) }).error), 'Choose a photo smaller than 2 MB.');
+  assert.equal(errorMessage(displayNameSchema.safeParse('A\u0001').error), 'Unsupported control character');
+  assert.equal(errorMessage(new Error('Failed to fetch')), 'Could not connect. Check your internet connection and try again.');
+  assert.equal(errorMessage(null), 'Could not connect. Please try again.');
+});
+
+test('deleting an account without a configured endpoint says so instead of asking to sign in', async () => {
+  const api = createChatApi({ auth: { getSession: async () => ({ data: { session: { access_token: 't' } }, error: null }) } }, { accountEndpoint: '' });
+  await assert.rejects(api.deleteAccount(), (error) => error.code === 'NOT_CONFIGURED' && /isn't configured/.test(error.message));
 });
 
 test('pagination uses a strict cursor and a lookahead, including equal timestamps', async () => {
@@ -105,11 +139,38 @@ test('blocking validates the connection and uses the authoritative RPC', async (
   await assert.rejects(api.blockFriend(id), /Offline/);
 });
 
+test('block, unblock and report validate ids and reasons before any request', async () => {
+  const calls = [];
+  const query = { delete() { calls.push(['delete']); return this; }, eq(...args) { calls.push(['eq', ...args]); return this; }, insert(row) { calls.push(['insert', row]); return this; }, then: (resolve) => resolve({ data: null, error: null }) };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
+    rpc: async (...args) => { calls.push(args); return { data: true, error: null }; },
+    from: (table) => { calls.push(['from', table]); return query; },
+  };
+  const api = createChatApi(client);
+  await assert.rejects(api.blockUser('x'));
+  await assert.rejects(api.unblockUser('x'));
+  await assert.rejects(api.report({ userId: id }, { reason: 'boring', details: '' }));
+  await assert.rejects(api.report({ userId: id }, { reason: 'spam', details: 'x'.repeat(501) }));
+  assert.equal(calls.length, 0);
+  const peer = '22222222-2222-4222-8222-222222222222';
+  await api.blockUser(peer);
+  await api.unblockUser(peer);
+  await api.report({ userId: peer }, { reason: 'harassment', details: '  ' });
+  await api.report({ groupId: peer }, { reason: 'spam', details: ' Scam link ' });
+  assert.deepEqual(calls, [
+    ['block_user', { p_user_id: peer }],
+    ['from', 'user_blocks'], ['delete'], ['eq', 'blocker_id', id], ['eq', 'blocked_id', peer],
+    ['from', 'reports'], ['insert', { reported_user_id: peer, reason: 'harassment', details: null }],
+    ['from', 'reports'], ['insert', { group_id: peer, reason: 'spam', details: 'Scam link' }],
+  ]);
+});
+
 test('database rate limits surface as RATE_LIMITED with the server notice', async () => {
   const notice = 'You are sending messages too fast. Wait a moment and try again.';
   const api = createChatApi({
     auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
-    from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { code: 'PT429', message: notice } }) }) }) }),
+    from: () => ({ upsert: () => ({ select: () => ({ maybeSingle: async () => ({ data: null, error: { code: 'PT429', message: notice } }) }) }) }),
     rpc: async () => ({ data: null, error: { code: 'PT429', message: 'You have joined a lot of chats this hour. Try again later.' } }),
   });
   await assert.rejects(api.sendGroupMessage(id, 'hello'), (error) => error.code === 'RATE_LIMITED' && error.message === notice);

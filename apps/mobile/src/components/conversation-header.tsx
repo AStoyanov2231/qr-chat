@@ -15,16 +15,16 @@ export function ConversationHeader({ title, subtitle, imageUrl, settings, settin
   <View style={{ height: insets.top }} />
   <View style={[{ minHeight: hero, backgroundColor: colors.photo }, belowSafeArea && { height: hero }]}>
     {imageUrl && <Image source={{ uri: imageUrl }} contentFit="cover" contentPosition="top" style={{ position: 'absolute', inset: 0 }} accessibilityElementsHidden />}
-    <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(10,20,30,0.24)' }} />
+    <View style={{ position: 'absolute', inset: 0, backgroundColor: colors.photoScrim }} />
     <View style={{ height: 56 }} />
     <View style={[{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 34, gap: 6 }, belowSafeArea && { flex: 1, justifyContent: 'flex-end', paddingBottom: 58 }]}>
-      <Copy selectable={false} accessibilityRole="header" numberOfLines={2} ellipsizeMode="tail" style={{ color: '#fff', fontSize: 30, lineHeight: 36, fontWeight: '800', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.4)', textShadowRadius: 8 }}>{title}</Copy>
-      {subtitle && <Copy style={{ color: '#fff', fontSize: 14 }}>{subtitle}</Copy>}
+      <Copy selectable={false} accessibilityRole="header" numberOfLines={2} ellipsizeMode="tail" style={{ color: colors.onPhoto, fontSize: 30, lineHeight: 36, fontWeight: '800', textAlign: 'center', textShadowColor: colors.shadowText, textShadowRadius: 8 }}>{title}</Copy>
+      {subtitle && <Copy style={{ color: colors.onPhoto, fontSize: 14 }}>{subtitle}</Copy>}
     </View>
   </View>
   {/* Controls stay put above the conversation, like the web overlay. */}
   <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: insets.top + 12 }}>
-    <NativeAction icon="back" accessibilityLabel={onBack ? 'Back' : 'Back to chats'} onPress={onBack ?? (() => router.dismissTo('/'))} />
+    <NativeAction icon="back" accessibilityLabel="Back to chats" onPress={onBack ?? (() => router.dismissTo('/'))} />
     <View style={{ flexDirection: 'row', gap: 12 }}>
       {browse && <NativeAction icon="browser" accessibilityLabel="Open venue page" onPress={browse} />}
       {settings && <NativeAction icon="settings" accessibilityLabel={settingsLabel ?? 'Settings'} disabled={disabled} onPress={settings} />}

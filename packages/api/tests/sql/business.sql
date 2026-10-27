@@ -26,16 +26,19 @@ begin
   assert place.name = 'Natterium Bar' and place.code ~ '^[a-z0-9]{10}$', 'place is created with a random code';
   assert (select code_key = 'v:' || place.code and name = 'Natterium Bar' from public.groups where id = place.group_id), 'place group carries the venue code and name';
   assert (select public.expires_at(m) = 'infinity' from public.group_members m where user_id = owner and group_id = place.group_id), 'owner membership is permanent';
-  place := public.update_place(place.id, 'Natterium', 'https://natterium.com/menu', null);
+  place := public.update_place(place.id, 'Natterium', 'https://natterium.com/menu', null, null);
   assert (select name = 'Natterium' from public.groups where id = place.group_id), 'renaming a place renames its group';
   denied := false;
-  begin perform public.update_place(place.id, 'Natterium', 'javascript:alert(1)', null); exception when check_violation then denied := true; end;
+  begin perform public.update_place(place.id, 'Natterium', 'javascript:alert(1)', null, null); exception when check_violation then denied := true; end;
   assert denied, 'links must be https';
   denied := false;
-  begin perform public.update_place(place.id, 'Natterium', null, guest || '/' || gen_random_uuid() || '.pdf'); exception when check_violation then denied := true; end;
+  begin perform public.update_place(place.id, 'Natterium', null, guest || '/' || gen_random_uuid() || '.pdf', null); exception when check_violation then denied := true; end;
   assert denied, 'menus must live in the owner''s folder';
   denied := false;
-  begin perform public.update_place(place.id, 'Natterium', 'https://natterium.com/menu', owner || '/' || gen_random_uuid() || '.pdf'); exception when check_violation then denied := true; end;
+  begin perform public.update_place(place.id, 'Natterium', null, null, guest || '/' || gen_random_uuid() || '.jpg'); exception when check_violation then denied := true; end;
+  assert denied, 'photos must live in the owner''s folder';
+  denied := false;
+  begin perform public.update_place(place.id, 'Natterium', 'https://natterium.com/menu', owner || '/' || gen_random_uuid() || '.pdf', null); exception when check_violation then denied := true; end;
   assert denied, 'a place has a menu link or a menu PDF, not both';
 
   perform set_config('request.jwt.claim.sub', guest::text, true);
@@ -50,7 +53,7 @@ begin
   assert denied, 'unknown venue codes are refused';
   assert not exists (select 1 from public.groups where code_key = 'v:unknown123'), 'unknown venue codes create no group';
   denied := false;
-  begin perform public.update_place(place.id, 'Taken', null, null); exception when insufficient_privilege then denied := true; end;
+  begin perform public.update_place(place.id, 'Taken', null, null, null); exception when insufficient_privilege then denied := true; end;
   assert denied, 'only business accounts edit places';
 
   -- Lapsed plan: the QR still works as a plain group, the venue extras switch off.

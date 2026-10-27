@@ -76,8 +76,9 @@ for (const platform of ['ios', 'android']) {
     assert.equal(state.navigation.length, 0);
   });
 
-  test(`${platform}: a join failure is shown and the next scan retries`, async (t) => {
+  test(`${platform}: a join failure is shown and a scan after the lock retries`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     let attempts = 0;
     state.auth.api = {
       joinGroup: async () => { if (++attempts === 1) throw new Error('Offline'); return { group_id: 'room-two' }; },
@@ -87,6 +88,7 @@ for (const platform of ['ios', 'android']) {
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data: 'New-Room' }); });
     assert.match(screen.text(), /Offline/);
     assert.equal(state.navigation.length, 0);
+    t.mock.timers.tick(1200);
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data: 'New-Room' }); });
     assert.equal(attempts, 2);
     assert.equal(state.navigation.at(-1)[1].pathname, '/room');
@@ -116,6 +118,7 @@ for (const platform of ['ios', 'android']) {
 
   test(`${platform}: scanner rejects invalid input, handles permission recovery, and stops in the background`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     state.permission = { granted: false, canAskAgain: false };
     const screen = await render(t, Scan);
     assert.equal(screen.root.findAllByType('CameraView').length, 0);
@@ -125,13 +128,14 @@ for (const platform of ['ios', 'android']) {
     await screen.update();
     assert.equal(screen.root.findAllByType('CameraView').length, 1);
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({type:'qr',data:'x'.repeat(513)}); });
-    assert.match(screen.text(), /code is invalid/);
+    assert.match(screen.text(), /QR code isn’t supported/);
     assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
     assert.doesNotMatch(screen.text(), /Enter a code/);
     state.auth.active = false;
     await screen.update();
     assert.equal(screen.root.findAllByType('CameraView').length, 0);
     assert.deepEqual(state.navigation, []);
+    t.mock.timers.tick(1200);
     state.auth.api = { joinGroup: async () => ({ group_id: 'room-two' }), resolveGroup: async () => null };
     state.auth.active = true; await screen.update();
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({type:'qr',data:'Case-Sensitive'}); });
@@ -262,7 +266,7 @@ for (const platform of ['ios', 'android']) {
     assert.match(screen.text(), /Send your first message/);
     const composer = screen.root.findAllByType('NativeTextInput').find(input => input.props.accessibilityLabel === 'Message Sam');
     assert.ok(composer);
-    assert.equal(composer.props.placeholder, 'Message…');
+    assert.equal(composer.props.placeholder, 'Message Sam…');
     assert.equal(composer.props.accessibilityLabel, 'Message Sam');
   });
 
@@ -295,7 +299,7 @@ test('a failed message stays marked, retries, and hands off to the loaded messag
   let failSend = true;
   const sent = [];
   const props = {
-    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    messages: [], userId: 'me', error: '', available: true, nextCursor: null,
     refresh: async () => { throw new Error('Offline'); }, loadOlder: async () => {},
     send: async body => { if (failSend) throw new Error('Failed send'); sent.push(body); return { id: 7 }; }, unavailable: 'Ended',
   };
@@ -320,7 +324,7 @@ test('a rate-limited send shows the database notice on the failed message', asyn
   reset();
   const notice = 'Slow mode is on in this busy chat. Wait a few seconds between messages.';
   const screen = await render(t, Conversation, {
-    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    messages: [], userId: 'me', error: '', available: true, nextCursor: null,
     refresh: async () => {}, loadOlder: async () => {}, unavailable: 'Ended',
     send: async () => { throw Object.assign(new Error(notice), { name: 'ChatApiError', code: 'RATE_LIMITED' }); },
   });
@@ -333,7 +337,7 @@ test('a sent message shows instantly and the field stays editable for the next o
   reset();
   let sendCount = 0;
   const screen = await render(t, Conversation, {
-    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    messages: [], userId: 'me', error: '', available: true, nextCursor: null,
     refresh: async () => {}, loadOlder: async () => {},
     send: async () => { sendCount += 1; await new Promise(() => {}); }, unavailable: 'Ended',
   });
