@@ -133,7 +133,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
   }
   const backend: ChatViewBackend = {
     ...snapshot, directPreviews, api, ready: true, error: "", connection: "connected", hasObservedGroup: true,
-    refresh: idle, refreshGroup: idle, openGroup: () => () => {}, groupLoading: false, loadOlder: idle,
+    refresh: idle, refreshGroup: idle, openGroup: () => () => {}, groupLoading: false, groupErrors: {}, loadOlder: idle,
   };
   return <ChatView view={view} backend={backend} directId={directId} setDirectId={setDirectId} business direct={{
     messages: directRows.filter((row) => row.group_id === directId), nextCursor: null, loading: false, error: "", connection: "connected", refresh: idle, loadOlder: idle,
