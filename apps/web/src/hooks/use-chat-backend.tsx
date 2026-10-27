@@ -71,7 +71,7 @@ function useSession() {
 export function useChatBackend() {
   const { api, store } = useSession();
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
-  return { ...state.snapshot, api, ready: state.ready, error: state.error, connection: state.connection, hasObservedGroup: state.hasObservedGroup, groupLoading: state.groupLoading,
+  return { ...state.snapshot, api, ready: state.ready, error: state.error, connection: state.connection, hasObservedGroup: state.hasObservedGroup, groupLoading: state.groupLoading, groupErrors: state.groupErrors,
     refresh: store.refresh, refreshGroup: store.refreshGroup, openGroup: store.openGroup, loadOlder: store.loadOlderGroup };
 }
 export function useDirectMessages(_api: Api, connectionId: string | null) {

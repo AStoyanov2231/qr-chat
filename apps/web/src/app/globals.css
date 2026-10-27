@@ -316,6 +316,7 @@ img.group-initials { object-fit: cover; }
 }
 
 .message-stream article p {
+  white-space: pre-wrap;
   padding: 10px 14px;
   border-radius: 24px;
   background: var(--fill);
@@ -362,15 +363,18 @@ img.group-initials { object-fit: cover; }
 }
 .message-composer-pill:focus-within { box-shadow: 0 0 0 2px var(--canvas), 0 0 0 4px var(--text); }
 
-.message-composer-pill input {
+.message-composer-pill textarea {
   min-width: 0;
   width: 100%;
-  height: 44px;
-  padding: 0;
+  min-height: 44px;
+  max-height: 132px;
+  padding: 11px 0;
   border: 0;
   outline: 0;
+  resize: none;
   background: transparent;
   font-size: 16px;
+  line-height: 22px;
 }
 
 .message-composer-pill > button {
@@ -799,7 +803,8 @@ body:has(.app-content:is(.has-chat, .has-overview, .has-profile)) { position: fi
 /* Equal sides keep the title centred whether one or two actions sit on the right. */
 .chat-bar-side { flex: 0 0 96px; display: flex; align-items: center; gap: 8px; }
 .chat-bar-side.end { flex: 0 0 auto; min-width: 96px; justify-content: flex-end; }
-.chat-bar .group-member-count { width: auto; height: 36px; display: inline-flex; padding: 0 12px; background: var(--secondary); color: var(--on-secondary); font-size: 14px; }
+.chat-bar .group-member-count { position: relative; width: auto; height: 36px; display: inline-flex; padding: 0 12px; background: var(--secondary); color: var(--on-secondary); font-size: 14px; }
+.chat-bar .group-member-count::before { content: ""; position: absolute; inset: -4px 0; }
 .chat-bar-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; line-height: 22px; font-weight: 700; }
 .chat-bar-title p { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 700; }
 /* One back button everywhere: a soft circle that presses in and nudges its arrow. */

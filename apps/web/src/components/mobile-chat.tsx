@@ -14,6 +14,8 @@ import {
   useSyncExternalStore,
   type FormEvent,
   type MouseEvent,
+  type RefObject,
+  type UIEvent,
 } from "react";
 import { CornersOut, QrCode } from "@phosphor-icons/react";
 import { useScreenTransition } from "@/hooks/use-screen-transition";
@@ -25,7 +27,7 @@ import { ConversationHeader } from "@/components/conversation-header";
 import { GroupSidebar } from "@/components/group-sidebar";
 import { ProfileView } from "@/components/profile-view";
 import { ChatsOverview } from "@/components/chats-overview";
-import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty, FriendRequestDecision, OutboxBubble } from "@/components/direct-message-parts";
+import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty, FriendRequestDecision, MessageInput, OutboxBubble } from "@/components/direct-message-parts";
 import { Avatar } from "@/components/avatar";
 import { ClearButton } from "@/components/clear-button";
 import { MemberProfile } from "@/components/member-profile";
@@ -33,11 +35,27 @@ import { Icon } from "@/components/icon";
 import { resolveCode, type Venue } from "@/lib/chat-view";
 import { useChatBackend, useDirectMessages, errorMessage } from "@/hooks/use-chat-backend";
 import { useOutbox } from "@/hooks/use-outbox";
+import { nearBottom } from "@/lib/message-input";
 
 function subscribeNetwork(callback: () => void) {
   window.addEventListener("online", callback);
   window.addEventListener("offline", callback);
   return () => { window.removeEventListener("online", callback); window.removeEventListener("offline", callback); };
+}
+
+/** Follows new messages only when the reader is near the end, just sent one, or just opened the chat. */
+function useFollowBottom(end: RefObject<HTMLDivElement | null>, conversation: string | undefined, latest: unknown, sent: number, own: boolean) {
+  const near = useRef(true);
+  const last = useRef({ conversation, sent });
+  useEffect(() => {
+    const stream = end.current?.parentElement;
+    const before = last.current;
+    last.current = { conversation, sent };
+    const fresh = before.conversation !== conversation;
+    if (fresh) near.current = true;
+    if (stream && (fresh || sent > before.sent || own || near.current)) stream.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
+  }, [end, conversation, latest, sent, own]);
+  return (event: UIEvent<HTMLElement>) => { near.current = nearBottom(event.currentTarget); };
 }
 
 function MessageDay({ time, previousTime }: { time: number; previousTime?: number }) {
@@ -76,7 +94,7 @@ export default function QrChatApp() {
   const friend = backend.friends.find((friend) => friend.id === directId && friend.accepted_at);
   const direct = useDirectMessages(backend.api, friend?.id ?? null);
   const [business, setBusiness] = useState(false);
-  useEffect(() => { if (backend.ready) void backend.api.isBusiness().then(setBusiness, () => {}); }, [backend.ready, backend.api]);
+  useEffect(() => { if (backend.ready) void backend.api.isBusiness().then((plan) => plan || backend.api.places().then((places) => places.length > 0)).then(setBusiness, () => {}); }, [backend.ready, backend.api]);
   return <ChatView view={view} backend={backend} direct={direct} directId={directId} setDirectId={setDirectId} business={business} />;
 }
 
@@ -88,6 +106,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const chatsUrl = preview ? "/design-preview" : "/";
   const profileUrl = preview ? "/design-preview?view=profile" : "/profile";
   const online = useSyncExternalStore(subscribeNetwork, () => navigator.onLine, () => true);
+  // One rule everywhere: "Reconnecting…" only when actually reconnecting; "polling" and the first "connecting" are normal.
+  const reconnecting = online && backend.connection === "reconnecting";
   const { session, api, ready } = backend;
   const groups = backend.groups;
   const [busy, setBusy] = useState(false);
@@ -148,7 +168,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     const element = app.current;
     if (element) return observeChatViewport(element);
   }, []);
-  useEffect(() => active && view !== "profile" && !directId ? openGroup(active.id) : undefined, [active, view, directId, openGroup]);
+  const activeId = active?.id;
+  useEffect(() => activeId && view !== "profile" && !directId ? openGroup(activeId) : undefined, [activeId, view, directId, openGroup]);
 
   const hiddenUsers = useMemo(
     () => new Set(session?.hidden ?? []),
@@ -161,6 +182,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const groupOutbox = active ? outbox.visible(`g:${active.id}`, group?.messages.map((message) => message.id) ?? []) : [];
   const directOutbox = directId ? outbox.visible(`d:${directId}`, direct.messages.map((message) => message.id)) : [];
   const groupTitle = group?.venue.name ?? active?.name ?? "";
+  const groupError = active ? backend.groupErrors[active.id] : undefined;
 
   async function perform(action: () => Promise<void>) {
     if (busyRef.current) return;
@@ -169,6 +191,13 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     try { await action(); return true; }
     catch (reason) { setNotice(errorMessage(reason)); return false; }
     finally { busyRef.current = false; setBusy(false); }
+  }
+
+  // The profile dialog sits above the toast, so its actions hand their error message back for the dialog to show.
+  async function profileAction(action: () => Promise<unknown>) {
+    let message = "";
+    await perform(async () => { try { await action(); } catch (reason) { message = errorMessage(reason); } });
+    return message;
   }
 
   function openCode(value: string) {
@@ -351,15 +380,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
     };
   }, [active, directId, view]);
 
-  useEffect(() => {
-    const stream = bottom.current?.parentElement;
-    stream?.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
-  }, [latestGroupMessageId, groupOutbox.length, active]);
-
-  useEffect(() => {
-    const stream = directBottom.current?.parentElement;
-    stream?.scrollTo({ top: stream.scrollHeight, behavior: "smooth" });
-  }, [latestDirectMessageId, directOutbox.length, directId]);
+  const followGroup = useFollowBottom(bottom, active?.id, latestGroupMessageId, groupOutbox.length, group?.messages.at(-1)?.user === session?.id);
+  const followDirect = useFollowBottom(directBottom, directId ?? undefined, latestDirectMessageId, directOutbox.length, direct.messages.at(-1)?.sender_id === session?.id);
 
   useEffect(() => {
     const stream = (directId ? directBottom : bottom).current?.parentElement;
@@ -514,11 +536,11 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
   return (
     <div ref={app} className="qr-app">
-      {(!online || backend.connection === "reconnecting") && <div className="connection-status" role="status">{online ? "Reconnecting… Your chats will refresh when connected." : "You’re offline. Reconnect to load chats and send messages."}</div>}
+      {(!online || reconnecting) && <div className="connection-status" role="status">{online ? "Reconnecting… Your chats will refresh when connected." : "You’re offline. Reconnect to load chats and send messages."}</div>}
       <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : "has-profile"}`}>
         {view === "profile" ? <>
-          {backend.error && <div className="connection-banner" role="alert">{backend.error} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
-          <ProfileView session={session} ready={ready} busy={busy} business={business} onBack={backToChats} onSave={(display_name, photo) => perform(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => void perform(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} onDeleteAccount={() => void perform(async () => { await api.deleteAccount(); router.replace("/sign-in"); router.refresh(); })} />
+          {backend.error && <div className="connection-banner" role="alert">{errorMessage(new Error(backend.error))} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
+          <ProfileView session={session} ready={ready} busy={busy} business={business} onBack={backToChats} onSave={(display_name, photo) => profileAction(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => profileAction(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} onDeleteAccount={() => profileAction(async () => { await api.deleteAccount(); router.replace("/sign-in"); router.refresh(); })} />
         </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={openOwnProfile} /> : !active && !directId && (
           <ChatsOverview
             profileName={session?.name}
@@ -559,7 +581,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
           <section className="conversation-view">
             <ConversationHeader title={groupTitle} onBack={backToChats} settingsLabel="Group members" members={group?.members.length} disabled={!group} onSettings={() => setSidebar(true)} venueLink={group ? venueLink(group.venue, window.location.origin) : null} />
             <div className="chat-conversation-surface">
-              <div className="message-stream" aria-live="polite">
+              <div className="message-stream" aria-live="polite" onScroll={followGroup}>
+                {groupError && <div className="connection-banner dm-load-error" role="alert">Couldn’t load messages. Your draft stays here. <button onClick={() => void perform(() => backend.refreshGroup(active.id))}>Retry</button></div>}
                 {group?.nextCursor !== null && group?.nextCursor !== undefined && <button className="text-button" disabled={busy} onClick={() => void perform(() => backend.loadOlder(active.id))}>Load older messages</button>}
                 {backend.groupLoading && <MessageSkeleton />}
                 {!backend.groupLoading && !group && <p className="first-message">Your membership has ended.</p>}
@@ -596,20 +619,12 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 <form className="message-composer" onSubmit={submitMessage} aria-busy={busy}>
                   <div className="message-composer-pill">
                     <label className="sr-only" htmlFor="message">Message</label>
-                    <input
-                      id="message"
-                      value={draft}
-                      disabled={busy}
-                      maxLength={4000}
-                      onChange={(event) => setDraft(event.target.value)}
-                      placeholder={`Message ${groupTitle}…`}
-                      autoComplete="off"
-                    />
+                    <MessageInput id="message" value={draft} disabled={backend.groupLoading} placeholder={`Message ${groupTitle}…`} onChange={setDraft} />
                     <button
                       type="submit"
                       className="send"
                       aria-label={busy ? "Sending message" : "Send message"}
-                      disabled={busy || !ready || !draft.trim()}
+                      disabled={busy || !ready || backend.groupLoading || !!groupError || !draft.trim()}
                     >
                       {busy ? <span className="send-spinner" aria-hidden="true" /> : <Icon name="send" size={19} />}
                     </button>
@@ -632,11 +647,11 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
         {view === "chats" && directId && ready && !backend.error && (
           <section className="conversation-view">
-            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={direct.connection === "connected" ? undefined : "Reconnecting…"} onBack={backToChats} />
+            <ConversationHeader title={peer?.display_name ?? "Direct message"} subtitle={reconnecting ? "Reconnecting…" : undefined} onBack={backToChats} />
             <div className="chat-conversation-surface">
               {!directFriend ? request ? <FriendRequestDecision name={peer?.display_name ?? "Participant"} avatarUrl={peer?.avatar_url ?? null} sentAge={messageAge(Date.parse(request.requested_at))} busy={busy}
                   onAccept={() => respondToRequest("accept")} onDecline={() => respondToRequest("decline")} onBlock={() => respondToRequest("block")} /> : <p className="first-message">This friendship is no longer available.</p> : <>
-                <div className="message-stream" aria-live="polite">
+                <div className="message-stream" aria-live="polite" onScroll={followDirect}>
                   {direct.error && <div className="connection-banner dm-load-error" role="alert">Couldn’t load messages. Your draft stays here. <button onClick={() => void perform(direct.refresh)}>Retry</button></div>}
                   {direct.loading && <MessageSkeleton />}
                   {!direct.loading && !direct.error && direct.messages.length === 0 && <FirstDirectMessageEmpty friendName={peer?.display_name ?? "your friend"} />}
