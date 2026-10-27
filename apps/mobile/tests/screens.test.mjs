@@ -128,7 +128,7 @@ for (const platform of ['ios', 'android']) {
     await screen.update();
     assert.equal(screen.root.findAllByType('CameraView').length, 1);
     await act(async () => { screen.root.findByType('CameraView').props.onBarcodeScanned({type:'qr',data:'x'.repeat(513)}); });
-    assert.match(screen.text(), /code is invalid/);
+    assert.match(screen.text(), /QR code isn’t supported/);
     assert.equal(screen.root.findAllByType('NativeTextInput').length, 0);
     assert.doesNotMatch(screen.text(), /Enter a code/);
     state.auth.active = false;
@@ -266,7 +266,7 @@ for (const platform of ['ios', 'android']) {
     assert.match(screen.text(), /Send your first message/);
     const composer = screen.root.findAllByType('NativeTextInput').find(input => input.props.accessibilityLabel === 'Message Sam');
     assert.ok(composer);
-    assert.equal(composer.props.placeholder, 'Message…');
+    assert.equal(composer.props.placeholder, 'Message Sam…');
     assert.equal(composer.props.accessibilityLabel, 'Message Sam');
   });
 

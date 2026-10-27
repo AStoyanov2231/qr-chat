@@ -39,6 +39,9 @@ export function friendshipState(connection: { accepted_at: string | null; reques
   return connection.requested_by_id === userId ? 'outgoing' : 'incoming';
 }
 
+/** Shown by both apps when a scanned code can't be turned into a QR key. */
+export const INVALID_CODE_MESSAGE = "This QR code isn’t supported. Try scanning a different one.";
+
 /** Only first-party QR handoff URLs are unwrapped: `?code=` and venue links `/v/<code>` (key `v:<code>`).
  * Other URLs remain opaque QR keys. */
 export function unwrapQrCode(input: string, origin: string): string {

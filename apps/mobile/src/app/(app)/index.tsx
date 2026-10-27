@@ -11,6 +11,7 @@ import { Copy, Icon, NativeInput, Skeleton, colors, shadowFloat, styles, useActi
 import { NativeAction } from '@/components/native-action';
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
+import { notify } from '@/lib/notice';
 import { roomRoute } from '@/lib/room-route';
 
 function useGroupAccessCountdown(expiresAt: string | null) {
@@ -65,7 +66,7 @@ function GroupCard({ group, unread, userId, profileName, open, onReveal, onNotic
   const groupMessageAge = latestGroupMessage ? messageAge(latestGroupMessage.time) : null;
   return <SwipeRow label={`Open ${group.venue.name}, ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}. ${accessIndicator.accessibilityLabel}${unread ? ` ${unreadLabel(unread)}.` : ''}`} actionsLabel={group.venue.name}
     open={open} onReveal={onReveal} onOpen={() => router.push(roomRoute(group))} refresh={refresh} onNotice={onNotice} errorText="Couldn’t leave this group. Try again."
-    actions={[{ kind: 'leave', label: 'Leave', icon: 'exit', danger: true, title: 'Leave this group?', message: 'You can join again by scanning its QR code.', run: () => api!.leaveGroup(group.id), notice: `You left ${group.venue.name}.` }]}>
+    actions={[{ kind: 'leave', label: 'Leave', icon: 'exit', danger: true, title: `Leave ${group.venue.name}?`, message: 'You can join again by scanning its QR code.', run: () => api!.leaveGroup(group.id), notice: `You left ${group.venue.name}.` }]}>
     <View style={homeStyles.groupAvatar}>
       <GroupAccessRing name={group.venue.name} imageUrl={group.venue.imageUrl} indicator={accessIndicator} />
       <Copy style={homeStyles.expiry}>{accessIndicator.label}</Copy>
@@ -220,16 +221,10 @@ export default function ChatsScreen() {
   const [search, setSearch] = useState('');
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
-  const [notice, setNotice] = useState('');
   const hasGroups = chat.groups.length > 0;
   const [expiryNotice, setExpiryNotice] = useState({ hasGroups, dismissed: false });
   if (expiryNotice.hasGroups !== hasGroups) setExpiryNotice({ hasGroups, dismissed: false });
   const expiryDismissed = expiryNotice.hasGroups === hasGroups && expiryNotice.dismissed;
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(''), 5000);
-    return () => clearTimeout(timer);
-  }, [notice]);
   const query = search.trim().toLocaleLowerCase();
   const peerFor = (friend: Friend): Peer => {
     const profile = friend.user_a_id === userId ? friend.user_b : friend.user_a;
@@ -269,18 +264,18 @@ export default function ChatsScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Dismiss group access notice" onPress={() => setExpiryNotice({ hasGroups, dismissed: true })} style={homeStyles.clearSearch}><Icon name="close" size={18} color={colors.muted} /></Pressable>
         </View>}
         {rows.map((row) => {
-          if (row.kind === 'group') return <GroupCard key={row.id} group={row.group} unread={chat.unread[row.id] ?? 0} userId={userId} profileName={chat.session?.name} open={revealedId === row.id} onReveal={(open) => setRevealedId(open ? row.id : null)} refresh={chat.refresh} onNotice={setNotice} />;
+          if (row.kind === 'group') return <GroupCard key={row.id} group={row.group} unread={chat.unread[row.id] ?? 0} userId={userId} profileName={chat.session?.name} open={revealedId === row.id} onReveal={(open) => setRevealedId(open ? row.id : null)} refresh={chat.refresh} onNotice={notify} />;
           const { friend } = row;
           const peer = peerFor(friend);
           if (row.kind === 'request') return friend.requested_by_id !== userId
             ? <IncomingRequestRow key={row.id} friend={friend} peer={peer} />
-            : <RequestRow key={row.id} friend={friend} peer={peer} busy={action.busy} onNotice={setNotice} refresh={chat.refresh} />;
+            : <RequestRow key={row.id} friend={friend} peer={peer} busy={action.busy} onNotice={notify} refresh={chat.refresh} />;
           const preview = chat.directPreviews[friend.id];
           const failed = !preview || preview.status === 'error';
           const message = preview?.status === 'ready' ? preview.message : null;
           const unread = failed ? 0 : chat.unread[friend.id] ?? 0;
           return <View key={row.id}>
-            <SwipeRow label={`Open direct message with ${peer.name}${unread ? `, ${unreadLabel(unread)}` : ''}`} actionsLabel={peer.name} open={revealedId === friend.id} onReveal={(open) => setRevealedId(open ? friend.id : null)} onOpen={() => openDirectMessage(friend)} refresh={chat.refresh} onNotice={setNotice} errorText="Couldn’t update this friendship. Try again."
+            <SwipeRow label={`Open direct message with ${peer.name}${unread ? `, ${unreadLabel(unread)}` : ''}`} actionsLabel={peer.name} open={revealedId === friend.id} onReveal={(open) => setRevealedId(open ? friend.id : null)} onOpen={() => openDirectMessage(friend)} refresh={chat.refresh} onNotice={notify} errorText="Couldn’t update this friendship. Try again."
               actions={[
                 { kind: 'unfriend', label: 'Unfriend', icon: 'userMinus', title: `Unfriend ${peer.name}?`, message: 'This ends your friendship and removes this conversation.', run: () => api!.removeFriend(friend.id), notice: `You and ${peer.name} are no longer friends.` },
                 { kind: 'block', label: 'Block', icon: 'block', danger: true, title: `Block ${peer.name}?`, message: 'This ends your friendship and prevents new friend requests between you.', run: () => api!.blockFriend(friend.id), notice: `Blocked ${peer.name}.` },
@@ -302,7 +297,6 @@ export default function ChatsScreen() {
         </View>)}
       </>}
     </ScrollView>
-    {!!notice && <View pointerEvents="none" style={homeStyles.notice}><Copy accessibilityLiveRegion="polite" style={{ color: colors.onSecondary, textAlign: 'center', fontSize: 14, lineHeight: 20 }}>{notice}</Copy></View>}
     <View pointerEvents="box-none" style={homeStyles.scanOverlay}>
       <View style={{ borderRadius: 32, boxShadow: shadowFloat }}><NativeAction icon="scan" prominent accessibilityLabel="Scan a QR code" disabled={!chat.ready || !!chat.error} onPress={() => router.push('/scan')} /></View>
     </View>
@@ -352,6 +346,5 @@ const homeStyles = StyleSheet.create({
   emptyTitle: { fontSize: 20, lineHeight: 26, fontWeight: '700', textAlign: 'center' },
   emptyCopy: { fontSize: 14, lineHeight: 20, color: colors.muted, textAlign: 'center' },
   loadError: { padding: 16, gap: 8, borderRadius: 24, backgroundColor: colors.fill },
-  notice: { position: 'absolute', bottom: 100, alignSelf: 'center', maxWidth: '90%', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 22, backgroundColor: colors.secondary, boxShadow: shadowFloat },
   scanOverlay: { position: 'absolute', right: 16, bottom: 20 },
 });

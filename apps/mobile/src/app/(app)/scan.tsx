@@ -3,7 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Linking, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { groupFallbackName, scannedCode, unwrapQrCode } from '@qr-chat/domain';
+import { INVALID_CODE_MESSAGE, groupFallbackName, scannedCode, unwrapQrCode } from '@qr-chat/domain';
 import { codeKeySchema } from '@qr-chat/validation';
 import { Button, Copy, ErrorNotice, useAction } from '@/components/chat-ui';
 import { NativeAction } from '@/components/native-action';
@@ -41,7 +41,7 @@ export default function ScanScreen() {
     const unlock = () => setTimeout(() => { locked.current = false; }, 1200);
     let code: string | undefined;
     try { const parsed = codeKeySchema.safeParse(unwrapQrCode(scannedCode(type, value), webOrigin)); if (parsed.success) code = parsed.data; } catch { /* malformed URL */ }
-    if (!code) { setError('This code is invalid. Try scanning another code.'); unlock(); return; }
+    if (!code) { setError(INVALID_CODE_MESSAGE); unlock(); return; }
     setError('');
     const current = chat.groups.find((group) => group.venue.codes[0] === code) ?? null;
     if (current && !current.venue.nameMissing) { router.replace(roomRoute(current)); return; }

@@ -177,6 +177,8 @@ export function BusinessPreview({ initialTime }: { initialTime: number }) {
       places.current = places.current.map((item) => item.id === place.id ? saved : item);
       return saved;
     },
+    async signOut() {},
+    async deleteAccount() {},
     async deletePlace(id) { places.current = places.current.map((place) => place.id === id ? { ...place, deleted_at: new Date().toISOString() } : place); },
   }));
   return <BusinessView preview={api} />;

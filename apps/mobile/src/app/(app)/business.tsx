@@ -51,11 +51,14 @@ export default function BusinessScreen() {
   const gesture = <Stack.Screen options={{ gestureEnabled: !editing }} />;
   if (editing && state) return <>{gesture}<PlaceEditor place={editing === 'new' ? null : editing} readOnly={!state.business} api={api!} onDone={done} onBack={() => setEditing(null)} /></>;
   const hasPlaces = !!state?.places.length;
-  return <Page title="Business" backLabel="Back" onBack={() => router.back()} onAdd={state?.business ? () => setEditing('new') : undefined}>
+  return <Page title="Business" backLabel="Back to chats" onBack={() => router.back()} onAdd={state?.business ? () => setEditing('new') : undefined}>
     {gesture}
     <ErrorNotice message={action.error} retry={() => { void action.run(load); }} />
     {!state ? !action.error && <Copy style={styles.muted}>Loading your places…</Copy>
-      : !state.business && !hasPlaces ? <Copy style={styles.muted}>This screen is for business accounts.</Copy>
+      : !state.business && !hasPlaces ? <View style={{ gap: 8 }}>
+        <Copy accessibilityRole="header" style={styles.subtitle}>This page is for business accounts.</Copy>
+        <Copy style={styles.muted}>Business accounts create QR codes for their venues.</Copy>
+      </View>
       : <>
         {!state.business && <View accessibilityRole="alert" style={{ padding: 16, borderRadius: 20, backgroundColor: colors.warning }}>
           <Copy style={{ color: colors.onWarning, fontSize: 14, lineHeight: 20 }}>Your business plan is inactive. Your QR codes still work as normal group chats; renew the plan to edit your places again.</Copy>

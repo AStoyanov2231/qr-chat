@@ -84,12 +84,12 @@ for (const platform of ['ios', 'android']) {
     const scanner = await render(t, Scan);
     const scan = (data) => act(async () => { scanner.root.findByType('CameraView').props.onBarcodeScanned({ type: 'qr', data }); });
     await scan('http://');
-    assert.ok(scanner.text().includes('This code is invalid'), 'A malformed URL is reported, not thrown');
+    assert.ok(scanner.text().includes('This QR code isn’t supported'), 'A malformed URL is reported, not thrown');
     t.mock.timers.tick(1200);
     await scan('Room-A');
     await scan('Room-A');
     assert.deepEqual(calls, ['Room-A'], 'A failed join is not retried on every frame');
-    assert.ok(scanner.text().includes('Join failed.') && !scanner.text().includes('This code is invalid'), 'The stale scan error is cleared');
+    assert.ok(scanner.text().includes('Join failed.') && !scanner.text().includes('This QR code isn’t supported'), 'The stale scan error is cleared');
     t.mock.timers.tick(1200);
     await scan('Room-A');
     assert.equal(calls.length, 2, 'The camera scans again after the lock');

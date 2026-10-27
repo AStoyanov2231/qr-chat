@@ -91,7 +91,10 @@ const mocks = {
     export const Stack=({children,...props})=>React.createElement('NativeStack',props,children);
     Stack.Screen=props=>React.createElement('NativeStackScreen',props);`,
   'expo-router/react-navigation': 'export const useHeaderHeight=()=>64;',
-  'react-native-safe-area-context': 'export const useSafeAreaInsets=()=>({top:24,right:0,bottom:24,left:0});',
+  'react-native-safe-area-context': `
+    import {createContext, useContext} from 'react';
+    export const SafeAreaInsetsContext=createContext(null);
+    export const useSafeAreaInsets=()=>useContext(SafeAreaInsetsContext) ?? {top:24,right:0,bottom:24,left:0};`,
   'react-native-screens/experimental': "export const SafeAreaView='NativeSafeAreaView';",
   'react-native-reanimated': `
     export const useReducedMotion=()=>true;

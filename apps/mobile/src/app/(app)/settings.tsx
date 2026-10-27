@@ -12,7 +12,7 @@ export default function SettingsScreen() {
     <Button label="Blocked people" subtle onPress={() => router.push('/blocked')} />
     <Button label="Sign out" danger subtle disabled={action.busy} onPress={() => { void action.run(async () => { await api!.signOut(); }); }} />
     <Button label="Delete account" danger subtle disabled={action.busy} onPress={() => {
-      Alert.alert('Delete account?', 'This permanently erases your profile, photo, friendships and the messages you sent.', [
+      Alert.alert('Delete account?', 'This permanently erases your profile, photo, friendships and the messages you sent. It cannot be undone.', [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => { void action.run(async () => { await api!.deleteAccount(); }); } },
       ]);

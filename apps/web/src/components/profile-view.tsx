@@ -25,10 +25,27 @@ type Props = {
   onUnblock: (id: string) => Promise<string>;
 };
 
+/** Sign out and the two-step Delete account, shared by Settings and the desktop Business page. Handlers resolve to an error message ("" on success). */
+export function AccountActions({ busy, onSignOut, onDeleteAccount }: { busy: boolean; onSignOut: () => Promise<string>; onDeleteAccount: () => Promise<string> }) {
+  const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pending, setPending] = useState(false);
+  const run = async (action: () => Promise<string>) => { setError(""); setPending(true); setError(await action()); setPending(false); };
+  const off = busy || pending;
+  return <>
+    <button className="profile-action danger" disabled={off} onClick={() => void run(onSignOut)}>Sign out<CaretRight size={18} /></button>
+    {confirmDelete
+      ? <><p>This permanently erases your profile, photo, friendships and the messages you sent. It cannot be undone.</p>
+        <button className="profile-action danger" disabled={off} onClick={() => void run(onDeleteAccount)}>Yes, delete my account<CaretRight size={18} /></button>
+        <button className="text-button" disabled={off} onClick={() => setConfirmDelete(false)}>Cancel</button></>
+      : <button className="profile-action danger" disabled={off} onClick={() => setConfirmDelete(true)}>Delete account<CaretRight size={18} /></button>}
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </>;
+}
+
 export function ProfileView({ session, ready, busy, business, onBack, onSave, onSignOut, onDeleteAccount, blocked, onUnblock }: Props) {
   const [error, setError] = useState("");
   const [panel, setPanel] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState<Blob | null | undefined>();
   const [preview, setPreview] = useState<string | null>(null);
@@ -46,7 +63,7 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
   function open(title: string) {
     ++selection.current;
     setPhoto(undefined); setPreview(null); setPhotoError(""); setPreparing(false);
-    setError(""); setConfirmDelete(false);
+    setError("");
     setPanel(title);
     setName(session?.name ?? "");
     dialog.current?.showModal();
@@ -98,16 +115,10 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
             {photoError && <p className="form-error" role="alert">{photoError}</p>}
           </div>
           <label htmlFor="profile-name">Display name</label><div className="clear-field"><input id="profile-name" maxLength={50} placeholder=" " value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required /><ClearButton label="Clear display name" inputId="profile-name" disabled={!ready || saving} onClear={() => setName("")} /></div>
-          <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{error && <p className="form-error" role="alert">{error}</p>}
+          <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Saving…" : "Save profile"}</button>{error && <p className="form-error" role="alert">{error}</p>}
         </form>}
         {panel === "Settings" && <div className="settings-actions"><button className="profile-action" onClick={() => { setError(""); setPanel("Blocked people"); }}>Blocked people<CaretRight size={18} /></button>
-          <button className="profile-action danger" disabled={busy} onClick={() => void run(onSignOut)}>Sign out<CaretRight size={18} /></button>
-          {confirmDelete
-            ? <><p>This permanently erases your profile, photo, friendships and the messages you sent. It cannot be undone.</p>
-              <button className="profile-action danger" disabled={busy} onClick={() => void run(onDeleteAccount)}>Yes, delete my account<CaretRight size={18} /></button>
-              <button className="text-button" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</button></>
-            : <button className="profile-action danger" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete account<CaretRight size={18} /></button>}
-          {error && <p className="form-error" role="alert">{error}</p>}
+          <AccountActions busy={busy} onSignOut={onSignOut} onDeleteAccount={onDeleteAccount} />
           <p>Product data and photos © <a href="https://openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a> contributors, under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL</a> and <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA</a> licenses.</p></div>}
         {panel === "Blocked people" && <div className="blocked-list settings-actions">
           {blocked.length ? blocked.map((person) => <div className="member-row" key={person.id}><Avatar name={person.name} url={person.avatarUrl} size={44} /><span>{person.name}</span><button className="text-button" disabled={busy} onClick={() => void run(() => onUnblock(person.id))}>Unblock</button></div>)

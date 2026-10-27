@@ -6,7 +6,7 @@ import { safeAuthDestination } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
 const authErrors: Record<string, string> = {
-  missing_code: "Google did not return a sign-in code. Please try again.",
+  missing_code: "Sign-in was not completed. Please try again.",
   callback_failed: "We could not finish signing you in. Please try again.",
 };
 const noop = () => () => {};

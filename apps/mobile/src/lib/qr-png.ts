@@ -21,15 +21,16 @@ const chunk = (type: string, data: Uint8Array) => {
 /**
  * A printable black-on-white QR code as PNG bytes, for sharing as an image file.
  * React Native has no canvas, so this writes a 1-bit PNG by hand.
- * ponytail: zlib "stored" blocks (no compression); a 1-bit image at this size stays around 50 KB.
+ * Exactly `side` pixels wide like the web export, so module widths differ by at most a pixel.
+ * ponytail: zlib "stored" blocks (no compression); a 1-bit 1024px image is about 130 KB.
  */
-export function qrPng(text: string, scale = 16, margin = 4) {
+export function qrPng(text: string, side = 1024, margin = 4) {
   const { modules } = QRCode.create(text, { errorCorrectionLevel: 'M' });
-  const side = (modules.size + margin * 2) * scale;
+  const total = modules.size + margin * 2;
   const rowBytes = Math.ceil(side / 8) + 1; // filter byte 0, then pixels (bit 1 = white)
   const raw = new Uint8Array(rowBytes * side);
   for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
-    const mx = Math.floor(x / scale) - margin, my = Math.floor(y / scale) - margin;
+    const mx = Math.floor(x * total / side) - margin, my = Math.floor(y * total / side) - margin;
     const dark = mx >= 0 && my >= 0 && mx < modules.size && my < modules.size && modules.get(my, mx);
     if (!dark) raw[y * rowBytes + 1 + (x >> 3)]! |= 0x80 >> (x & 7);
   }
