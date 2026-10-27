@@ -311,7 +311,7 @@ test('malformed barcodes never reach Open Food Facts, the cache or storage', asy
 test('transport failures show connection guidance while actionable API and validation errors stay useful', async () => {
   const { errorMessage } = await load('../src/hooks/use-chat-backend.tsx', {
     react: { createContext: () => ({}) },
-    '@qr-chat/api': {},
+    '@qr-chat/api': await import('@qr-chat/api'),
     '@/lib/supabase/client': {},
     '@/lib/auth/redirect': {},
   });
@@ -324,6 +324,6 @@ test('transport failures show connection guidance while actionable API and valid
     assert.equal(errorMessage(new ChatApiError(notice, 'RATE_LIMITED')), notice, 'rate-limit notices are shown as is');
   }
   const { z } = require('@qr-chat/validation');
-  const invalid = z.string().min(1).safeParse('');
-  assert.equal(errorMessage(invalid.error), 'Check your input and try again.');
+  const invalid = z.string().refine(() => false, 'Choose a PDF smaller than 10 MB.').safeParse('');
+  assert.equal(errorMessage(invalid.error), 'Choose a PDF smaller than 10 MB.', 'the first validation issue is shown');
 });

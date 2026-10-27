@@ -47,9 +47,9 @@ function sampleSnapshot(now: number): ChatSnapshot {
 
 function sampleDirectMessages(now: number): Tables<"messages">[] {
   return [0, 1, 2].flatMap((index) => [
-    { id: index * 10 + 1, group_id: connectionId(index), sender_id: peerId(index), body: "Hey, how are you? 😊", created_at: new Date(now - 8 * 60000).toISOString() },
-    { id: index * 10 + 2, group_id: connectionId(index), sender_id: localUserId, body: "All good! What are you up to these days?", created_at: new Date(now - 7 * 60000).toISOString() },
-    { id: index * 10 + 3, group_id: connectionId(index), sender_id: peerId(index), body: "Just working and chilling. You?", created_at: new Date(now - 6 * 60000).toISOString() },
+    { id: index * 10 + 1, group_id: connectionId(index), sender_id: peerId(index), body: "Hey, how are you? 😊", client_id: null, created_at: new Date(now - 8 * 60000).toISOString() },
+    { id: index * 10 + 2, group_id: connectionId(index), sender_id: localUserId, body: "All good! What are you up to these days?", client_id: null, created_at: new Date(now - 7 * 60000).toISOString() },
+    { id: index * 10 + 3, group_id: connectionId(index), sender_id: peerId(index), body: "Just working and chilling. You?", client_id: null, created_at: new Date(now - 6 * 60000).toISOString() },
   ]);
 }
 
@@ -92,7 +92,7 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
     },
     async sendDirectMessage(id, input) {
       const body = messageBodySchema.parse(input);
-      setDirectRows((rows) => [...rows, { id: Math.max(0, ...rows.map((row) => row.id)) + 1, group_id: id, sender_id: localUserId, body, created_at: new Date().toISOString() }]);
+      setDirectRows((rows) => [...rows, { id: Math.max(0, ...rows.map((row) => row.id)) + 1, group_id: id, sender_id: localUserId, body, client_id: null, created_at: new Date().toISOString() }]);
     },
     async leaveGroup(id) { setSnapshot((current) => ({ ...current, groups: current.groups.filter((group) => group.id !== id) })); },
     async acceptFriend(id) { setSnapshot((current) => ({ ...current, friends: current.friends.map((friend) => friend.id === id ? { ...friend, accepted_at: new Date().toISOString() } : friend) })); },

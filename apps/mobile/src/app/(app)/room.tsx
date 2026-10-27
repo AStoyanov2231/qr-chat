@@ -24,9 +24,9 @@ export default function RoomScreen() {
   const title = group?.venue.name ?? (typeof name === 'string' ? name : 'Group');
   const link = process.env.EXPO_OS !== 'web' && ChatBrowser ? venueLink(group?.venue ?? { id: '', name: title, label: '', kind: 'place', codes: typeof routeCode === 'string' ? [routeCode] : [] }, webOrigin) : null;
   const browse = link ? () => { void ChatBrowser?.open(link, title).catch(() => {}); } : undefined;
-  async function sendMessage(body: string) {
+  async function sendMessage(body: string, clientId: string) {
     if (!api || !group) throw new Error('Your membership has ended.');
-    return api.sendGroupMessage(group.id, body);
+    return api.sendGroupMessage(group.id, body, clientId);
   }
 
   return <View style={{ flex: 1 }}>
@@ -35,7 +35,7 @@ export default function RoomScreen() {
       browse={browse} />
     <Conversation
       composerLabel={`Message ${title}`}
-      avatars key={groupId ?? 'ended'} messages={group?.messages ?? []} userId={userId!}
+      avatars key={groupId ?? 'ended'} conversation={`g:${groupId}`} messages={group?.messages ?? []} userId={userId!}
       loading={(!chat.ready || chat.groupLoading) && !chat.error} error={chat.error} available={!!group && chat.ready}
       connected={chat.connection === 'connected'} nextCursor={group?.nextCursor ?? null}
       loadOlder={() => group ? chat.loadOlder(group.id) : Promise.resolve()} refresh={() => groupId ? chat.refreshGroup(groupId) : chat.refresh()} send={sendMessage}
