@@ -7,6 +7,7 @@ import type { AvatarUpload } from "@qr-chat/api";
 import { Avatar } from "./avatar";
 import { prepareAvatar } from "@/lib/avatar";
 import { ArrowLeft, CaretRight, Gear, LockSimple, PencilSimple, Question, Storefront, X } from "@phosphor-icons/react";
+import type { Member } from "@qr-chat/domain";
 import type { Session } from "@/lib/chat-view";
 
 type Props = {
@@ -19,9 +20,12 @@ type Props = {
   onSave: (name: string, photo?: AvatarUpload | null) => Promise<string>;
   onSignOut: () => Promise<string>;
   onDeleteAccount: () => Promise<string>;
+  /** People you blocked, listed under Settings → Blocked people. */
+  blocked: Member[];
+  onUnblock: (id: string) => Promise<string>;
 };
 
-export function ProfileView({ session, ready, busy, business, onBack, onSave, onSignOut, onDeleteAccount }: Props) {
+export function ProfileView({ session, ready, busy, business, onBack, onSave, onSignOut, onDeleteAccount, blocked, onUnblock }: Props) {
   const [error, setError] = useState("");
   const [panel, setPanel] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -96,7 +100,8 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
           <label htmlFor="profile-name">Display name</label><div className="clear-field"><input id="profile-name" maxLength={50} placeholder=" " value={name} onChange={(event) => setName(event.target.value)} disabled={!ready || saving} required /><ClearButton label="Clear display name" inputId="profile-name" disabled={!ready || saving} onClear={() => setName("")} /></div>
           <button className="scan-primary" disabled={!ready || saving || !name.trim()}>{saving ? "Please wait…" : "Save profile"}</button>{error && <p className="form-error" role="alert">{error}</p>}
         </form>}
-        {panel === "Settings" && <div className="settings-actions"><button className="profile-action danger" disabled={busy} onClick={() => void run(onSignOut)}>Sign out<CaretRight size={18} /></button>
+        {panel === "Settings" && <div className="settings-actions"><button className="profile-action" onClick={() => { setError(""); setPanel("Blocked people"); }}>Blocked people<CaretRight size={18} /></button>
+          <button className="profile-action danger" disabled={busy} onClick={() => void run(onSignOut)}>Sign out<CaretRight size={18} /></button>
           {confirmDelete
             ? <><p>This permanently erases your profile, photo, friendships and the messages you sent. It cannot be undone.</p>
               <button className="profile-action danger" disabled={busy} onClick={() => void run(onDeleteAccount)}>Yes, delete my account<CaretRight size={18} /></button>
@@ -104,6 +109,11 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
             : <button className="profile-action danger" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete account<CaretRight size={18} /></button>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <p>Product data and photos © <a href="https://openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a> contributors, under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL</a> and <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA</a> licenses.</p></div>}
+        {panel === "Blocked people" && <div className="blocked-list settings-actions">
+          {blocked.length ? blocked.map((person) => <div className="member-row" key={person.id}><Avatar name={person.name} url={person.avatarUrl} size={44} /><span>{person.name}</span><button className="text-button" disabled={busy} onClick={() => void run(() => onUnblock(person.id))}>Unblock</button></div>)
+            : <p>You haven’t blocked anyone.</p>}
+          {error && <p className="form-error" role="alert">{error}</p>}
+        </div>}
         {panel === "Privacy" && <><p>Group messages are available to members with active access. Your name and photo are visible to people in your group and your friends. Direct messages are shared with accepted friends. Each group’s access ends 24 hours after you join it; leaving a group also ends that access.</p>
           <p><Link href="/privacy">Read the full Privacy Policy</Link></p></>}
         {panel === "Help & Feedback" && <p>Tap the scan button at the bottom of Chats to scan a QR code or a product barcode, then join the group. You can be in as many groups as you scan; each one lasts 24 hours. To keep talking after group access ends, open a member’s profile and send a friend request. If the camera is blocked, allow camera access in your browser’s settings and try again.</p>}

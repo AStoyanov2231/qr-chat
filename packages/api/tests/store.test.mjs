@@ -187,6 +187,16 @@ test('overview includes a group preview and group events never download unopened
   assert.deepEqual(f.calls,['group:ids','access']);assert.equal(f.store.getState().snapshot.groups[0].messages.at(-1).id,'3');
   f.calls.length=0;f.store.openGroup(room);await tick();assert.deepEqual(f.calls,['group:head','access']);assert.equal(f.store.getState().snapshot.groups[0].messages.length,3);
 });
+test('blocked people fill session.hidden and their group messages and previews are left out', async t => {
+  const f=fixture();t.after(()=>f.store.dispose());const peer='44444444-4444-4444-8444-444444444444';
+  f.overview.blocked=[{id:peer,display_name:'Sam',avatar_url:null}];f.overview.memberships[0].preview={...row(3),sender_id:peer};
+  f.setGroup([{...row(3),sender_id:peer},row(2),row(1)]);await f.store.start();
+  const {snapshot}=f.store.getState();
+  assert.deepEqual(snapshot.session.hidden,[peer]);assert.deepEqual(snapshot.blocked,[{id:peer,name:'Sam',avatarUrl:null}]);
+  assert.equal(snapshot.groups[0].messages.length,0,'a blocked sender is not the chat-list preview');
+  f.store.openGroup(room);await tick();
+  assert.deepEqual(f.store.getState().snapshot.groups[0].messages.map(message=>message.id),['1','2']);
+});
 test('reconnect restores a late-committed ID below the newest window in previously loaded history', async t => {
   const f=fixture();t.after(()=>f.store.dispose());const rows=Array.from({length:150},(_,i)=>row(150-i));
   f.store.openGroup(room);f.setGroup(rows.filter(row=>row.id!==25));await f.store.start();await f.store.loadOlderGroup(room);await f.store.loadOlderGroup(room);

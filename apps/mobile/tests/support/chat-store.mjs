@@ -5,7 +5,7 @@ export function getChatStore(api) {
   if (host.chatStore) return host.chatStore;
   if (stores.has(api)) return stores.get(api);
   const listeners = new Set();
-  let state = { snapshot: {session:null,groups:[],friends:[],directPreviews:{},unread:{}}, ready: false, error: '', connection: 'connected', hasObservedGroup: false, groupLoading: false, directs: {} };
+  let state = { snapshot: {session:null,groups:[],friends:[],directPreviews:{},unread:{},blocked:[]}, ready: false, error: '', connection: 'connected', hasObservedGroup: false, groupLoading: false, directs: {} };
   const counts = new Map();
   const publish = patch => { state = {...state,...patch}; for(const listener of listeners) listener(); };
   const watcher = filters => { const value={filters,stopped:false,onState:connection=>publish({connection}),stop(){this.stopped=true;}};host.watchers.push(value);return value; };

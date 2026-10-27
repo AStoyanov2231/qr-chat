@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@qr-chat/types";
-import { codeKeySchema, productNameSchema, placeNameSchema, placeLinkSchema, menuUploadSchema, qrNameLookupResponseSchema, profileSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
+import { codeKeySchema, productNameSchema, placeNameSchema, placeLinkSchema, menuUploadSchema, qrNameLookupResponseSchema, profileSchema, reportSchema, userIdSchema, messageBodySchema, pageSchema, displayNameSchema, avatarUploadSchema } from "@qr-chat/validation";
 import type { ChatOverview, ChatAccess, ChatMutation, GroupMessage, Friend, Profile } from "./overview.ts";
 export { getChatStore, createChatStore } from "./store.ts";
 export { createObservedFetch } from "./requests.ts";
@@ -84,6 +84,7 @@ export function createChatApi(
         profile: overview.profile && withAvatar(overview.profile),
         memberships: overview.memberships.map((membership) => ({ ...membership, groups: membership.groups && withVenueImage(membership.groups, membership.place), place: membership.place && withMenu(membership.place), members: membership.members.map(withProfiles), preview: membership.preview && withProfiles(membership.preview) })),
         friends: overview.friends.map(friendView),
+        blocked: (overview.blocked ?? []).map(withAvatar),
       };
     },
     async access(signal?: AbortSignal): Promise<ChatAccess> {
@@ -215,6 +216,22 @@ export function createChatApi(
     async blockFriend(connectionId: string) {
       const blocked = await result(client.rpc("block_friend_connection", { p_connection_id: userIdSchema.parse(connectionId) }));
       if (!blocked) throw new ChatApiError("This connection is no longer available.", "NOT_AVAILABLE");
+    },
+    /** Blocks anyone by id and ends any friendship or request between you. */
+    async blockUser(personId: string) {
+      await result(client.rpc("block_user", { p_user_id: userIdSchema.parse(personId) }));
+    },
+    async unblockUser(personId: string) {
+      const blocked_id = userIdSchema.parse(personId);
+      await nullableResult(client.from("user_blocks").delete().eq("blocker_id", await userId()).eq("blocked_id", blocked_id));
+    },
+    /** Files a report on a user or a group. Reports are write-only: nobody can read them back from the app. */
+    async report(target: { userId: string } | { groupId: string }, input: { reason: unknown; details: unknown }) {
+      const { reason, details } = reportSchema.parse(input);
+      await nullableResult(client.from("reports").insert({
+        ...("userId" in target ? { reported_user_id: userIdSchema.parse(target.userId) } : { group_id: userIdSchema.parse(target.groupId) }),
+        reason, details: details || null,
+      }));
     },
     async directMessages(connectionId: string, options: { before?: number; limit?: number } = {}, signal?: AbortSignal) {
       const { before, limit } = pageSchema.parse(options);
