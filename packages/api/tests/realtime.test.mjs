@@ -95,15 +95,31 @@ test('a reused topic waits for its closing channel before joining again', async 
   second.stop();
 });
 
-test('a channel error leaves every topic, retries and refetches missed data', async () => {
+test('a channel error rejoins only that topic, retries and refetches missed data', async () => {
   const client = fakeClient(); let server = ['one']; let cache = []; const states = [];
   const watcher = watchChanges(client, [topic('user', me), topic('group', id)], async () => { cache = [...server]; }, (state) => states.push(state), { retryMs: 1, pollMs: 100000 });
   client.channels.forEach(live); await tick(); assert.deepEqual(cache, ['one']);
   client.channels[1].status('CHANNEL_ERROR'); server.push('missed'); await tick();
-  assert.ok(client.channels.slice(0, 2).every((channel) => channel.removed), 'all topics are left together');
+  assert.equal(client.channels[0].removed, undefined, 'the healthy topic stays joined');
+  assert.equal(client.channels[1].removed, true);
+  assert.deepEqual(client.channels.slice(2).map((channel) => channel.name), [`group:${id}`], 'only the failed topic is rejoined');
   client.channels.slice(2).forEach(live); await tick();
   assert.deepEqual(cache, server);
   assert.ok(states.includes('reconnecting'));
+  watcher.stop();
+});
+
+test('a socket drop errors every channel but schedules one retry without polling', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const client = fakeClient(); let polls = 0; const states = [];
+  const watcher = watchChanges(client, [topic('user', me), topic('group', id), topic('group', other)], async () => {}, (state) => states.push(state), { fallbackMs: 5000, retryMs: 1000, onPoll: () => { polls++; }, random: () => 0.5 });
+  client.channels.forEach(live);
+  client.channels.forEach((channel) => channel.status('CLOSED'));
+  assert.ok(client.channels.every((channel) => channel.removed));
+  assert.equal(states.includes('polling'), false, 'one drop is one attempt, not three');
+  t.mock.timers.tick(1000);
+  assert.equal(client.channels.length, 6, 'one retry rejoins every topic');
+  t.mock.timers.tick(10000); assert.equal(polls, 0);
   watcher.stop();
 });
 
