@@ -27,9 +27,10 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let checked = false;
     let stopped = false;
-    const signIn = () => {
+    const signIn = (explicitSignOut = false) => {
       flushSync(() => setSignedOut(true));
-      window.location.replace(signInPath(window.location.pathname, window.location.search));
+      // After an explicit sign-out the next account must not inherit this page as its return path.
+      window.location.replace(explicitSignOut ? "/sign-in" : signInPath(window.location.pathname, window.location.search));
     };
     // The app shell is static, so the signed-out guard runs here from the stored session.
     // An error means the session could not be refreshed yet (e.g. offline): nothing starts, and the
@@ -50,7 +51,7 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
     window.addEventListener("offline", activity);
     document.addEventListener("visibilitychange", activity);
     const { data } = value.api.client.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") signIn();
+      if (event === "SIGNED_OUT") signIn(true);
       else if (session && !checked && !stopped) { checked = true; activity(); }
     });
     return () => {

@@ -32,6 +32,13 @@ export function OAuthButton() {
     return () => { stopped = true; };
   }, [next]);
 
+  // Back/forward cache restores the page with its old "pending" state.
+  useEffect(() => {
+    const reset = (e: PageTransitionEvent) => { if (e.persisted) setPending(false); };
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+
   async function signIn() {
     setError("");
     setPending(true);

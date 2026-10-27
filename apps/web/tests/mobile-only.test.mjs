@@ -42,7 +42,7 @@ test('desktop product routes show landing and mobile product routes render their
 });
 
 test('desktop lets business owners sign in and manage places', () => {
-  for (const pathname of ['/business', '/sign-in', '/auth/callback']) {
+  for (const pathname of ['/business', '/privacy', '/sign-in', '/auth/callback']) {
     const desktop = gate({ pathname, mobile: false });
     assert.equal(desktop.result, desktop.children);
   }
