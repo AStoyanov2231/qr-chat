@@ -21,6 +21,8 @@ const icons = Object.fromEntries(['Prohibit', 'SignOut', 'UserMinus', 'Check', '
   (props) => React.createElement('svg', { ...props, 'data-icon': name, 'aria-hidden': 'true' }),
 ]));
 
+const messageInput = await import('../src/lib/message-input.ts');
+
 async function loadTsxModule(relativePath) {
   const sourceUrl = new URL(relativePath, import.meta.url);
   const source = await readFile(sourceUrl, 'utf8');
@@ -41,6 +43,7 @@ async function loadTsxModule(relativePath) {
     if (specifier === './avatar') return { Avatar };
     if (specifier === './conversation-header') return conversationHeader;
     if (specifier === '@/components/avatar') return { Avatar };
+    if (specifier === '@/lib/message-input') return messageInput;
     if (specifier === '@/components/icon') return { Icon };
     if (specifier === '@/components/clear-button') return { ClearButton: () => null };
     if (specifier === '@/components/mobile-chat') return { default: () => null };
@@ -269,11 +272,16 @@ test('first-DM copy, composer, and outbox bubbles show sent and failed messages'
     onChange: noOp,
     onSubmit: noOp,
   }));
-  assert.match(composer, /value="Another note"/);
+  assert.match(composer, /<textarea[^>]*rows="1"/);
+  assert.match(composer, />Another note<\/textarea>/);
   assert.match(composer, /placeholder="Message Jordan Lee…"/);
   assert.match(composer, /message-composer-pill/);
   assert.match(composer, /data-icon="send"/);
   assert.doesNotMatch(composer, /disabled/, 'Sending never disables the input, so the keyboard stays open');
+  const busyComposer = renderToStaticMarkup(React.createElement(directParts.DirectMessageComposer, { draft: 'x', friendName: 'Jordan Lee', busy: true, ready: true, loading: false, loadError: '', onChange: noOp, onSubmit: noOp }));
+  assert.doesNotMatch(busyComposer, /<textarea[^>]*disabled/, 'A busy state never closes the keyboard');
+  const loadingComposer = renderToStaticMarkup(React.createElement(directParts.DirectMessageComposer, { draft: 'x', friendName: 'Jordan Lee', busy: false, ready: true, loading: true, loadError: '', onChange: noOp, onSubmit: noOp }));
+  assert.match(loadingComposer, /<textarea[^>]*disabled/, 'The composer is disabled while loading');
 
   const sending = renderToStaticMarkup(React.createElement(directParts.OutboxBubble, { item: { key: 'a', conversation: 'd:x', text: 'On my way', failed: false }, onRetry: noOp }));
   assert.match(sending, /class="own"/);
@@ -359,6 +367,8 @@ test('the profile page provides a back link to Chats and keeps its actions', asy
   assert.match(html, /<a[^>]*aria-label="Back to chats"[^>]*href="\/"/);
   assert.match(html, /aria-label="Settings"/);
   assert.match(html, /Edit Profile/);
+  assert.doesNotMatch(html, /<button[^>]*aria-label="Edit Profile"[^>]*disabled/);
+  assert.match(renderToStaticMarkup(React.createElement(ProfileView, { session: null, ready: false, busy: false, onSave: noOp, onSignOut: noOp, onDeleteAccount: noOp })), /<button[^>]*aria-label="Edit Profile"[^>]*disabled/, 'Edit waits for the session so the name is never empty');
   assert.match(html, /Privacy/);
   assert.match(html, /Help &amp; Feedback/);
   assert.doesNotMatch(html, /Saved Places|Notifications|profile-stats|>Messages<|>Places</);

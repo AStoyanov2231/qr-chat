@@ -11,8 +11,8 @@ export function observeChatViewport(element: HTMLElement): () => void {
   let focusFrame = 0;
   let restoreInput: (() => void) | undefined;
   const focusComposer = (event: PointerEvent) => {
-    const input = event.target as HTMLInputElement;
-    if (event.pointerType !== "touch" || !input.matches(".message-composer input") || document.activeElement === input || viewport.scale !== 1) return;
+    const input = event.target as HTMLElement;
+    if (event.pointerType !== "touch" || !input.matches(".message-composer textarea") || document.activeElement === input || viewport.scale !== 1) return;
     event.preventDefault();
     // WebKit pans to the input's pre-keyboard position even with preventScroll.
     // Focus it outside the viewport, then restore it before the next paint.
@@ -26,7 +26,7 @@ export function observeChatViewport(element: HTMLElement): () => void {
   };
   const update = () => {
     if (viewport.scale !== 1) return;
-    const composerFocused = document.activeElement?.matches(".message-composer input") ?? false;
+    const composerFocused = document.activeElement?.matches(".message-composer textarea") ?? false;
     if (width !== window.innerWidth) {
       width = window.innerWidth;
       fullHeight = window.innerHeight;
