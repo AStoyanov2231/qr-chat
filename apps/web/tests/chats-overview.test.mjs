@@ -48,6 +48,7 @@ async function loadTsxModule(relativePath) {
     if (specifier === '@/components/clear-button') return { ClearButton: () => null };
     if (specifier === '@/components/mobile-chat') return { default: () => null };
     if (specifier === '@/lib/avatar') return { prepareAvatar: async () => null };
+    if (specifier === '@/lib/css-var') return { cssVar: () => '' };
     return requireFromTest(specifier);
   };
   const evaluate = runInThisContext(`(function (require, module, exports) { ${output}\n})`, {

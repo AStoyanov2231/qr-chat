@@ -13,7 +13,7 @@ export async function prepareAvatar(file: File): Promise<Blob> {
     canvas.width = canvas.height = AVATAR_PX;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("This browser could not prepare the photo. Try another browser.");
-    context.fillStyle = "#fff";
+    context.fillStyle = "#fff"; // canvas can't use var(--*); white = --surface, flattened behind transparent PNGs
     context.fillRect(0, 0, AVATAR_PX, AVATAR_PX);
     context.drawImage(image, (image.width - size) / 2, (image.height - size) / 2, size, size, 0, 0, AVATAR_PX, AVATAR_PX);
     return await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not prepare this photo.")), "image/jpeg", 0.85));

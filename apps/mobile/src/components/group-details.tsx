@@ -18,7 +18,7 @@ export function GroupQr({ code, size = 180 }: { code: string; size?: number }) {
         if (modules.get(y, x)) path += `M${x + 4} ${y + 4}h1v1h-1z`;
       }
       const size = modules.size + 8;
-      return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><rect width="100%" height="100%" fill="white"/><path d="${path}" fill="#111111"/></svg>`)}`;
+      return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><rect width="100%" height="100%" fill="${colors.surface}"/><path d="${path}" fill="${colors.text}"/></svg>`)}`;
     } catch { return null; }
   }, [code]);
   return uri ? <Image source={{ uri }} contentFit="contain" style={{ width: size, height: size, borderRadius: size * 2 / 15 }} accessibilityLabel="Group QR code" /> : <Copy>QR code could not be displayed.</Copy>;

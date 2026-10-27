@@ -91,7 +91,7 @@ export function Conversation({ conversation, messages, userId, loading, error, a
               {failed && <Copy style={{ alignSelf: 'flex-end', fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.danger }}>{item.outbox?.notice ? `Not sent. ${item.outbox.notice}` : 'Not sent. Tap ! to retry'}</Copy>}
             </View>
             {failed && <Pressable accessibilityRole="button" accessibilityLabel="Message not sent. Retry" onPress={() => outbox.retry(item.outbox!, deliver)} style={{ width: 44, height: 44, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' }}><Copy selectable={false} style={{ color: '#fff', fontSize: 14, lineHeight: 18, fontWeight: '800' }}>!</Copy></View>
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' }}><Copy selectable={false} style={{ color: colors.onDanger, fontSize: 14, lineHeight: 18, fontWeight: '800' }}>!</Copy></View>
             </Pressable>}
           </View>
         </View>;

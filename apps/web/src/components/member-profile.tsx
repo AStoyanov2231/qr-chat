@@ -34,7 +34,7 @@ export function MemberProfile({ person, friend, userId, canRequest, blocked, bus
     <div className="entry-panel member-profile">
       <button className="modal-close" aria-label="Close profile" disabled={busy} onClick={onClose}><Icon name="close" size={20} /></button>
       {person ? <>
-        <div className="member-hero" style={person.avatarUrl ? { backgroundImage: `linear-gradient(rgba(10,20,30,.2),rgba(10,20,30,.38)),url(${JSON.stringify(person.avatarUrl)})` } : undefined}>
+        <div className="member-hero" style={person.avatarUrl ? { backgroundImage: `linear-gradient(var(--photo-scrim-top),var(--photo-scrim-bottom)),url(${JSON.stringify(person.avatarUrl)})` } : undefined}>
           {!person.avatarUrl && <Avatar name={person.name} url={null} size={96} />}
           <h2>{person.name}</h2>
           <p>{relationship === "accepted" ? "Friend" : "QR Chat member"}</p>
