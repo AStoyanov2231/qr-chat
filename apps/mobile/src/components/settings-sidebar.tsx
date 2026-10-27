@@ -21,9 +21,9 @@ export function SettingsSidebar({ label, onClose, children }: { label: string; o
     });
   }
   return <Modal transparent visible animationType="none" onShow={() => { if (!closing) Animated.timing(progress, { toValue: 0, duration: reduceMotion ? 0 : 240, useNativeDriver: true }).start(); }} onRequestClose={close}>
-    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: 'rgba(17,17,17,0.12)' }}>
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.scrimLight }}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label.toLowerCase()}`} onPress={close} style={{ flex: 1 }} />
-      <Animated.View accessibilityViewIsModal style={{ width: sidebarWidth, transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, sidebarWidth] }) }], overflow: 'hidden', backgroundColor: isGlassEffectAPIAvailable() ? 'rgba(255,255,255,0.55)' : colors.floating, paddingBottom: insets.bottom, borderTopLeftRadius: 24, borderBottomLeftRadius: 24 }}>
+      <Animated.View accessibilityViewIsModal style={{ width: sidebarWidth, transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, sidebarWidth] }) }], overflow: 'hidden', backgroundColor: isGlassEffectAPIAvailable() ? colors.floatingGlass : colors.floating, paddingBottom: insets.bottom, borderTopLeftRadius: 24, borderBottomLeftRadius: 24 }}>
         {isGlassEffectAPIAvailable() && <GlassView glassEffectStyle="regular" colorScheme="light" style={{ position: 'absolute', inset: 0 }} />}
         <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label.toLowerCase()}`} onPress={close} style={{ position: 'absolute', top: insets.top + 8, right: 16, zIndex: 1, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: colors.fill }}><Icon name="close" size={20} /></Pressable>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingBottom: 24 }}>

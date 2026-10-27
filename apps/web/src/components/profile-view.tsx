@@ -61,7 +61,7 @@ export function ProfileView({ session, ready, busy, business, onBack, onSave, on
   return <section className="conversation-view profile-view">
     {/* The photo header mirrors group chats: your avatar fills it, controls float above. */}
     <header className="chat-photo-header">
-      <div className="chat-header-backdrop" aria-hidden="true" style={session?.avatarUrl ? { backgroundImage: `linear-gradient(rgba(10,20,30,.2),rgba(10,20,30,.38)),url(${JSON.stringify(session.avatarUrl)})` } : undefined} />
+      <div className="chat-header-backdrop" aria-hidden="true" style={session?.avatarUrl ? { backgroundImage: `linear-gradient(var(--photo-scrim-top),var(--photo-scrim-bottom)),url(${JSON.stringify(session.avatarUrl)})` } : undefined} />
       <div className="chat-header-title"><h1>{session?.name || "Your profile"}</h1></div>
     </header>
     <div className="chat-header-controls"><Link href="/" className="back-button" onClick={(event) => { if (onBack && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onBack(); } }} aria-label="Back to chats"><ArrowLeft size={20} weight="bold" /></Link></div>

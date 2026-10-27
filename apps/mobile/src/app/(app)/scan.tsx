@@ -5,7 +5,7 @@ import { Linking, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { groupFallbackName, scannedCode, unwrapQrCode } from '@qr-chat/domain';
 import { codeKeySchema } from '@qr-chat/validation';
-import { Button, Copy, ErrorNotice, useAction } from '@/components/chat-ui';
+import { Button, Copy, ErrorNotice, colors, useAction } from '@/components/chat-ui';
 import { NativeAction } from '@/components/native-action';
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
@@ -65,16 +65,16 @@ export default function ScanScreen() {
   const cameraVisible = permission?.granted && focused && active && !cameraError;
   const targetSize = Math.min(width * 0.7, 340);
   const closeButton = <NativeAction icon="close" accessibilityLabel="Close scanner" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} />;
-  return <View style={{ flex: 1, backgroundColor: '#07090b' }}>
-    <Stack.Screen options={{ statusBarStyle: 'light', headerTransparent: true, headerTintColor: '#fff', title: '', headerRight: () => closeButton,
+  return <View style={{ flex: 1, backgroundColor: colors.camera }}>
+    <Stack.Screen options={{ statusBarStyle: 'light', headerTransparent: true, headerTintColor: colors.onPhoto, title: '', headerRight: () => closeButton,
       unstable_headerRightItems: process.env.EXPO_OS === 'ios' ? () => [{ type: 'custom', element: closeButton, hidesSharedBackground: true }] : undefined }} />
     {cameraVisible && <CameraView key={attempt} accessibilityLabel="Camera preview" style={{ position: 'absolute', inset: 0 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'upc_a', 'upc_e'] }} onBarcodeScanned={({ type, data }) => { void accept(type, data); }} onMountError={() => setCameraError('The camera could not start. Check camera access and try again.')} />}
     <View pointerEvents="none" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: insets.top + 48 }}>
-      {cameraVisible && <View style={{ width: targetSize, height: targetSize, borderWidth: 2, borderColor: '#ffffffeb', borderRadius: 28, boxShadow: '0 0 0 2000px #03050770' }} />}
+      {cameraVisible && <View style={{ width: targetSize, height: targetSize, borderWidth: 2, borderColor: colors.onPhotoLine, borderRadius: 28, boxShadow: `0 0 0 2000px ${colors.cameraShade}` }} />}
     </View>
-    <View style={{ gap: 16, paddingHorizontal: 24, paddingTop: 26, paddingBottom: Math.max(insets.bottom, 20), backgroundColor: '#07090be6' }}>
-      <Copy accessibilityRole="header" style={{ color: '#fff', fontSize: 32, lineHeight: 38, fontWeight: '800' }}>Find the code.</Copy>
-      <Copy style={{ color: '#d5d8df', fontSize: 14, lineHeight: 20 }}>{cameraError || (join.busy ? 'Joining…' : !chat.ready ? 'Getting your chats ready…' : permission?.granted ? 'Hold a QR code or barcode inside the frame.' : 'Allow camera access to scan a code.')}</Copy>
+    <View style={{ gap: 16, paddingHorizontal: 24, paddingTop: 26, paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.cameraSheet }}>
+      <Copy accessibilityRole="header" style={{ color: colors.onPhoto, fontSize: 32, lineHeight: 38, fontWeight: '800' }}>Find the code.</Copy>
+      <Copy style={{ color: colors.onPhotoMuted, fontSize: 14, lineHeight: 20 }}>{cameraError || (join.busy ? 'Joining…' : !chat.ready ? 'Getting your chats ready…' : permission?.granted ? 'Hold a QR code or barcode inside the frame.' : 'Allow camera access to scan a code.')}</Copy>
       {cameraError ? <Button label="Try camera again" subtle onPress={() => { setCameraError(''); setAttempt(attempt + 1); }} /> : !permission?.granted && <Button label={permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'} onPress={permit} />}
       <ErrorNotice message={error || join.error || chat.error} retry={chat.error ? () => { void chat.refresh().catch(() => {}); } : undefined} />
     </View>
