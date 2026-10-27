@@ -56,6 +56,13 @@ export const menuUploadSchema = z.strictObject({
     .refine((data) => data.byteLength > 0 && data.byteLength <= MENU_MAX_BYTES, 'Choose a PDF smaller than 10 MB.')
     .refine((data) => new TextDecoder().decode(data.slice(0, 5)) === '%PDF-', 'Choose a valid PDF file.'),
 });
+/** Report reasons in display order; the keys match the DB check on reports.reason. */
+export const reportReasons = { spam: "Spam or scam", harassment: "Harassment or hate", inappropriate: "Nudity or violence", other: "Something else" } as const;
+export type ReportReason = keyof typeof reportReasons;
+export const reportSchema = z.strictObject({
+  reason: z.enum(Object.keys(reportReasons) as [ReportReason, ...ReportReason[]]),
+  details: z.string().trim().max(500),
+});
 export const pageSchema = z.strictObject({
   before: z.number().int().positive().safe().optional(),
   limit: z.number().int().min(1).max(100).default(50),

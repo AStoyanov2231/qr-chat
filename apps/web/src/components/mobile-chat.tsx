@@ -31,6 +31,7 @@ import { DirectMessageBubble, DirectMessageComposer, FirstDirectMessageEmpty, Fr
 import { Avatar } from "@/components/avatar";
 import { ClearButton } from "@/components/clear-button";
 import { MemberProfile } from "@/components/member-profile";
+import { ReportDialog } from "@/components/report-dialog";
 import { Icon } from "@/components/icon";
 import { resolveCode, type Venue } from "@/lib/chat-view";
 import { useChatBackend, useDirectMessages, errorMessage } from "@/hooks/use-chat-backend";
@@ -73,7 +74,7 @@ function MessageSkeleton() {
   );
 }
 
-type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "blockFriend" | "signOut" | "deleteAccount" | "nameProductGroup";
+type PreviewCommands = "saveProfile" | "saveProfileWithAvatar" | "sendGroupMessage" | "sendDirectMessage" | "leaveGroup" | "requestFriend" | "acceptFriend" | "removeFriend" | "blockFriend" | "blockUser" | "unblockUser" | "report" | "signOut" | "deleteAccount" | "nameProductGroup";
 export type ChatViewApi = Pick<ChatApi, "joinGroup" | "resolveGroup"> & {
   [K in PreviewCommands]: (...args: Parameters<ChatApi[K]>) => Promise<unknown>;
 };
@@ -131,6 +132,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   const personPeer = personFriend?.user_a_id === session?.id ? personFriend?.user_b : personFriend?.user_a;
   const personMember = groups.flatMap((item) => item.members).find((member) => member.id === personId);
   const person = personMember ?? (personPeer ? { id: personPeer.id, name: personPeer.display_name ?? 'Participant', avatarUrl: personPeer.avatar_url } : null);
+  const [report, setReport] = useState<{ target: Parameters<ChatViewApi["report"]>[0]; name: string } | null>(null);
 
   const [cameraState, setCameraState] = useState<
     "idle" | "starting" | "active" | "error"
@@ -540,7 +542,8 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       <main ref={motion.surface} data-screen={screen} className={`app-content ${view === "chats" ? active || directId ? "has-chat" : "has-overview" : "has-profile"}`}>
         {view === "profile" ? <>
           {backend.error && <div className="connection-banner" role="alert">{errorMessage(new Error(backend.error))} <button onClick={() => void perform(backend.refresh)}>Retry</button></div>}
-          <ProfileView session={session} ready={ready} busy={busy} business={business} onBack={backToChats} onSave={(display_name, photo) => profileAction(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => profileAction(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} onDeleteAccount={() => profileAction(async () => { await api.deleteAccount(); router.replace("/sign-in"); router.refresh(); })} />
+          <ProfileView session={session} ready={ready} busy={busy} business={business} onBack={backToChats} onSave={(display_name, photo) => profileAction(async () => { await api.saveProfileWithAvatar(display_name, photo); await backend.refresh(); setNotice("Profile saved."); })} onSignOut={() => profileAction(async () => { await api.signOut(); router.replace("/sign-in"); router.refresh(); })} onDeleteAccount={() => profileAction(async () => { await api.deleteAccount(); router.replace("/sign-in"); router.refresh(); })}
+            blocked={backend.blocked} onUnblock={(id) => profileAction(async () => { await api.unblockUser(id); await backend.refresh(); })} />
         </> : !ready && !backend.error ? <ChatsOverview loading profileName={session?.name} profileAvatarUrl={session?.avatarUrl} connected={backend.connection === "connected"} onOpenOwnProfile={openOwnProfile} /> : !active && !directId && (
           <ChatsOverview
             profileName={session?.name}
@@ -641,7 +644,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
                 </button>
               )}
             </div>
-            {sidebar && group && <GroupSidebar key={group.id} group={group} userId={session?.id} onClose={() => setSidebar(false)} onProfile={openPerson} />}
+            {sidebar && group && <GroupSidebar key={group.id} group={group} userId={session?.id} onClose={() => setSidebar(false)} onProfile={openPerson} onReport={() => setReport({ target: { groupId: group.id }, name: groupTitle })} />}
           </section>
         )}
 
@@ -687,11 +690,17 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
 
       </main>
 
-      {personId && session && <MemberProfile key={personId} person={person} friend={personFriend} userId={session.id} canRequest={!!personMember} busy={busy} error={personError || backend.error} onClose={() => setPersonId(null)}
+      {personId && session && <MemberProfile key={personId} person={person} friend={personFriend} userId={session.id} canRequest={!!personMember} blocked={hiddenUsers.has(personId)} busy={busy} error={personError || backend.error} onClose={() => setPersonId(null)}
         onRequest={() => { if (personMember) void changeFriend(() => api.requestFriend(personMember.id)); }}
         onAccept={() => { if (personFriend) void changeFriend(() => api.acceptFriend(personFriend.id)); }}
         onRemove={() => { if (personFriend) void changeFriend(() => api.removeFriend(personFriend.id)); }}
-        onMessage={() => { if (!personFriend?.accepted_at) return; setPersonId(null); openDirectMessage(personFriend.id); }} />}
+        onMessage={() => { if (!personFriend?.accepted_at) return; setPersonId(null); openDirectMessage(personFriend.id); }}
+        onBlock={() => { if (person && window.confirm(`Block ${person.name}? They won’t be able to send you friend requests.`)) void changeFriend(() => api.blockUser(person.id)); }}
+        onUnblock={() => void changeFriend(() => api.unblockUser(personId))}
+        onReport={() => { if (!person) return; setPersonId(null); setReport({ target: { userId: person.id }, name: person.name }); }} />}
+
+      {report && <ReportDialog name={report.name} busy={busy} onClose={() => setReport(null)}
+        onSubmit={(reason, details) => profileAction(async () => { await api.report(report.target, { reason, details }); setReport(null); setNotice("Thanks for the report. We’ll review it."); })} />}
 
       <dialog
         className="camera-dialog"

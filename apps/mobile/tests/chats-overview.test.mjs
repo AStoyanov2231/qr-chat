@@ -194,7 +194,7 @@ for (const platform of ['ios', 'android']) {
     assert.equal(retried, true);
   });
 
-  test(`${platform}: an incoming request opens its DM screen, which accepts after a failed try or declines`, async (t) => {
+  test(`${platform}: an incoming request opens its DM screen, which accepts after a failed try, declines or blocks`, async (t) => {
     reset(); process.env.EXPO_OS = platform;
     const incoming = { id: friendId, user_a_id: 'me', user_b_id: 'peer', requested_by_id: 'peer', requested_at: '2026-10-01T10:00:00Z', accepted_at: null, user_b: { id: 'peer', display_name: 'Sam', avatar_url: null } };
     state.chat.friends = [incoming];
@@ -207,14 +207,16 @@ for (const platform of ['ios', 'android']) {
       state.chat.friends = [{ ...incoming, accepted_at: '2026-10-02T10:00:00Z' }];
     };
     state.auth.api.removeFriend = async (id) => { calls.push(['remove', id]); };
+    state.auth.api.blockFriend = async (id) => { calls.push(['block', id]); };
     const screen = await render(t, Direct);
-    assert.match(screen.text(), /Sam wants to be friends/);
+    assert.match(screen.text(), /Wants to be friends · \d+d ago/);
+    assert.match(screen.text(), /Let Sam message you\?/);
     await screen.press('Accept');
     assert.match(screen.text(), /Offline/);
     fail = false;
     await screen.press('Accept');
     await screen.update();
-    assert.doesNotMatch(screen.text(), /wants to be friends/);
+    assert.doesNotMatch(screen.text(), /Wants to be friends/);
     assert.deepEqual(calls, [['accept', friendId]]);
 
     state.chat.friends = [incoming];
@@ -222,6 +224,12 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Decline');
     assert.deepEqual(calls.at(-1), ['remove', friendId]);
     assert.deepEqual(state.navigation.at(-1), ['back']);
+
+    await screen.press('Block Sam');
+    const [title, , buttons] = state.alerts.at(-1);
+    assert.equal(title, 'Block Sam?');
+    await act(async () => { buttons.find((button) => button.style === 'destructive').onPress(); });
+    assert.deepEqual(calls.at(-1), ['block', friendId]);
   });
 
   test(`${platform}: the access ring refreshes once a minute and clears stale countdown timers`, async (t) => {

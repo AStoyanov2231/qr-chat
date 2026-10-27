@@ -299,6 +299,44 @@ export type Database = {
         }
         Relationships: []
       }
+      reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          group_id: string | null
+          id: number
+          reason: string
+          reported_user_id: string | null
+          reporter_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          group_id?: string | null
+          id?: never
+          reason: string
+          reported_user_id?: string | null
+          reporter_id?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          group_id?: string | null
+          id?: never
+          reason?: string
+          reported_user_id?: string | null
+          reporter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_permissions: {
         Row: {
           permission_id: number
@@ -449,6 +487,7 @@ export type Database = {
         Args: { p_connection_id: string }
         Returns: boolean
       }
+      block_user: { Args: { p_user_id: string }; Returns: boolean }
       expires_at: {
         Args: { "": Database["public"]["Tables"]["group_members"]["Row"] }
         Returns: {

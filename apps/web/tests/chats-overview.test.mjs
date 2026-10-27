@@ -44,7 +44,7 @@ async function loadTsxModule(relativePath) {
     if (specifier === './conversation-header') return conversationHeader;
     if (specifier === '@/components/avatar') return { Avatar };
     if (specifier === '@/lib/message-input') return messageInput;
-    if (specifier === '@/components/icon') return { Icon };
+    if (specifier === '@/components/icon' || specifier === './icon') return { Icon };
     if (specifier === '@/components/clear-button') return { ClearButton: () => null };
     if (specifier === '@/components/mobile-chat') return { default: () => null };
     if (specifier === '@/lib/avatar') return { prepareAvatar: async () => null };
@@ -455,4 +455,26 @@ test('rows with unread messages show a count badge and a bold preview; read rows
   assert.match(html, /aria-label="Open direct message with Jordan Lee"/);
   assert.equal((html.match(/class="unread-badge"/g) ?? []).length, 2, 'chats without unread messages show no badge');
   assert.doesNotMatch(renderOverview(props({ groups: [group] })), /unread-badge|preview-unread/);
+});
+
+test('a member profile offers Report and Block; a blocked member shows Unblock instead of Add friend', async () => {
+  const { MemberProfile } = await loadTsxModule('../src/components/member-profile.tsx');
+  const base = { person: { id: 'user-sam', name: 'Sam', avatarUrl: null }, userId: sessionId, canRequest: true, busy: false, error: '', onClose: noOp, onRequest: noOp, onAccept: noOp, onRemove: noOp, onMessage: noOp, onBlock: noOp, onUnblock: noOp, onReport: noOp };
+  const open = renderToStaticMarkup(React.createElement(MemberProfile, { ...base, blocked: false }));
+  assert.match(open, />Add friend</);
+  assert.match(open, /class="member-safety"><button type="button" class="request-block">Report<\/button><button type="button" class="request-block">Block<\/button>/);
+  const blocked = renderToStaticMarkup(React.createElement(MemberProfile, { ...base, blocked: true }));
+  assert.doesNotMatch(blocked, /Add friend|>Block</);
+  assert.match(blocked, /You blocked Sam\./);
+  assert.match(blocked, />Unblock<\/button>/);
+  assert.match(blocked, />Report<\/button>/);
+});
+
+test('the report dialog lists the fixed reasons, optional details and waits for a reason', async () => {
+  const { ReportDialog } = await loadTsxModule('../src/components/report-dialog.tsx');
+  const html = renderToStaticMarkup(React.createElement(ReportDialog, { name: 'Brew & Chat', busy: false, onClose: noOp, onSubmit: async () => '' }));
+  assert.match(html, /aria-label="Report Brew &amp; Chat"/);
+  for (const label of ['Spam or scam', 'Harassment or hate', 'Nudity or violence', 'Something else']) assert.match(html, new RegExp(`type="radio"[^>]*/>${label}</label>`));
+  assert.match(html, /<label for="report-details">Details \(optional\)<\/label><textarea id="report-details" maxLength="500"/);
+  assert.match(html, /<button class="scan-primary" disabled="">Send report<\/button>/);
 });

@@ -42,6 +42,7 @@ function sampleSnapshot(now: number): ChatSnapshot {
     })),
     directPreviews: {},
     unread: { [groupId]: 2, [connectionId(0)]: 1 },
+    blocked: [],
   };
 }
 
@@ -102,6 +103,16 @@ export function DesignPreview({ view, initialTime }: { view: "chats" | "profile"
       if (friend) blockedPeers.current.add(friend.user_b_id);
       setSnapshot((current) => ({ ...current, friends: current.friends.filter((friend) => friend.id !== id) }));
     },
+    async blockUser(id) {
+      blockedPeers.current.add(id);
+      const member = snapshot.groups.flatMap((group) => group.members).find((member) => member.id === id);
+      setSnapshot((current) => ({ ...current, friends: current.friends.filter((friend) => friend.user_b_id !== id), blocked: [...current.blocked, { id, name: member?.name ?? "Participant", avatarUrl: member?.avatarUrl ?? null }], session: current.session && { ...current.session, hidden: [...current.session.hidden, id] } }));
+    },
+    async unblockUser(id) {
+      blockedPeers.current.delete(id);
+      setSnapshot((current) => ({ ...current, blocked: current.blocked.filter((person) => person.id !== id), session: current.session && { ...current.session, hidden: current.session.hidden.filter((hidden) => hidden !== id) } }));
+    },
+    async report() {},
     async requestFriend(id) {
       if (blockedPeers.current.has(id)) throw new Error("This friendship is unavailable.");
       const member = snapshot.groups.flatMap((group) => group.members).find((member) => member.id === id);

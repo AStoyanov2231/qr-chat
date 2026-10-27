@@ -1,26 +1,31 @@
-import { groupFallbackName, type Message, type Group, type Session } from '@qr-chat/domain';
+import { groupFallbackName, type Message, type Group, type Member, type Session } from '@qr-chat/domain';
 import type { ChatApi } from './index.ts';
 import type { ChatOverview, GroupMessage, GroupOverview, Friend, DirectMessage } from './overview.ts';
 
 export type DirectPreview = { status: 'ready'; message: DirectMessage | null } | { status: 'error' };
-/** unread: other people's unread messages per group or DM id; chats with none are left out. */
-export type ChatSnapshot = { session: Session | null; groups: Group[]; friends: Friend[]; directPreviews: Record<string, DirectPreview>; unread: Record<string, number> };
-export const emptySnapshot: ChatSnapshot = { session: null, groups: [], friends: [], directPreviews: {}, unread: {} };
+/** unread: other people's unread messages per group or DM id; chats with none are left out.
+ * blocked: people the user blocked; session.hidden holds their ids. */
+export type ChatSnapshot = { session: Session | null; groups: Group[]; friends: Friend[]; directPreviews: Record<string, DirectPreview>; unread: Record<string, number>; blocked: Member[] };
+export const emptySnapshot: ChatSnapshot = { session: null, groups: [], friends: [], directPreviews: {}, unread: {}, blocked: [] };
 export function groupMessageView(message: GroupMessage): Message {
   return { id: String(message.id), user: message.sender_id ?? 'deleted', name: message.profiles?.display_name ?? 'Former participant', avatarUrl: message.profiles?.avatar_url ?? null, text: message.body, time: Date.parse(message.created_at) };
 }
-function groupView(membership: GroupOverview): Group | null {
+function groupView(membership: GroupOverview, hidden: Set<string>): Group | null {
   const room = membership.groups;
   if (!room?.code_key) return null;
-  return { id: room.id, venue: { id: room.id, name: room.name ?? groupFallbackName(room.code_key), nameMissing: room.name === null, imageUrl: room.image_url, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.', place: membership.place ? { ownerId: membership.place.owner_id, linkUrl: membership.place.link_url, menuUrl: membership.place.menu_url } : null }, members: membership.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: membership.preview ? [groupMessageView(membership.preview)] : [], nextCursor: null, expiresAt: membership.expires_at };
+  return { id: room.id, venue: { id: room.id, name: room.name ?? groupFallbackName(room.code_key), nameMissing: room.name === null, imageUrl: room.image_url, codes: [room.code_key], kind: 'place', label: 'A conversation for this QR code.', place: membership.place ? { ownerId: membership.place.owner_id, linkUrl: membership.place.link_url, menuUrl: membership.place.menu_url } : null }, members: membership.members.map((member) => ({ id: member.user_id, name: member.profiles?.display_name ?? 'Participant', avatarUrl: member.profiles?.avatar_url ?? null })), messages: membership.preview && !hidden.has(membership.preview.sender_id ?? '') ? [groupMessageView(membership.preview)] : [], nextCursor: null, expiresAt: membership.expires_at };
 }
 export function snapshotFromOverview(overview: ChatOverview): ChatSnapshot {
+  const blocked = overview.blocked ?? [];
+  const hidden = blocked.map((person) => person.id);
+  const hiddenIds = new Set(hidden);
   return {
-    session: { id: overview.userId, name: overview.profile?.display_name ?? '', avatarUrl: overview.profile?.avatar_url ?? null, hidden: [] },
-    groups: overview.memberships.flatMap((membership) => groupView(membership) ?? []),
+    session: { id: overview.userId, name: overview.profile?.display_name ?? '', avatarUrl: overview.profile?.avatar_url ?? null, hidden },
+    groups: overview.memberships.flatMap((membership) => groupView(membership, hiddenIds) ?? []),
     friends: overview.friends,
     directPreviews: Object.fromEntries(overview.friends.filter((friend) => friend.accepted_at).map((friend) => [friend.id, { status: 'ready' as const, message: overview.directPreviews[friend.id] ?? null }])),
     unread: { ...overview.unread },
+    blocked: blocked.map((person) => ({ id: person.id, name: person.display_name ?? 'Participant', avatarUrl: person.avatar_url })),
   };
 }
 

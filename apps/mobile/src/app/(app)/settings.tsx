@@ -1,4 +1,5 @@
 import { Alert, Linking } from 'react-native';
+import { router } from 'expo-router';
 import { Button, Copy, ErrorNotice, Screen, styles, useAction } from '@/components/chat-ui';
 import { webOrigin } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
@@ -8,6 +9,7 @@ export default function SettingsScreen() {
   const { api } = useAuth();
   const action = useAction();
   return <Screen><ErrorNotice message={action.error} />
+    <Button label="Blocked people" subtle onPress={() => router.push('/blocked')} />
     <Button label="Sign out" danger subtle disabled={action.busy} onPress={() => { void action.run(async () => { await api!.signOut(); }); }} />
     <Button label="Delete account" danger subtle disabled={action.busy} onPress={() => {
       Alert.alert('Delete account?', 'This permanently erases your profile, photo, friendships and the messages you sent.', [

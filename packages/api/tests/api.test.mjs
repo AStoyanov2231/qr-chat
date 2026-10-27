@@ -139,6 +139,33 @@ test('blocking validates the connection and uses the authoritative RPC', async (
   await assert.rejects(api.blockFriend(id), /Offline/);
 });
 
+test('block, unblock and report validate ids and reasons before any request', async () => {
+  const calls = [];
+  const query = { delete() { calls.push(['delete']); return this; }, eq(...args) { calls.push(['eq', ...args]); return this; }, insert(row) { calls.push(['insert', row]); return this; }, then: (resolve) => resolve({ data: null, error: null }) };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user: { id } } }, error: null }) },
+    rpc: async (...args) => { calls.push(args); return { data: true, error: null }; },
+    from: (table) => { calls.push(['from', table]); return query; },
+  };
+  const api = createChatApi(client);
+  await assert.rejects(api.blockUser('x'));
+  await assert.rejects(api.unblockUser('x'));
+  await assert.rejects(api.report({ userId: id }, { reason: 'boring', details: '' }));
+  await assert.rejects(api.report({ userId: id }, { reason: 'spam', details: 'x'.repeat(501) }));
+  assert.equal(calls.length, 0);
+  const peer = '22222222-2222-4222-8222-222222222222';
+  await api.blockUser(peer);
+  await api.unblockUser(peer);
+  await api.report({ userId: peer }, { reason: 'harassment', details: '  ' });
+  await api.report({ groupId: peer }, { reason: 'spam', details: ' Scam link ' });
+  assert.deepEqual(calls, [
+    ['block_user', { p_user_id: peer }],
+    ['from', 'user_blocks'], ['delete'], ['eq', 'blocker_id', id], ['eq', 'blocked_id', peer],
+    ['from', 'reports'], ['insert', { reported_user_id: peer, reason: 'harassment', details: null }],
+    ['from', 'reports'], ['insert', { group_id: peer, reason: 'spam', details: 'Scam link' }],
+  ]);
+});
+
 test('database rate limits surface as RATE_LIMITED with the server notice', async () => {
   const notice = 'You are sending messages too fast. Wait a moment and try again.';
   const api = createChatApi({

@@ -65,7 +65,9 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     }
     // Use current authorized identities even when a history request began before
     // a profile edit. Hidden/departed profiles must not survive in cached rows.
-    return rows.map(row => groupMessageView({ ...row, profiles: row.sender_id ? profiles.get(row.sender_id) ?? null : null } as GroupMessage));
+    // Blocked people's messages are left out of every group view, previews included.
+    const hidden = new Set(snapshot.session?.hidden);
+    return rows.filter((row) => !hidden.has(row.sender_id ?? '')).map(row => groupMessageView({ ...row, profiles: row.sender_id ? profiles.get(row.sender_id) ?? null : null } as GroupMessage));
   }
   function publishMessages(key: string) {
     const cache = conversations.get(key);
