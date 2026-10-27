@@ -83,7 +83,7 @@ const mocks = {
   'expo-router': `
     import React, {useEffect} from 'react';
     export const router=Object.fromEntries(['push','replace','dismissTo','back'].map(method => [method,(...args) => globalThis.__qrChatNativeTest.navigation.push([method,...args])]));
-    router.canGoBack=()=>true;
+    router.canGoBack=()=>globalThis.__qrChatNativeTest.canGoBack ?? true;
     export {useLocalSearchParams} from 'expo-router/build/hooks/useLocalSearchParams.js';
     export {useRoute} from 'expo-router/build/react-navigation/core/useRoute.js';
     export const useFocusEffect=callback=>useEffect(callback,[callback]);

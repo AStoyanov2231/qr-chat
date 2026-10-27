@@ -18,6 +18,7 @@ import {
 import { CornersOut, QrCode } from "@phosphor-icons/react";
 import { useScreenTransition } from "@/hooks/use-screen-transition";
 import { useScannerDialog } from "@/hooks/use-scanner-dialog";
+import { appOrigin } from "@/lib/app-origin";
 import { cameraErrorMessage } from "@/lib/camera-error";
 import { observeChatViewport } from "@/lib/chat-viewport";
 import { ConversationHeader } from "@/components/conversation-header";
@@ -173,7 +174,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   function openCode(value: string) {
     let accepted = false;
     try {
-      const venue = resolveCode(value, window.location.origin);
+      const venue = resolveCode(value, appOrigin());
       setPending(null);
       setError("");
 
