@@ -12,6 +12,11 @@ export function safeAuthDestination(value: string | null | undefined) {
     return DEFAULT_AUTH_DESTINATION;
   }
 
+  // "/.//evil.com" normalizes to "//evil.com", which browsers treat as another origin.
+  if (/^[/\\]{2}/.test(destination.pathname)) {
+    return DEFAULT_AUTH_DESTINATION;
+  }
+
   if (
     destination.pathname.startsWith("/auth/")
     || destination.pathname.startsWith("/sign-in")

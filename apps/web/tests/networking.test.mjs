@@ -221,7 +221,7 @@ test('web session host pauses on hidden/offline, resumes once and removes lifecy
   t.after(()=>{for(const [name,descriptor] of Object.entries(previous)) {if(descriptor) Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}});
   Object.defineProperty(globalThis,'document',{value:{hidden:false,addEventListener:listen,removeEventListener:remove},configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
-  Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener:remove,location:{pathname:'/profile',search:'',replace(path){assert.equal(revoked,true,"Access must be revoked before redirect");assert.equal(path,"/sign-in?next=%2Fprofile","sign-out keeps the destination");}}},configurable:true});
+  Object.defineProperty(globalThis,'window',{value:{addEventListener:listen,removeEventListener:remove,location:{pathname:'/profile',search:'',replace(path){assert.equal(revoked,true,"Access must be revoked before redirect");assert.equal(path,"/sign-in","sign-out drops the destination");}}},configurable:true});
   const api={client:{auth:{getSession:async()=>({data:{session:{}}}),onAuthStateChange:fn=>{authListener=fn;return {data:{subscription:{unsubscribe(){authCleaned=true;}}}};}}}};
   const store={async start(){if(!active){active=true;starts++;}},pause(){if(active){active=false;pauses++;}},dispose(){disposed=true;}};
   const { ChatSessionProvider }=await load('../src/hooks/use-chat-backend.tsx',{

@@ -7,6 +7,8 @@ test("auth return destinations stay on the app origin", () => {
   assert.equal(safeAuthDestination("https://evil.example"), "/");
   assert.equal(safeAuthDestination("//evil.example"), "/");
   assert.equal(safeAuthDestination("/\\evil.example"), "/");
+  assert.equal(safeAuthDestination("/.//evil.example"), "/");
+  assert.equal(safeAuthDestination("/\\/evil.example"), "/");
 });
 
 test("auth routes cannot become recursive return destinations", () => {
