@@ -299,7 +299,7 @@ test('a failed message stays marked, retries, and hands off to the loaded messag
   let failSend = true;
   const sent = [];
   const props = {
-    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    messages: [], userId: 'me', error: '', available: true, nextCursor: null,
     refresh: async () => { throw new Error('Offline'); }, loadOlder: async () => {},
     send: async body => { if (failSend) throw new Error('Failed send'); sent.push(body); return { id: 7 }; }, unavailable: 'Ended',
   };
@@ -324,7 +324,7 @@ test('a rate-limited send shows the database notice on the failed message', asyn
   reset();
   const notice = 'Slow mode is on in this busy chat. Wait a few seconds between messages.';
   const screen = await render(t, Conversation, {
-    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    messages: [], userId: 'me', error: '', available: true, nextCursor: null,
     refresh: async () => {}, loadOlder: async () => {}, unavailable: 'Ended',
     send: async () => { throw Object.assign(new Error(notice), { name: 'ChatApiError', code: 'RATE_LIMITED' }); },
   });
@@ -337,7 +337,7 @@ test('a sent message shows instantly and the field stays editable for the next o
   reset();
   let sendCount = 0;
   const screen = await render(t, Conversation, {
-    messages: [], userId: 'me', error: '', available: true, connected: true, nextCursor: null,
+    messages: [], userId: 'me', error: '', available: true, nextCursor: null,
     refresh: async () => {}, loadOlder: async () => {},
     send: async () => { sendCount += 1; await new Promise(() => {}); }, unavailable: 'Ended',
   });

@@ -3,6 +3,7 @@ import { Button, Copy, ErrorNotice, Screen, styles, useAction } from '@/componen
 import { webOrigin } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 
+const link = (url: string, label: string) => <Copy accessibilityRole="link" style={{ ...styles.muted, textDecorationLine: 'underline' }} onPress={() => { void Linking.openURL(url).catch(() => {}); }}>{label}</Copy>;
 export default function SettingsScreen() {
   const { api } = useAuth();
   const action = useAction();
@@ -15,6 +16,6 @@ export default function SettingsScreen() {
       ]);
     }} />
     {webOrigin ? <Copy accessibilityRole="link" style={styles.muted} onPress={() => { void Linking.openURL(`${webOrigin.replace(/\/+$/u, '')}/privacy`).catch(() => {}); }}>Privacy Policy</Copy> : null}
-    <Copy accessibilityRole="link" style={styles.muted} onPress={() => { void Linking.openURL('https://openfoodfacts.org').catch(() => {}); }}>Product data and photos © Open Food Facts contributors, under the ODbL and CC BY-SA licenses.</Copy>
+    <Copy style={styles.muted}>Product data and photos © {link('https://openfoodfacts.org', 'Open Food Facts')} contributors, under the {link('https://opendatacommons.org/licenses/odbl/1-0/', 'ODbL')} and {link('https://creativecommons.org/licenses/by-sa/3.0/', 'CC BY-SA')} licenses.</Copy>
   </Screen>;
 }

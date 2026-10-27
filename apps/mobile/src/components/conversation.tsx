@@ -16,7 +16,6 @@ type Props = {
   loading?: boolean;
   error: string;
   available: boolean;
-  connected: boolean;
   nextCursor: number | null;
   loadOlder: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -31,7 +30,7 @@ type Props = {
   ownerId?: string;
 };
 
-export function Conversation({ messages, userId, loading, error, available, connected, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, emptyState, composerLabel = 'Message', endedAction, openProfile, canOpenProfile, ownerId }: Props) {
+export function Conversation({ messages, userId, loading, error, available, nextCursor, loadOlder, refresh, send, unavailable, avatars = false, emptyState, composerLabel = 'Message', endedAction, openProfile, canOpenProfile, ownerId }: Props) {
   const [draft, setDraft] = useState('');
   const action = useAction();
   const outbox = useOutbox();
@@ -61,7 +60,6 @@ export function Conversation({ messages, userId, loading, error, available, conn
   return <View style={styles.screen}>
     <View style={{ paddingHorizontal: 16, gap: 8 }}>
       <ErrorNotice message={error || action.error} retry={() => { void action.run(refresh); }} />
-      {!connected && !error && <Copy accessibilityLiveRegion="polite" style={styles.muted}>Reconnecting…</Copy>}
     </View>
     {loading ? <View style={{ flex: 1, padding: 16 }}><Skeleton view="messages" /></View> : <FlatList
       ref={list}
@@ -83,7 +81,7 @@ export function Conversation({ messages, userId, loading, error, available, conn
         return <View style={{ gap: 8 }}>
           {day && <View style={{ alignSelf: 'center', height: 24, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.fill, marginVertical: 8 }}><Copy style={{ fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.muted }}>{day}</Copy></View>}
           <View style={{ flexDirection: own ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 8 }}>
-            {avatars && !own && <Pressable accessibilityRole={profileAvailable ? 'button' : undefined} accessibilityLabel={profileAvailable ? `View ${item.name}'s profile` : undefined} disabled={!profileAvailable} onPress={() => openProfile?.(item)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Avatar name={item.name} url={item.avatarUrl} size={32} /></Pressable>}
+            {avatars && !own && <Pressable accessibilityRole={profileAvailable ? 'button' : undefined} accessibilityLabel={profileAvailable ? `View ${item.name}'s profile` : undefined} disabled={!profileAvailable} onPress={() => openProfile?.(item)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Avatar name={item.name} url={item.avatarUrl} size={44} /></Pressable>}
             <View style={{ maxWidth: '78%', gap: 4 }}>
               {item.user === ownerId && <OwnerTag />}
               <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 24, borderCurve: 'continuous', backgroundColor: own ? colors.secondary : colors.fill }}><Copy style={{ fontSize: 16, lineHeight: 22, color: own ? colors.onSecondary : colors.text }}>{item.text}</Copy></View>

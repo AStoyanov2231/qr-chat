@@ -258,7 +258,6 @@ export default function ChatsScreen() {
       </View>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={homeStyles.list} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} alwaysBounceVertical={false} keyboardShouldPersistTaps="handled">
-      {chat.connection === 'reconnecting' && !chat.error && <View style={styles.notice}><Copy accessibilityLiveRegion="polite" style={homeStyles.meta}>Reconnecting… Your chats will return when you’re online.</Copy></View>}
       {!!action.error && <View accessibilityRole="alert" style={styles.notice}><Copy style={homeStyles.requestError}>Couldn’t refresh your chats. Try again.</Copy><NativeAction label="Retry" variant="outlined" onPress={() => action.run(chat.refresh)} /></View>}
       {chat.error ? <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={homeStyles.loadError}>
         <Copy style={homeStyles.emptyTitle}>Couldn’t load your chats.</Copy>

@@ -8,6 +8,7 @@ import { Button, Copy, ErrorNotice, TextButton, styles, useAction } from '@/comp
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { useDirectMessages } from '@/hooks/use-direct-messages';
+import { notify } from '@/lib/notice';
 
 export default function DirectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,12 +50,12 @@ export default function DirectScreen() {
       <Copy style={{ fontSize: 20, lineHeight: 26, fontWeight: '700', textAlign: 'center' }}>{`${peerName} wants to be friends`}</Copy>
       <Copy style={[styles.muted, { textAlign: 'center' }]}>Accept to start a private conversation.</Copy>
       <ErrorNotice message={action.error} />
-      <Button label={action.busy ? 'Updating…' : 'Accept'} disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.acceptFriend(request.id); await chat.refresh(); }); }} />
-      <TextButton label="Decline" disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.removeFriend(request.id); await chat.refresh(); router.back(); }); }} />
+      <Button label={action.busy ? 'Updating…' : 'Accept'} disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.acceptFriend(request.id); await chat.refresh(); notify(`You and ${peerName} are now friends.`); }); }} />
+      <TextButton label="Decline" disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.removeFriend(request.id); await chat.refresh(); notify(`Declined ${peerName}’s friend request.`); router.back(); }); }} />
     </View>
   </View>;
   return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
-    <ChatBar title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} />
+    <ChatBar title={peerName} />
     <Conversation
       key={id}
       avatars
@@ -63,7 +64,6 @@ export default function DirectScreen() {
       loading={(!chat.ready && !chat.error) || (!!friend && direct.loading)}
       error={chat.error || (friend ? direct.error : '')}
       available={!!friend && chat.ready}
-      connected={direct.connection === 'connected'}
       nextCursor={direct.nextCursor}
       loadOlder={direct.loadOlder}
       refresh={refresh}
@@ -72,7 +72,7 @@ export default function DirectScreen() {
       emptyState={emptyState}
       composerLabel={`Message ${peerName}`}
       canOpenProfile={(message) => message.user === userId || message.user === peer?.id}
-      openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
+      openProfile={(message) => router.push(message.user === userId ? '/profile' : { pathname: '/person/[id]', params: { id: message.user } })}
     />
 
   </View>;

@@ -6,6 +6,7 @@ import { Button as ComposeButton, Text as ComposeText } from '@expo/ui/jetpack-c
 import { fillMaxWidth, height } from '@expo/ui/jetpack-compose/modifiers';
 import { Image } from 'expo-image';
 import { SymbolView, type AndroidSymbol } from 'expo-symbols';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextProps, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import { errorMessage } from '@/providers/chat-provider';
@@ -36,7 +37,7 @@ export function Icon({ name, size = 25, color = colors.text }: { name: IconName;
   if (process.env.EXPO_OS === 'ios') return <Image source={`sf:${ios}`} tintColor={color} style={{ width: size, height: size }} accessibilityElementsHidden />;
   return <View collapsable={false} accessible={false} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden><SymbolView name={{ android: android as AndroidSymbol }} tintColor={color} size={size} style={{ width: size, height: size }} /></View>;
 }
-export function Copy({ style, ...props }: TextProps) { return <Text selectable {...props} style={[styles.copy, style]} />; }
+export function Copy({ style, ...props }: TextProps) { return <Text {...props} style={[styles.copy, style]} />; }
 export function Screen({ children, contentContainerStyle }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
   // Bound the viewport before flex layout so footers cannot grow behind native bars.
   return <SafeAreaView edges={{ top: true, bottom: true, left: true, right: true }} collapsable={false} style={styles.screen}>
@@ -110,7 +111,15 @@ export function ErrorNotice({ message, retry }: { message: string; retry?: () =>
   if (!message) return null;
   return <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}><Copy style={{ color: colors.danger }}>{message}</Copy>{retry && <Button label="Retry" onPress={retry} subtle />}</View>;
 }
-export function Skeleton({ profile = false, view = 'groups' }: { profile?: boolean; view?: 'home' | 'groups' | 'chats' | 'messages' }) {
+/** Placeholder bars that pulse together (web shimmers); still under reduced motion. */
+export function Skeleton(props: Parameters<typeof SkeletonBody>[0]) {
+  const reduced = useReducedMotion();
+  const opacity = useSharedValue(1);
+  useEffect(() => { if (!reduced) opacity.value = withRepeat(withTiming(0.5, { duration: 800 }), -1, true); }, [reduced, opacity]);
+  const pulse = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View style={pulse}><SkeletonBody {...props} /></Animated.View>;
+}
+function SkeletonBody({ profile = false, view = 'groups' }: { profile?: boolean; view?: 'home' | 'groups' | 'chats' | 'messages' }) {
   if (profile) return <View accessibilityLabel="Loading profile" accessibilityRole="progressbar" style={{ gap: 16, alignItems: 'center', paddingTop: 10 }}>
     <View style={[styles.skeleton, { height: 130, width: 130, borderRadius: 65 }]} />
     <View style={[styles.skeleton, { width: 164, height: 28 }]} /><View style={[styles.skeleton, { width: 105, height: 17 }]} />

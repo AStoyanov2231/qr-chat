@@ -11,7 +11,7 @@ export function errorMessage(reason: unknown) {
   }
   return message || 'Could not connect. Please try again.';
 }
-const empty = { snapshot: emptySnapshot, ready: false, error: '', connection: 'connecting' as ConnectionState, hasObservedGroup: false, groupLoading: false, directs: {} };
+const empty = { snapshot: emptySnapshot, ready: false, error: '', connection: 'connecting' as ConnectionState, hasObservedGroup: false, groupLoading: false, groupErrors: {} as Record<string, string>, directs: {} };
 const idle = async () => {};
 const noGroup = (_groupId: string) => () => {};
 function useBackend() {
@@ -26,7 +26,7 @@ function useBackend() {
     return () => store.pause();
   }, [store, userId, active]);
   return { ...state.snapshot, ready: state.ready, error: state.error ? errorMessage(new Error(state.error)) : '', groupAccessEnded: state.ready && state.hasObservedGroup && !state.snapshot.groups.length,
-    groupLoading: state.groupLoading, connection: active ? state.connection : 'reconnecting' as ConnectionState,
+    groupLoading: state.groupLoading, groupErrors: state.groupErrors, connection: active ? state.connection : 'reconnecting' as ConnectionState,
     refresh: store?.refresh ?? idle, refreshGroup: store?.refreshGroup ?? idle, openGroup: store?.openGroup ?? noGroup,
     loadOlder: store?.loadOlderGroup ?? idle };
 }
