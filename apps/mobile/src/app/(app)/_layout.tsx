@@ -1,22 +1,27 @@
 import { router, Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo, type PropsWithChildren } from 'react';
 import { View } from 'react-native';
 import { useNetworkState } from 'expo-network';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatProvider, useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { colors, Copy, IconButton, shadowFloat } from '@/components/chat-ui';
 import { useNotice } from '@/lib/notice';
 
-/** Offline or reconnecting; `polling` and the first `connecting` are not worth a banner. */
-function ConnectionBanner() {
+/** Offline or reconnecting; `polling` and the first `connecting` are not worth a banner.
+ * The banner already covers the status bar, so the screens below it get a zero top inset. */
+function ConnectionFrame({ children }: PropsWithChildren) {
   const { connection } = useChat();
   const network = useNetworkState();
   const insets = useSafeAreaInsets();
   const offline = network.isConnected === false || network.isInternetReachable === false;
-  if (!offline && connection !== 'reconnecting') return null;
-  return <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: 16, backgroundColor: colors.warning }}>
-    <Copy style={{ color: colors.onWarning, fontSize: 14, lineHeight: 20 }}>{offline ? 'You’re offline. Reconnect to load chats and send messages.' : 'Reconnecting… Your chats will refresh when connected.'}</Copy>
+  const banner = offline || connection === 'reconnecting';
+  const below = useMemo(() => ({ ...insets, top: 0 }), [insets]);
+  return <View style={{ flex: 1 }}>
+    {banner && <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ paddingTop: insets.top + 8, paddingBottom: 8, paddingHorizontal: 16, backgroundColor: colors.warning }}>
+      <Copy style={{ color: colors.onWarning, fontSize: 14, lineHeight: 20 }}>{offline ? 'You’re offline. Reconnect to load chats and send messages.' : 'Reconnecting… Your chats will refresh when connected.'}</Copy>
+    </View>}
+    <SafeAreaInsetsContext.Provider value={banner ? below : insets}><View style={{ flex: 1 }}>{children}</View></SafeAreaInsetsContext.Provider>
   </View>;
 }
 function Toast() {
@@ -36,7 +41,7 @@ export default function AppLayout() {
     clearPendingCode();
   }, [pendingCode, clearPendingCode]);
   const modal = { presentation: 'modal' as const, headerRight: () => <IconButton name="close" label="Close" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} /> };
-  return <ChatProvider key={userId}><View style={{ flex: 1 }}><ConnectionBanner /><View style={{ flex: 1 }}><Stack screenOptions={{ statusBarStyle: 'dark', headerShadowVisible: false, headerTintColor: colors.text, contentStyle: { backgroundColor: colors.canvas }, headerBackButtonDisplayMode: 'minimal' }}>
+  return <ChatProvider key={userId}><ConnectionFrame><Stack screenOptions={{ statusBarStyle: 'dark', headerShadowVisible: false, headerTintColor: colors.text, contentStyle: { backgroundColor: colors.canvas }, headerBackButtonDisplayMode: 'minimal' }}>
     <Stack.Screen name="index" options={{ headerShown: false }} />
     <Stack.Screen name="chats" options={{ headerShown: false }} />
     <Stack.Screen name="profile" options={{ title: 'Your profile', presentation: 'card', headerShown: false }} />
@@ -51,5 +56,5 @@ export default function AppLayout() {
     <Stack.Screen name="blocked" options={{ ...modal, title: 'Blocked people' }} />
     <Stack.Screen name="report" options={{ ...modal, title: 'Report' }} />
     <Stack.Screen name="business" options={{ title: 'Business', headerShown: false }} />
-  </Stack><Toast /></View></View></ChatProvider>;
+  </Stack><Toast /></ConnectionFrame></ChatProvider>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { groupFallbackName, messageAge, messageDayLabel, scannedCode, venueLink } from "@qr-chat/domain";
+import { INVALID_CODE_MESSAGE, groupFallbackName, messageAge, messageDayLabel, scannedCode, venueLink } from "@qr-chat/domain";
 import type { ChatApi } from "@qr-chat/api";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -215,7 +215,7 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
       if (current && !current.venue.nameMissing) dismissEntry(() => openConversation(current.venue));
       else join(current?.venue ?? venue, !!current);
     } catch {
-      setNotice("Could not complete this action. Please try again.");
+      setError(INVALID_CODE_MESSAGE);
     }
     return accepted;
   }

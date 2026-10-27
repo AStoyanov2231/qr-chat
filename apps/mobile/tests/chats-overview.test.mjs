@@ -1,7 +1,10 @@
 import { test } from 'node:test';
+import React from 'react';
 import assert from 'node:assert/strict';
 import { reset, render, state, act } from './support/native-harness.mjs';
 
+const { useNotice } = await import('../src/lib/notice.ts');
+const Notice = () => React.createElement('Text', null, `notice:${useNotice()}`);
 const { default: Groups } = await import('../src/app/(app)/index.tsx');
 const { default: Direct } = await import('../src/app/(app)/direct/[id].tsx');
 const group = { id: 'room-one', venue: { id: 'room-one', name: 'Cafe', codes: ['Cafe-A'], label: 'A conversation for this QR code.' }, members: [{ id: 'me', name: 'Andy' }, { id: 'peer', name: 'Sam' }], messages: [], nextCursor: null };
@@ -96,7 +99,7 @@ for (const platform of ['ios', 'android']) {
     await screen.press('Leave Cafe');
     await act(async () => { await state.alerts.at(-1)[2].find(button => button.text === 'Leave').onPress(); });
     assert.deepEqual(calls, [['leave', 'room-one']]);
-    assert.match(screen.text(), /You left Cafe\./);
+    assert.match((await render(t, Notice)).text(), /You left Cafe\./);
   });
 
   test(`${platform}: DM swipes reveal circular actions, preserve vertical scrolling and close the previous row`, async (t) => {
@@ -167,7 +170,7 @@ for (const platform of ['ios', 'android']) {
     const block = screen.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Block Sam');
     assert.equal(block.props.disabled, true);
     await act(async () => { finish(); });
-    assert.match(screen.text(), /Blocked Sam/);
+    assert.match((await render(t, Notice)).text(), /Blocked Sam/);
     assert.equal(block.props.disabled, false);
   });
 

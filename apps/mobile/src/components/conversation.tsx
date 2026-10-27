@@ -99,7 +99,7 @@ export function Conversation({ conversation, messages, userId, loading, error, a
     />}
     <Animated.View style={[{ paddingHorizontal: 16, paddingTop: 8 }, composer]}>
       {available ? <View style={{ width: '100%', maxWidth: 520, alignSelf: 'center', flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingLeft: 14, paddingRight: 3, paddingVertical: 3, borderRadius: 26, backgroundColor: colors.fill, borderWidth: 1, borderColor: colors.line }}>
-        <NativeInput accessibilityLabel={composerLabel} placeholder="Message…" value={draft} onChangeText={setDraft} maxLength={4000} multiline containerStyle={{ flex: 1, minWidth: 0, minHeight: 44, maxHeight: 150 }} style={{ paddingHorizontal: 4, paddingVertical: 11 }} />
+        <NativeInput accessibilityLabel={composerLabel} placeholder={`${composerLabel}…`} value={draft} onChangeText={setDraft} maxLength={4000} multiline containerStyle={{ flex: 1, minWidth: 0, minHeight: 44, maxHeight: 150 }} style={{ paddingHorizontal: 4, paddingVertical: 11 }} />
         <Pressable accessibilityRole="button" accessibilityLabel="Send message" accessibilityState={{ disabled: sendDisabled }} disabled={sendDisabled} onPress={submit} style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: colors.primary, opacity: sendDisabled ? 0.4 : 1, transform: [{ scale: pressed ? 1.08 : 1 }] })}>
           <Icon name="arrow" size={20} color={colors.onPrimary} />
         </Pressable>

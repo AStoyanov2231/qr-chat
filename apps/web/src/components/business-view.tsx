@@ -13,6 +13,7 @@ import { errorMessage } from "@/hooks/use-chat-backend";
 import { appOrigin } from "@/lib/app-origin";
 import { prepareAvatar } from "@/lib/avatar";
 import { SwipeRow } from "./chats-overview";
+import { AccountActions } from "./profile-view";
 import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
@@ -21,7 +22,7 @@ let client: ReturnType<typeof createChatApi> | undefined;
 const live = () => client ??= createChatApi(createClient());
 const HTTPS = "https://\\S+";
 /** What the screen needs; the local design preview passes an in-memory stand-in. */
-export type BusinessApi = Pick<ChatApi, "isBusiness" | "places" | "createPlace" | "updatePlace" | "deletePlace">;
+export type BusinessApi = Pick<ChatApi, "isBusiness" | "places" | "createPlace" | "updatePlace" | "deletePlace" | "signOut" | "deleteAccount">;
 
 /** Business owners manage their places here, on desktop or phone. Without the plan, places are read-only. */
 export function BusinessView({ preview }: { preview?: BusinessApi }) {
@@ -31,6 +32,13 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
   // The list is the home; "new" or a place opens the editor, which returns to the list when done.
   const [editing, setEditing] = useState<Place | "new" | null>(null);
   const [revealedId, setRevealedId] = useState<string | null>(null);
+  // The auth listener also redirects on SIGNED_OUT; leaving it to this flow keeps a stale ?next=/business from reaching the next account.
+  const leaving = useRef(false);
+  const leave = async (action: () => Promise<unknown>) => {
+    leaving.current = true;
+    try { await action(); if (!preview) window.location.replace("/sign-in"); return ""; }
+    catch (reason) { leaving.current = false; return errorMessage(reason); }
+  };
   const load = useCallback(async () => {
     const [business, places] = await Promise.all([api().isBusiness(), api().places()]);
     setState({ business, places });
@@ -43,7 +51,7 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
     });
     if (preview) return;
     // auth-js relays a sign-out in another tab as SIGNED_OUT here.
-    const { data } = live().client.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") window.location.replace(signInPath("/business")); });
+    const { data } = live().client.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT" && !leaving.current) window.location.replace(signInPath("/business")); });
     return () => data.subscription.unsubscribe();
   }, [load, preview]);
   const retry = () => { setError(""); load().catch((reason) => setError(errorMessage(reason))); };
@@ -58,7 +66,7 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
       <h1>Business</h1>
       {state?.business && <button type="button" className="back-button" aria-label="Add a place" onClick={() => setEditing("new")}><Plus size={20} weight="bold" /></button>}
     </header>
-    {error && <div className="business-error" role="alert"><p>{error}</p><button type="button" className="text-button" onClick={retry}>Try again</button></div>}
+    {error && <div className="business-error" role="alert"><p>{error}</p><button type="button" className="text-button" onClick={retry}>Retry</button></div>}
     {!state ? !error && <p role="status">Loading your places…</p>
       : !state.business && !hasPlaces ? <section className="business-intro">
         <h2>This page is for business accounts.</h2>
@@ -88,14 +96,18 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
             : <button type="button" className="business-row" onClick={() => setEditing(place)}>{row}</button>}</li>;
         })}</ul>}
       </>}
+    <section className="settings-actions business-account" aria-label="Account">
+      <AccountActions busy={false} onSignOut={() => leave(() => api().signOut())} onDeleteAccount={() => leave(() => api().deleteAccount())} />
+    </section>
   </main>;
 }
 
+/** "" while generating, null if it failed. */
 function useQr(url: string) {
-  const [qr, setQr] = useState("");
+  const [qr, setQr] = useState<string | null>("");
   useEffect(() => {
     let active = true;
-    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" }).then((data) => { if (active) setQr(data); }, () => {});
+    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" }).then((data) => { if (active) setQr(data); }, () => { if (active) setQr(null); });
     return () => { active = false; };
   }, [url]);
   return qr;
@@ -128,7 +140,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const qr = useQr(place ? qrPayload(`v:${place.code}`, appOrigin()) : "");
   const disabled = readOnly || saving;
-  const file = `${name.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/gu, "") || "place"}-qr.png`;
+  const file = `${(place?.name ?? "").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/gu, "") || "place"}-qr.png`;
   const dirty = !place || name.trim() !== place.name || (kind === "link" ? link.trim() : "") !== (place.link_url ?? "") || (kind === "pdf" ? !!menu : !!place.menu_path) || photo !== undefined;
   const pick = (picked: File | undefined) => { if (picked?.type === "application/pdf") setMenu(picked); };
   const pickPhoto = async (picked: File | undefined) => {
@@ -203,6 +215,7 @@ function PlaceEditor({ place, readOnly, api, onDone, onBack }: { place: Place | 
         </>}
       </div>
       {place && qr && <a className="scan-primary subtle business-download" href={qr} download={file}><DownloadSimple size={16} weight="bold" />Download QR</a>}
+      {place && qr === null && <p className="form-error" role="alert">Couldn’t create the QR code image. Reload and try again.</p>}
       {!readOnly && <div className="business-actions">
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="scan-primary" disabled={saving || !name.trim() || !dirty}>{saving ? "Saving…" : place ? "Save changes" : "Create place"}</button>

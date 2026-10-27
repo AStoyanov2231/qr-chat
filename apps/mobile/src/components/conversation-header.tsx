@@ -24,7 +24,7 @@ export function ConversationHeader({ title, subtitle, imageUrl, settings, settin
   </View>
   {/* Controls stay put above the conversation, like the web overlay. */}
   <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: insets.top + 12 }}>
-    <NativeAction icon="back" accessibilityLabel={onBack ? 'Back' : 'Back to chats'} onPress={onBack ?? (() => router.dismissTo('/'))} />
+    <NativeAction icon="back" accessibilityLabel="Back to chats" onPress={onBack ?? (() => router.dismissTo('/'))} />
     <View style={{ flexDirection: 'row', gap: 12 }}>
       {browse && <NativeAction icon="browser" accessibilityLabel="Open venue page" onPress={browse} />}
       {settings && <NativeAction icon="settings" accessibilityLabel={settingsLabel ?? 'Settings'} disabled={disabled} onPress={settings} />}
