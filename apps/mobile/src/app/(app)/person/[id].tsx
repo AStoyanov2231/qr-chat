@@ -5,6 +5,7 @@ import { Button, Copy, ErrorNotice, Skeleton, TextButton, colors, styles, useAct
 import { ConversationHeader } from '@/components/conversation-header';
 import { useAuth } from '@/providers/auth-provider';
 import { useChat } from '@/providers/chat-provider';
+import { notify } from '@/lib/notice';
 
 export default function PersonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -17,7 +18,7 @@ export default function PersonScreen() {
   const person = member ?? (peer ? { id: peer.id, name: peer.display_name ?? 'Participant', avatarUrl: peer.avatar_url } : null);
   const relationship = friendshipState(friend, userId!);
   const disabled = action.busy || !chat.ready;
-  const change = (mutation: () => Promise<unknown>) => { void action.run(async () => { await mutation(); await chat.refresh(); }); };
+  const change = (mutation: () => Promise<unknown>, done?: string) => { void action.run(async () => { await mutation(); await chat.refresh(); if (done) notify(done); }); };
 
   return <View style={{ flex: 1, backgroundColor: colors.canvas }}>
     <ConversationHeader title={person?.name ?? 'Profile'} subtitle={person ? relationship === 'accepted' ? 'Friend' : 'QR Chat member' : undefined} imageUrl={person?.avatarUrl} onBack={() => router.back()} />
@@ -28,8 +29,8 @@ export default function PersonScreen() {
         : relationship === 'accepted' && friend ? <Button label="Message" disabled={disabled} onPress={() => router.dismissTo({ pathname: '/direct/[id]', params: { id: friend.id } })} />
           : relationship === 'incoming' && friend ? <>
             <Copy style={styles.muted}>{person.name} wants to be friends. Accept to start a private conversation.</Copy>
-            <Button label={action.busy ? 'Updating…' : 'Accept'} disabled={disabled} onPress={() => change(() => api!.acceptFriend(friend.id))} />
-            <TextButton label="Decline" disabled={disabled} onPress={() => change(() => api!.removeFriend(friend.id))} />
+            <Button label={action.busy ? 'Updating…' : 'Accept'} disabled={disabled} onPress={() => change(() => api!.acceptFriend(friend.id), `You and ${person.name} are now friends.`)} />
+            <TextButton label="Decline" disabled={disabled} onPress={() => change(() => api!.removeFriend(friend.id), `Declined ${person.name}’s friend request.`)} />
           </> : relationship === 'outgoing' && friend ? <>
             <Copy accessibilityLiveRegion="polite" style={styles.muted}>Request sent. You can message after they accept.</Copy>
             <TextButton label="Cancel request" disabled={disabled} onPress={() => change(() => api!.removeFriend(friend.id))} />

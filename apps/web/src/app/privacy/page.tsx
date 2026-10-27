@@ -9,7 +9,7 @@ export default function PrivacyPage() {
     <main className="legal-page">
       <Link href="/welcome" className="app-brand" aria-label="About QR Chat"><span><Icon name="qr" size={19} /></span>QR Chat</Link>
       <h1>Privacy Policy</h1>
-      <p className="legal-updated">Last updated 15 October 2026</p>
+      <p className="legal-updated">Last updated 27 October 2026</p>
 
       <h2>What we collect</h2>
       <ul>
@@ -25,6 +25,9 @@ export default function PrivacyPage() {
 
       <h2>Product barcodes</h2>
       <p>Our server looks up the barcode number on <a href="https://world.openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a>. Nothing about you is sent, only the number. We save the product name and photo so the lookup happens once per product. Product data and photos come from Open Food Facts contributors under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL</a> and <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA</a> licenses. When a product is unknown, a group member may type a name for it; everyone who scans that product sees it.</p>
+
+      <h2>Business places</h2>
+      <p>If you have a business plan, we store each place you create: its name, an optional website link, an optional menu (a PDF) and an optional photo, together with the QR code and chat group made for it. Your plan status is kept with your account. Anyone who scans the place’s QR code joins its group and sees the name, link, menu and photo. The menu and photo files are public: anyone who has their web address can open them, and the photo is also used as the group’s picture and in link previews. Deleting your account erases your places and these files.</p>
 
       <h2>Who can see what</h2>
       <p>Group members see your name, photo and group messages while they have access. Friends see your direct messages. We do not sell your data or use it for advertising.</p>

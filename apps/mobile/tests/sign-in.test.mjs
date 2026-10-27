@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reset, render, state } from './support/native-harness.mjs';
+import { act, reset, render, state } from './support/native-harness.mjs';
 
 const { default: SignIn } = await import('../src/app/sign-in.tsx');
 
@@ -34,7 +34,22 @@ for (const platform of ['ios', 'android']) {
     const screen = await render(t, SignIn);
     await screen.press('Continue with Google');
     assert.match(screen.text(), /Could not start sign-in/);
-    const button = screen.root.findAll(node => node.type === 'SwiftUIButton' || node.type === 'ComposeButton')[0];
-    assert.equal(button.props.enabled ?? !button.props.modifiers.some(modifier => modifier.$type === 'disabled' && modifier.value), true);
+    const button = screen.root.findAll(node => node.type === 'Pressable' && node.props.accessibilityRole === 'button')[0];
+    assert.equal(button.props.disabled, false);
+    assert.ok(screen.root.findAllByType('Image').length, 'the Google logo shows beside the label');
+    assert.match(screen.text(), /Privacy Policy/);
+    await act(async () => { screen.root.findAll(node => node.type === 'Text' && node.props.accessibilityRole === 'link')[0].props.onPress(); });
+    assert.deepEqual(state.opened, ['https://chat.example/privacy']);
+  });
+
+  test(`${platform}: the Google button says it is opening while sign-in runs`, async t => {
+    reset(); process.env.EXPO_OS = platform;
+    let finish;
+    state.auth.api = { client: { auth: { signInWithOAuth: () => new Promise(resolve => { finish = resolve; }) } } };
+    const screen = await render(t, SignIn);
+    await screen.press('Continue with Google');
+    assert.match(screen.text(), /Opening sign in\.\.\./);
+    await act(async () => { finish({ data: {}, error: new Error('x') }); });
+    assert.match(screen.text(), /Continue with Google/);
   });
 }

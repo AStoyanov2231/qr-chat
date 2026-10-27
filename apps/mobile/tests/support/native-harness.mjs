@@ -102,6 +102,7 @@ const mocks = {
     export const useSharedValue=value=>({value});
     export const useDerivedValue=compute=>({value:compute()});
     export const withTiming=value=>value;
+    export const withRepeat=value=>value;
     export const useAnimatedStyle=compute=>compute();
     export const useAnimatedReaction=()=>{};`,
   'react-native-worklets': 'export const scheduleOnRN=(fn,...args)=>fn(...args);',
@@ -187,8 +188,8 @@ export function reset() {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, {
     params: {}, navigation: [], alerts: [], opened: [], watchers: [], appListeners: new Set(), linkListeners: new Set(), loadDirectSnapshot: async()=>({messages:[],nextCursor:null}), permission: { granted: true, canAskAgain: true },
-    auth: { userId: 'me', active: true, api: { resolveGroup: async () => null, isBusiness: async () => false } },
-    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, unread: {}, connection: 'connected', refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
+    auth: { userId: 'me', active: true, api: { resolveGroup: async () => null, isBusiness: async () => false, places: async () => [] } },
+    chat: { ready: true, error: '', groupAccessEnded: false, session: { id: 'me', name: 'Andy' }, groups: [], friends: [], directPreviews: {}, unread: {}, connection: 'connected', groupErrors: {}, refresh: async () => {}, refreshGroup: async () => {}, openGroup: () => () => {}, loadOlder: async () => {} },
     loadChatSnapshot: async () => ({session:{id:'me',name:'Andy'},groups:[],friends:[],directPreviews:{}}),
   });
 }

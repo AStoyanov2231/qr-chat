@@ -33,7 +33,7 @@ export function GroupDetails({ group, onNavigate }: { group: Group; onNavigate?:
       : <View style={{ marginHorizontal: -16, aspectRatio: 4 / 3, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.avatar }}><Copy selectable={false} style={{ fontSize: 48, lineHeight: 56, fontWeight: '700' }}>{groupInitials(group.venue.name)}</Copy></View>}
     <Copy accessibilityRole="header" style={{ fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.muted, textTransform: 'uppercase' }}>{`${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}`}</Copy>
     <ErrorNotice message={chat.error} />
-    {group.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => { onNavigate?.(); router.push(member.id === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: member.id } }); }} style={[styles.row, { minHeight: 60, paddingVertical: 8 }]}>
+    {group.members.map((member) => <Pressable key={member.id} accessibilityRole="button" accessibilityLabel={`View ${member.name}'s profile`} onPress={() => { onNavigate?.(); router.push(member.id === userId ? '/profile' : { pathname: '/person/[id]', params: { id: member.id } }); }} style={[styles.row, { minHeight: 60, paddingVertical: 8 }]}>
       <Avatar name={member.name} url={member.avatarUrl} size={44} /><Copy style={{ flex: 1, fontSize: 16 }}>{member.id === userId ? 'You' : member.name}</Copy>{member.id === group.venue.place?.ownerId && <OwnerTag />}<Icon name="chevron" size={18} />
     </Pressable>)}
   </View>;
