@@ -51,7 +51,8 @@ test('the menu is a link or a PDF: the toggle shows only the active option', asy
   await screen.press('PDF');
   await screen.type('Place name', 'My bar');
   await screen.press('Save changes');
-  assert.deepEqual(calls[0][1], { name: 'My bar', link: '', menu: undefined, photo: undefined });
+  assert.equal(calls.length, 0, 'the PDF option without a file never silently clears the link');
+  assert.match(screen.text(), /Choose a PDF menu, or switch back to Link\./);
 });
 
 test('Share QR shares the venue QR as a PNG file', async (t) => {

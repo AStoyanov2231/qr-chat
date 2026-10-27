@@ -148,7 +148,7 @@ function RequestRow({ friend, peer, busy, onNotice, refresh }: {
 
 type SwipeAction = { kind: string; label: string; icon: React.ComponentProps<typeof Icon>['name']; danger?: boolean; title: string; message: string; run: () => Promise<unknown>; notice: string };
 
-function SwipeRow({ label, actionsLabel, open, onReveal, onOpen, children, actions, errorText, onNotice, refresh }: {
+export function SwipeRow({ label, actionsLabel, open, onReveal, onOpen, children, actions, errorText, onNotice, refresh }: {
   label: string; actionsLabel: string; open: boolean; onReveal: (open: boolean) => void; onOpen: () => void;
   children: React.ReactNode; actions: SwipeAction[]; errorText: string; onNotice: (message: string) => void; refresh: () => Promise<void>;
 }) {

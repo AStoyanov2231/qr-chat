@@ -252,30 +252,50 @@ export function createChatApi(
       const name = placeNameSchema.parse(input.name);
       const link = placeLinkSchema.parse(input.link) || null;
       const upload = input.menu ? menuUploadSchema.parse(input.menu) : input.menu;
-      const bucket = client.storage.from("venue-menus");
-      let menu_path = place.menu_path;
-      if (upload) {
-        menu_path = `${await userId()}/${upload.uploadId}.pdf`;
-        await result(bucket.upload(menu_path, upload.data, { contentType: "application/pdf", cacheControl: "31536000", upsert: false }));
-      } else if (upload === null) menu_path = null;
       const photo = input.photo ? avatarUploadSchema.parse(input.photo) : input.photo;
+      const id = await userId();
+      const placeId = userIdSchema.parse(place.id);
+      const menus = client.storage.from("venue-menus");
       const photos = client.storage.from("venue-photos");
-      let photo_path = place.photo_path;
-      if (photo) {
-        photo_path = `${await userId()}/${photo.uploadId}.jpg`;
-        await result(photos.upload(photo_path, photo.data, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));
-      } else if (photo === null) photo_path = null;
-      const saved = withPlace(await result(client.rpc("update_place", { p_place_id: userIdSchema.parse(place.id), p_name: name, p_link_url: link, p_menu_path: menu_path, p_photo_path: photo_path })));
-      if (place.menu_path && place.menu_path !== menu_path) {
-        try { await bucket.remove([place.menu_path]); } catch { /* best effort */ }
+      // undefined keeps the stored file, null removes it, a string is this save's upload.
+      const menuPath = upload ? `${id}/${upload.uploadId}.pdf` : upload;
+      const photoPath = photo ? `${id}/${photo.uploadId}.jpg` : photo;
+      let calling = false;
+      try {
+        if (upload && menuPath) await result(menus.upload(menuPath, upload.data, { contentType: "application/pdf", cacheControl: "31536000", upsert: false }));
+        if (photo && photoPath) await result(photos.upload(photoPath, photo.data, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));
+        // Files this save leaves alone keep what is stored now, not the editor's snapshot, so a newer save from another device survives.
+        // ponytail: read-then-write; a save landing within this one round trip can still be overwritten. Move keep-semantics into update_place if that matters.
+        const current = await result(client.from("places").select("menu_path, photo_path").eq("id", placeId).single());
+        const menu_path = menuPath === undefined ? current.menu_path : menuPath;
+        const photo_path = photoPath === undefined ? current.photo_path : photoPath;
+        calling = true;
+        const saved = withPlace(await result(client.rpc("update_place", { p_place_id: placeId, p_name: name, p_link_url: link, p_menu_path: menu_path, p_photo_path: photo_path })));
+        // Cleanup failure must not turn a committed save into a failed form.
+        if (current.menu_path && current.menu_path !== menu_path) await menus.remove([current.menu_path]).catch(() => {});
+        if (current.photo_path && current.photo_path !== photo_path) await photos.remove([current.photo_path]).catch(() => {});
+        emit({ kind: "overview" });
+        return saved;
+      } catch (error) {
+        // A lost response can follow a committed update, so uploads are dropped only when the place can't reference them:
+        // the failure came before the RPC, or the server answered with an error (a network failure has an empty code).
+        if (!calling || (error instanceof ChatApiError && error.code)) {
+          if (menuPath) await menus.remove([menuPath]).catch(() => {});
+          if (photoPath) await photos.remove([photoPath]).catch(() => {});
+        }
+        throw error;
       }
-      if (place.photo_path && place.photo_path !== photo_path) {
-        try { await photos.remove([place.photo_path]); } catch { /* best effort */ }
-      }
-      emit({ kind: "overview" });
-      return saved;
     },
-    deletePlace: async (placeId: string) => { await nullableResult(client.rpc("delete_place", { p_place_id: userIdSchema.parse(placeId) })); emit({ kind: "overview" }); },
+    /** Soft-deletes the place (its QR stops accepting joins), then removes its menu and photo files. */
+    async deletePlace(placeId: string) {
+      const id = userIdSchema.parse(placeId);
+      const files = await result(client.from("places").select("menu_path, photo_path").eq("id", id).single());
+      await nullableResult(client.rpc("delete_place", { p_place_id: id }));
+      emit({ kind: "overview" });
+      // A deleted place is never shown again, so its files are unused; cleanup failure must not fail the delete.
+      if (files.menu_path) await client.storage.from("venue-menus").remove([files.menu_path]).catch(() => {});
+      if (files.photo_path) await client.storage.from("venue-photos").remove([files.photo_path]).catch(() => {});
+    },
     /** Permanently erases the signed-in account on the server, then clears the local session. */
     async deleteAccount() {
       const { data } = await client.auth.getSession();
