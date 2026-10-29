@@ -221,14 +221,14 @@ export function ChatView({ view = "chats", backend, direct, directId, setDirectI
   }
 
   const openInitialCode = useEffectEvent((value: string) => {
-    // External links can open a group you're already in. New joins require the camera.
+    // A venue link joins like a scan; a group you're already in opens directly.
     const current = groups.find((item) => item.venue.codes[0] === value);
     if (current) {
       motion.initialScreen(`group:${current.venue.codes[0]}`);
       setActive(current.venue);
       switchDirectConversation(null);
     }
-    else startEntry();
+    else openCode(value);
   });
   const openScannedCode = useEffectEvent((value: string) => openCode(value));
 

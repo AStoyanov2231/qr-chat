@@ -10,9 +10,11 @@ export function observeChatViewport(element: HTMLElement): () => void {
   let trackingUntil = 0;
   let focusFrame = 0;
   let restoreInput: (() => void) | undefined;
+  // Only Safari accepts this scripted focus; iOS Chrome/Firefox/Edge drop the keyboard, so they keep the native tap focus.
+  const safari = !/CriOS|FxiOS|EdgiOS|OPiOS/u.test(navigator.userAgent);
   const focusComposer = (event: PointerEvent) => {
     const input = event.target as HTMLElement;
-    if (event.pointerType !== "touch" || !input.matches(".message-composer textarea") || document.activeElement === input || viewport.scale !== 1) return;
+    if (!safari || event.pointerType !== "touch" || !input.matches(".message-composer textarea") || document.activeElement === input || viewport.scale !== 1) return;
     event.preventDefault();
     // WebKit pans to the input's pre-keyboard position even with preventScroll.
     // Focus it outside the viewport, then restore it before the next paint.
