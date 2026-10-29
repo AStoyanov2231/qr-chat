@@ -15,7 +15,7 @@ type Props = Omit<ButtonProps, 'style'> & {
   prominent?: boolean;
 };
 
-const systemImages = { back: 'chevron.left', settings: 'gearshape', close: 'xmark', browser: 'safari', scan: 'qrcode.viewfinder', plus: 'plus' } as const;
+const systemImages = { back: 'chevron.left', settings: 'gearshape', close: 'xmark', browser: 'arrow.up.right.square', scan: 'qrcode.viewfinder', plus: 'plus' } as const;
 const labelColors = { filled: [colors.primary, colors.onPrimary], outlined: [colors.fill, colors.text], text: [undefined, colors.text] } as const;
 
 export function NativeAction({ align = 'center', accessibilityLabel, icon, prominent = false, ...buttonProps }: Props) {

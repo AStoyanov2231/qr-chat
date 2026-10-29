@@ -32,7 +32,7 @@ const symbols = {
   block: ['nosign', 'block'], userMinus: ['person.badge.minus.fill', 'person_remove'],
   check: ['checkmark', 'check'], userPlus: ['person.badge.plus.fill', 'person_add'],
   help: ['questionmark.circle', 'help'], pin: ['mappin', 'location_on'], close: ['xmark', 'close'],
-  browser: ['safari', 'open_in_browser'], plus: ['plus', 'add'], business: ['storefront', 'storefront'],
+  browser: ['arrow.up.right.square', 'open_in_new'], plus: ['plus', 'add'], business: ['storefront', 'storefront'],
   pdf: ['doc.richtext', 'picture_as_pdf'], link: ['link', 'link'], trash: ['trash', 'delete'], share: ['square.and.arrow.up', 'share'],
 } as const;
 export type IconName = keyof typeof symbols;

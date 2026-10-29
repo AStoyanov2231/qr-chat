@@ -13,7 +13,6 @@ import { errorMessage } from "@/hooks/use-chat-backend";
 import { appOrigin } from "@/lib/app-origin";
 import { prepareAvatar } from "@/lib/avatar";
 import { SwipeRow } from "./chats-overview";
-import { AccountActions } from "./profile-view";
 import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 
@@ -32,13 +31,6 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
   // The list is the home; "new" or a place opens the editor, which returns to the list when done.
   const [editing, setEditing] = useState<Place | "new" | null>(null);
   const [revealedId, setRevealedId] = useState<string | null>(null);
-  // The auth listener also redirects on SIGNED_OUT; leaving it to this flow keeps a stale ?next=/business from reaching the next account.
-  const leaving = useRef(false);
-  const leave = async (action: () => Promise<unknown>) => {
-    leaving.current = true;
-    try { await action(); if (!preview) window.location.replace("/sign-in"); return ""; }
-    catch (reason) { leaving.current = false; return errorMessage(reason); }
-  };
   const load = useCallback(async () => {
     const [business, places] = await Promise.all([api().isBusiness(), api().places()]);
     setState({ business, places });
@@ -51,7 +43,7 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
     });
     if (preview) return;
     // auth-js relays a sign-out in another tab as SIGNED_OUT here.
-    const { data } = live().client.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT" && !leaving.current) window.location.replace(signInPath("/business")); });
+    const { data } = live().client.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") window.location.replace(signInPath("/business")); });
     return () => data.subscription.unsubscribe();
   }, [load, preview]);
   const retry = () => { setError(""); load().catch((reason) => setError(errorMessage(reason))); };
@@ -96,9 +88,6 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
             : <button type="button" className="business-row" onClick={() => setEditing(place)}>{row}</button>}</li>;
         })}</ul>}
       </>}
-    <section className="settings-actions business-account" aria-label="Account">
-      <AccountActions busy={false} onSignOut={() => leave(() => api().signOut())} onDeleteAccount={() => leave(() => api().deleteAccount())} />
-    </section>
   </main>;
 }
 
@@ -106,9 +95,13 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
 function useQr(url: string) {
   const [qr, setQr] = useState<string | null>("");
   useEffect(() => {
+    let blobUrl = "";
     let active = true;
-    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" }).then((data) => { if (active) setQr(data); }, () => { if (active) setQr(null); });
-    return () => { active = false; };
+    // A blob URL, not a data URL: browsers drop `download` on large data URLs.
+    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" })
+      .then((data) => fetch(data)).then((response) => response.blob())
+      .then((blob) => { if (!active) return; blobUrl = URL.createObjectURL(blob); setQr(blobUrl); }, () => { if (active) setQr(null); });
+    return () => { active = false; if (blobUrl) URL.revokeObjectURL(blobUrl); };
   }, [url]);
   return qr;
 }
