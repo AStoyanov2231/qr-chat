@@ -95,9 +95,13 @@ export function BusinessView({ preview }: { preview?: BusinessApi }) {
 function useQr(url: string) {
   const [qr, setQr] = useState<string | null>("");
   useEffect(() => {
+    let blobUrl = "";
     let active = true;
-    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" }).then((data) => { if (active) setQr(data); }, () => { if (active) setQr(null); });
-    return () => { active = false; };
+    // A blob URL, not a data URL: browsers drop `download` on large data URLs.
+    void QRCode.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M" })
+      .then((data) => fetch(data)).then((response) => response.blob())
+      .then((blob) => { if (!active) return; blobUrl = URL.createObjectURL(blob); setQr(blobUrl); }, () => { if (active) setQr(null); });
+    return () => { active = false; if (blobUrl) URL.revokeObjectURL(blobUrl); };
   }, [url]);
   return qr;
 }
