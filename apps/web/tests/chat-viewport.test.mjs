@@ -97,7 +97,7 @@ test('touch focus suppresses Safari auto-pan before focus and restores the origi
   const cleanup = observeChatViewport(f.element);
   let focusedTransform;
   const input = {
-    matches: selector => selector === '.message-composer input',
+    matches: selector => selector === '.message-composer textarea',
     style: { transform: '' },
     focus: options => {
       assert.equal(options.preventScroll, true);

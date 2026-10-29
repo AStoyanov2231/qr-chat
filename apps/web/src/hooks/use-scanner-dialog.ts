@@ -2,6 +2,7 @@
 
 import { useEffectEvent, useLayoutEffect, useRef, type RefObject } from "react";
 import { animateMotion, scannerCircle } from "@/lib/motion";
+import { cssVar } from "@/lib/css-var";
 
 export function useScannerDialog(open: boolean, joining: boolean, trigger: RefObject<HTMLElement | null>, onClosed: () => void) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -19,7 +20,7 @@ export function useScannerDialog(open: boolean, joining: boolean, trigger: RefOb
       const theme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
       if (theme) {
         const content = theme.content;
-        theme.content = "#07090b";
+        theme.content = cssVar("--camera");
         restoreTheme.current = () => { theme.content = content; };
       }
     }

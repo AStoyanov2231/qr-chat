@@ -7,8 +7,9 @@ import type { ChatAccess, ChatOverview, GroupMessage, ChatMutation, DirectMessag
 type Row = GroupMessage | DirectMessage;
 type Conversation = { rows: Map<number, Row>; nextCursor: number | null; loaded: boolean; headIds: number[] };
 export type DirectState = { messages: DirectMessage[]; nextCursor: number | null; loading: boolean; error: string };
-export type ChatStoreState = { snapshot: ChatSnapshot; ready: boolean; error: string; connection: ConnectionState; hasObservedGroup: boolean; groupLoading: boolean; directs: Record<string, DirectState> };
-const initialState: ChatStoreState = { snapshot: emptySnapshot, ready: false, error: '', connection: 'connecting', hasObservedGroup: false, groupLoading: false, directs: {} };
+/** groupErrors: per-group load failures by group id (DMs carry theirs in directs[id].error); `error` is a whole-session failure. */
+export type ChatStoreState = { snapshot: ChatSnapshot; ready: boolean; error: string; connection: ConnectionState; hasObservedGroup: boolean; groupLoading: boolean; groupErrors: Record<string, string>; directs: Record<string, DirectState> };
+const initialState: ChatStoreState = { snapshot: emptySnapshot, ready: false, error: '', connection: 'connecting', hasObservedGroup: false, groupLoading: false, groupErrors: {}, directs: {} };
 const emptyDirect: DirectState = { messages: [], nextCursor: null, loading: true, error: '' };
 
 /** One session store per injected API. Hosts provide activity; the store owns networking. */
@@ -21,6 +22,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   const recoveries = new Set<string>();
   const olderPages = new Set<string>();
   const validations = new Set<string>();
+  // Conversations whose access was checked this session; later message reads rely on RLS alone.
+  const verified = new Set<string>();
   const pendingWrites = new Map<string, Row[]>();
   const writtenIds = new Map<string, Set<number>>();
   const directViews = new Map<string, number>();
@@ -34,7 +37,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   const groupViews = new Map<string, number>();
   const viewingGroup = (id: string) => groupViews.has(id);
   const hasGroup = (id: string) => state.snapshot.groups.some((group) => group.id === id);
-  const viewedGroupLoading = (groups: ChatSnapshot['groups']) => groups.some((group) => viewingGroup(group.id) && !conversations.get(`g:${group.id}`)?.loaded);
+  const viewedGroupLoading = (groups: ChatSnapshot['groups'], errors = state.groupErrors) => groups.some((group) => viewingGroup(group.id) && !conversations.get(`g:${group.id}`)?.loaded && !errors[group.id]);
   let safety: ReturnType<typeof setTimeout> | undefined;
   let expiry: ReturnType<typeof setTimeout> | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -64,7 +67,9 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     }
     // Use current authorized identities even when a history request began before
     // a profile edit. Hidden/departed profiles must not survive in cached rows.
-    return rows.map(row => groupMessageView({ ...row, profiles: row.sender_id ? profiles.get(row.sender_id) ?? null : null } as GroupMessage));
+    // Blocked people's messages are left out of every group view, previews included.
+    const hidden = new Set(snapshot.session?.hidden);
+    return rows.filter((row) => !hidden.has(row.sender_id ?? '')).map(row => groupMessageView({ ...row, profiles: row.sender_id ? profiles.get(row.sender_id) ?? null : null } as GroupMessage));
   }
   function publishMessages(key: string) {
     const cache = conversations.get(key);
@@ -74,12 +79,15 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (key.startsWith('g:')) {
       if (!hasGroup(id)) return;
       const groups = state.snapshot.groups.map((group) => group.id === id ? { ...group, messages: groupMessageViews(rows, state.snapshot), nextCursor: cache.nextCursor } : group);
-      publish({ snapshot: { ...state.snapshot, groups }, groupLoading: viewedGroupLoading(groups) });
+      const groupErrors = { ...state.groupErrors }; delete groupErrors[id];
+      publish({ snapshot: { ...state.snapshot, groups }, groupErrors, groupLoading: viewedGroupLoading(groups, groupErrors) });
     } else if (key.startsWith('d:') && accepted().has(id)) {
       const latest = rows.at(-1) as DirectMessage | undefined;
       const previous = state.snapshot.directPreviews[id];
       const preview = latest && (previous?.status !== 'ready' || !previous.message || latest.id >= previous.message.id) ? { status: 'ready' as const, message: latest } : previous;
-      publish({ directs: { ...state.directs, [id]: { messages: rows as DirectMessage[], nextCursor: cache.nextCursor, loading: false, error: '' } }, snapshot: preview ? { ...state.snapshot, directPreviews: { ...state.snapshot.directPreviews, [id]: preview } } : state.snapshot });
+      // An unopened DM caches only its newest row for the preview; opening it shows the skeleton until history loads.
+      const directs = cache.loaded ? { ...state.directs, [id]: { messages: rows as DirectMessage[], nextCursor: cache.nextCursor, loading: false, error: '' } } : state.directs;
+      publish({ directs, snapshot: preview ? { ...state.snapshot, directPreviews: { ...state.snapshot.directPreviews, [id]: preview } } : state.snapshot });
     }
   }
   const viewing = (id: string) => viewingGroup(id) || directViews.has(id);
@@ -106,7 +114,7 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   }
   function forgetConversation(key: string) {
     conversations.delete(key); pendingIds.delete(key); pendingWrites.delete(key); writtenIds.delete(key);
-    recoveries.delete(key); olderPages.delete(key); validations.delete(key);
+    recoveries.delete(key); olderPages.delete(key); validations.delete(key); verified.delete(key);
   }
   function prune(access: ChatAccess) {
     const allowed = new Set(access.acceptedConnectionIds);
@@ -125,11 +133,20 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!current(ticket)) return;
     generation++; controller.abort(); controller = new AbortController();
     // Cached private bodies are discarded when access cannot be checked.
-    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear();
-    publish({ snapshot: emptySnapshot, directs: {}, ready: false, groupLoading: false, error: error instanceof Error ? error.message : 'Could not synchronize.', connection: 'reconnecting' });
+    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); verified.clear();
+    publish({ snapshot: emptySnapshot, directs: {}, groupErrors: {}, ready: false, groupLoading: false, error: error instanceof Error ? error.message : 'Could not synchronize.', connection: 'reconnecting' });
     stopWatcher();
     clearTimeout(retry);
     retry = setTimeout(() => { if (active) void refresh('retry').catch(() => {}); }, Math.min(1000 * 2 ** attempts++, 30000) * (0.8 + random() * 0.2));
+  }
+  /** A failed read stays with its conversation; the rest of the session keeps working. */
+  function conversationFailed(key: string, error: unknown) {
+    const id = key.slice(2);
+    if (!viewing(id)) return;
+    const message = error instanceof Error ? error.message : 'Could not load messages.';
+    if (key.startsWith('d:')) { publish({ directs: { ...state.directs, [id]: { ...(state.directs[id] ?? emptyDirect), loading: false, error: message } } }); return; }
+    const groupErrors = { ...state.groupErrors, [id]: message };
+    publish({ groupErrors, groupLoading: viewedGroupLoading(state.snapshot.groups, groupErrors) });
   }
   function stopWatcher() { watcher?.stop(); watcher = undefined; watcherKey = ''; }
   function updateWatcher() {
@@ -142,7 +159,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     watcherKey = key;
     if (watcher) { watcher.update(topics); return; }
     const ticket = generation;
-    watcher = watchChanges(api.client, topics, () => refresh('reconnect'), (connection) => { if (current(ticket)) publish({ connection }); }, {
+    // A (re)join compares head ids like a poll; validating the whole cached range is left to resume.
+    watcher = watchChanges(api.client, topics, () => refresh('subscribed'), (connection) => { if (current(ticket)) publish({ connection }); }, {
       onChange: event, random, coordinated: true,
       // Overview polling compares head ids, so unchanged conversations download nothing.
       fallbackMs: options.fallbackMs ?? 5000, onPoll: () => refresh('poll'),
@@ -169,7 +187,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
     if (!current(ticket)) return null;
     const sessionId = await api.userId();
     if (!current(ticket)) return null;
-    if (access.userId !== identity || sessionId !== identity) throw new Error('Please sign in again.');
+    // A different identity is a whole-session failure, unlike a failed read.
+    if (access.userId !== identity || sessionId !== identity) { const error = new Error('Please sign in again.'); fail(error, ticket); throw error; }
     prune(access);
     return access;
   }
@@ -213,7 +232,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
         const latestId = [...(cached?.rows.keys() ?? [])].reduce((max, id) => Math.max(max, id), 0);
         if (!cached?.loaded || validate || (preview?.id ?? 0) !== latestId) tasks.push(refreshConversation(key, true, false, validate && !!cached?.loaded));
       }
-      await Promise.all(tasks);
+      // Conversation failures are reported per conversation and do not fail the overview.
+      await Promise.all(tasks.map((task) => task.catch(() => {})));
       if (current(ticket)) { attempts = 0; clearTimeout(retry); }
     } catch (error) { fail(error, ticket); throw error; }
   }
@@ -268,8 +288,9 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
         const cache = conversation(key);
         // Work in a copy until the final authorization check succeeds.
         const next = { ...cache, rows: new Map(cache.rows), headIds: [...cache.headIds] };
-        const ids = [...(pendingIds.get(key) ?? [])]; pendingIds.delete(key);
-        const writes = pendingWrites.get(key) ?? []; pendingWrites.delete(key);
+        // Pending hints are cleared only once their rows are published, so a failed or stale run keeps them.
+        const ids = [...(pendingIds.get(key) ?? [])];
+        const writes = [...(pendingWrites.get(key) ?? [])];
         for (const row of writes) next.rows.set(row.id, row);
         const missing = ids.filter((id) => !next.rows.has(id));
         for (let offset = 0; offset < missing.length; offset += 100) {
@@ -277,6 +298,8 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
           const rows = key.startsWith('g:') ? await api.groupMessageIds(id, batch, signal) : await api.directMessageIds(id, batch, signal);
           for (const row of rows) next.rows.set(row.id, row);
         }
+        // An ID the server withholds may mean lost access.
+        const withheld = missing.some((id) => !next.rows.has(id));
         const needsRecovery = recoveries.delete(key);
         const needsOlder = olderPages.delete(key);
         const validateCachedRange = validations.delete(key);
@@ -293,10 +316,16 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
           next.rows = new Map([[latest.id, latest]]);
         }
         if (next.loaded) next.headIds = [...next.rows.keys()].sort((a, b) => b - a).slice(0, 50);
-        const access = await checkAccess(ticket);
-        if (!access || (key.startsWith('g:') ? !access.memberships.some((membership) => membership.group_id === id) : !access.acceptedConnectionIds.includes(id))) { updateWatcher(); return; }
-        conversations.set(key, next); publishMessages(key); track(id, fresh);
-      } catch (error) { fail(error, ticket); throw error; }
+        if (needsRecovery || withheld || !verified.has(key)) {
+          const access = await checkAccess(ticket);
+          if (!access || (key.startsWith('g:') ? !access.memberships.some((membership) => membership.group_id === id) : !access.acceptedConnectionIds.includes(id))) { updateWatcher(); return; }
+          verified.add(key);
+        } else if (!current(ticket) || (key.startsWith('g:') ? !hasGroup(id) : !accepted().has(id))) return;
+        conversations.set(key, next);
+        for (const id of ids) pendingIds.get(key)?.delete(id);
+        pendingWrites.set(key, (pendingWrites.get(key) ?? []).filter((row) => !writes.includes(row)));
+        publishMessages(key); track(id, fresh);
+      } catch (error) { verified.delete(key); if (current(ticket)) conversationFailed(key, error); throw error; }
     });
   }
   function event(change: ChangeEvent) {
@@ -329,16 +358,17 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
   function resetIdentity(id: string | null) {
     generation++; controller.abort(); controller = new AbortController(); coordinator.cancel(); stopWatcher();
     clearTimeout(expiry); clearTimeout(retry); attempts = 0;
-    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); recoverOverview = false; identity = id;
+    conversations.clear(); pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); verified.clear(); recoverOverview = false; identity = id;
     unreadAfter.clear(); readIds.clear();
     publish({ ...initialState });
   }
   function pause() {
     if (!active) return;
     active = false; generation++; controller.abort(); coordinator.cancel(); stopWatcher();
-    pendingIds.clear(); pendingWrites.clear(); writtenIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); recoverOverview = false;
+    // Loaded chats stay on screen; own sent rows stay pending for the next read.
+    pendingIds.clear(); recoveries.clear(); olderPages.clear(); validations.clear(); verified.clear(); recoverOverview = false;
     clearTimeout(safety); clearTimeout(expiry); clearTimeout(retry);
-    publish({ snapshot: emptySnapshot, directs: {}, ready: false, groupLoading: false, connection: 'reconnecting' });
+    publish({ connection: 'reconnecting' });
   }
   async function start() {
     if (active) return;
@@ -359,7 +389,6 @@ export function createChatStore(api: ChatApi, options: { random?: () => number; 
         }).data.subscription;
         unlistenMutation = api.onMutation(mutation);
       }
-      publish({ ready: false, snapshot: emptySnapshot, directs: {} });
       scheduleSafety(); await refresh('resume');
     } catch (error) { fail(error, ticket); }
   }

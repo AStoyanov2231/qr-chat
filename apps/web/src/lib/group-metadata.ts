@@ -89,10 +89,11 @@ async function lookupPage(db: Db, code: string): Promise<{ name: string | null; 
   const { title, image } = page ? pageMeta(page.data.toString("utf8")) : { title: null, image: null };
   let image_path: string | null = null;
   if (page && image) {
-    const photo = await fetchPublic(new URL(image, page.url).href, MAX_IMAGE_BYTES, /^image\/(?:jpeg|png|webp)$/iu).catch(() => null);
+    const imageUrl = new URL(image, page.url).href;
+    const photo = await fetchPublic(imageUrl, MAX_IMAGE_BYTES, /^image\/(?:jpeg|png|webp)$/iu).catch(() => null);
     if (photo && !photo.over && photo.data.length) {
-      // One photo per address, shared by every group created from it.
-      const path = `u/${createHash("sha256").update(code).digest("hex")}.${IMAGE_EXT[photo.type]}`;
+      // One photo per address and source image, shared by every group created from it; a new og:image gets a new path past the year-long cache.
+      const path = `u/${createHash("sha256").update(`${code}\n${imageUrl}`).digest("hex")}.${IMAGE_EXT[photo.type]}`;
       const upload = await db.storage.from("group-images").upload(path, photo.data, { contentType: photo.type, cacheControl: PRODUCT_IMAGE_CACHE, upsert: true });
       if (!upload.error) image_path = path;
     }

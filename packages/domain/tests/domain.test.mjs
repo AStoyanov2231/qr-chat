@@ -9,6 +9,7 @@ import {
   directMessagePreview,
   directConversationTime,
   groupInitials,
+  initials,
   qrGroupName,
   scannedCode,
   groupFallbackName,
@@ -127,6 +128,22 @@ test('chat rows mix groups, DMs and requests with the newest activity first', ()
     { dm: { status: 'ready', message: { created_at: '2026-01-01T13:00:00Z' } } },
   );
   assert.deepEqual(rows.map(row => `${row.kind}:${row.id}`), ['direct:dm', 'group:busy', 'request:request', 'group:quiet']);
+});
+test('owner groups ("infinity" expiry) sort deterministically instead of NaN', () => {
+  const group = (id, time, expiresAt) => ({ id, messages: time ? [{ time: Date.parse(time) }] : [], expiresAt });
+  const rows = chatRows(
+    [group('owner', null, 'infinity'), group('busy', '2026-01-01T12:00:00Z', 'infinity'), group('quiet', null, '2026-01-02T10:00:00Z')],
+    [{ id: 'dm', accepted_at: '2026-01-01T00:00:00Z', requested_at: '2026-01-01T00:00:00Z' }],
+    {},
+  );
+  assert.ok(rows.every(row => Number.isFinite(row.time)));
+  assert.deepEqual(rows.map(row => row.id), ['busy', 'quiet', 'dm', 'owner']);
+});
+test('initials keep emoji whole', () => {
+  assert.equal(initials('ab'), 'AB');
+  assert.equal(initials('😀🎉x'), '😀🎉');
+  assert.equal(initials('👨‍👩‍👧z'), '👨‍👩‍👧Z');
+  assert.equal(initials(''), '');
 });
 test('venue links unwrap to v: keys and print back as links', () => {
   assert.equal(unwrapQrCode('https://chat.example/v/abcde23456', 'https://chat.example'), 'v:abcde23456');

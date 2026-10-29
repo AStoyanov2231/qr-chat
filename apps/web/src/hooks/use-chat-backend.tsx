@@ -4,18 +4,10 @@ import { flushSync } from "react-dom";
 import { createChatApi, getChatStore } from "@qr-chat/api";
 import { signInPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
-import { z } from "@qr-chat/validation";
 
 type Api = ReturnType<typeof createChatApi>;
 const Context = createContext<{ api: Api; store: ReturnType<typeof getChatStore> } | null>(null);
-export function errorMessage(error: unknown) {
-  if (error instanceof z.ZodError) return "Check your input and try again.";
-  const message = error instanceof Error ? error.message : "";
-  if (/failed to fetch|fetch failed|load failed|network(?:error| request failed)|network connection was lost|internet connection.*offline/i.test(message)) {
-    return "Could not connect. Check your internet connection and try again.";
-  }
-  return message || "Could not connect. Please try again.";
-}
+export { errorMessage } from "@qr-chat/api";
 
 /** Mounted in the protected layout so route navigation retains data and subscriptions. */
 export function ChatSessionProvider({ children }: PropsWithChildren) {
@@ -27,9 +19,10 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let checked = false;
     let stopped = false;
-    const signIn = () => {
+    const signIn = (explicitSignOut = false) => {
       flushSync(() => setSignedOut(true));
-      window.location.replace(signInPath(window.location.pathname, window.location.search));
+      // After an explicit sign-out the next account must not inherit this page as its return path.
+      window.location.replace(explicitSignOut ? "/sign-in" : signInPath(window.location.pathname, window.location.search));
     };
     // The app shell is static, so the signed-out guard runs here from the stored session.
     // An error means the session could not be refreshed yet (e.g. offline): nothing starts, and the
@@ -50,7 +43,7 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
     window.addEventListener("offline", activity);
     document.addEventListener("visibilitychange", activity);
     const { data } = value.api.client.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") signIn();
+      if (event === "SIGNED_OUT") signIn(true);
       else if (session && !checked && !stopped) { checked = true; activity(); }
     });
     return () => {
@@ -70,7 +63,7 @@ function useSession() {
 export function useChatBackend() {
   const { api, store } = useSession();
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
-  return { ...state.snapshot, api, ready: state.ready, error: state.error, connection: state.connection, hasObservedGroup: state.hasObservedGroup, groupLoading: state.groupLoading,
+  return { ...state.snapshot, api, ready: state.ready, error: state.error, connection: state.connection, hasObservedGroup: state.hasObservedGroup, groupLoading: state.groupLoading, groupErrors: state.groupErrors,
     refresh: store.refresh, refreshGroup: store.refreshGroup, openGroup: store.openGroup, loadOlder: store.loadOlderGroup };
 }
 export function useDirectMessages(_api: Api, connectionId: string | null) {

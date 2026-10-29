@@ -23,6 +23,8 @@ export type ChatOverview = {
   directPreviews: Record<string, DirectMessage | null>;
   /** Other people's unread messages per group or DM id (capped at 100); chats with none are left out. */
   unread: Record<string, number>;
+  /** People the caller blocked, newest first. Absent until the user_safety migration is applied. */
+  blocked?: Pick<Profile, "id" | "display_name" | "avatar_path" | "avatar_url">[];
 };
 export type ChatAccess = { userId: string; memberships: Pick<MembershipRow, "group_id" | "expires_at">[]; acceptedConnectionIds: string[] };
 export type ChatMutation =

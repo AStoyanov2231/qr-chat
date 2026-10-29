@@ -1,13 +1,15 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { userIdSchema } from '@qr-chat/validation';
+import { messageAge } from '@qr-chat/domain';
 import { Conversation } from '@/components/conversation';
 import { ChatBar } from '@/components/conversation-header';
 import { Avatar } from '@/components/avatar';
-import { Button, Copy, ErrorNotice, TextButton, styles, useAction } from '@/components/chat-ui';
+import { Button, Copy, ErrorNotice, TextButton, colors, shadowFloat, styles, useAction } from '@/components/chat-ui';
 import { useChat } from '@/providers/chat-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { useDirectMessages } from '@/hooks/use-direct-messages';
+import { notify } from '@/lib/notice';
 
 export default function DirectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -42,37 +44,52 @@ export default function DirectScreen() {
     if (chat.error || !chat.ready) await chat.refresh();
     await direct.refresh();
   }
-  if (request) return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
-    <ChatBar title={peerName} />
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20 }}>
-      <Avatar name={peerName} url={peer?.avatar_url} size={72} />
-      <Copy style={{ fontSize: 20, lineHeight: 26, fontWeight: '700', textAlign: 'center' }}>{`${peerName} wants to be friends`}</Copy>
-      <Copy style={[styles.muted, { textAlign: 'center' }]}>Accept to start a private conversation.</Copy>
-      <ErrorNotice message={action.error} />
-      <Button label={action.busy ? 'Updating…' : 'Accept'} disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.acceptFriend(request.id); await chat.refresh(); }); }} />
-      <TextButton label="Decline" disabled={action.busy || !chat.ready} onPress={() => { void action.run(async () => { await api!.removeFriend(request.id); await chat.refresh(); router.back(); }); }} />
-    </View>
-  </View>;
+  if (request) {
+    const sentAge = messageAge(Date.parse(request.requested_at));
+    const respond = (mutation: () => Promise<unknown>, done: string, leave = true) => { void action.run(async () => { await mutation(); await chat.refresh(); notify(done); if (leave) router.back(); }); };
+    const disabled = action.busy || !chat.ready;
+    return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
+      <ChatBar title={peerName} />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 20 }}>
+        <Avatar name={peerName} url={peer?.avatar_url} size={88} />
+        <Copy style={{ marginTop: 8, fontSize: 20, lineHeight: 26, fontWeight: '700', textAlign: 'center' }}>{peerName}</Copy>
+        <Copy style={[styles.muted, { fontSize: 14, lineHeight: 20, textAlign: 'center' }]}>{`Wants to be friends · ${sentAge === 'Now' ? 'just now' : `${sentAge} ago`}`}</Copy>
+      </View>
+      <View accessibilityLabel="Respond to friend request" style={{ gap: 12, margin: 12, padding: 16, paddingBottom: 8, borderWidth: 1, borderColor: colors.line, borderRadius: 24, backgroundColor: colors.surface, boxShadow: shadowFloat }}>
+        <Copy style={{ fontSize: 17, lineHeight: 22, fontWeight: '700', textAlign: 'center' }}>{`Let ${peerName} message you?`}</Copy>
+        <Copy style={[styles.muted, { fontSize: 14, lineHeight: 20, textAlign: 'center' }]}>Accept to start chatting. Declining removes the request.</Copy>
+        <ErrorNotice message={action.error} />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1 }}><Button label="Decline" subtle disabled={disabled} onPress={() => respond(() => api!.removeFriend(request.id), `Declined ${peerName}’s friend request.`)} /></View>
+          <View style={{ flex: 1 }}><Button label={action.busy ? 'Updating…' : 'Accept'} disabled={disabled} onPress={() => respond(() => api!.acceptFriend(request.id), `You and ${peerName} are now friends.`, false)} /></View>
+        </View>
+        <TextButton label={`Block ${peerName}`} danger disabled={disabled} onPress={() => Alert.alert(`Block ${peerName}?`, 'They won’t be able to send you friend requests.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Block', style: 'destructive', onPress: () => respond(() => api!.blockFriend(request.id), `Blocked ${peerName}.`) },
+        ])} />
+      </View>
+    </View>;
+  }
   return <View style={{ flex: 1 }}><Stack.Screen options={{ title: peerName, headerShown: false }} />
-    <ChatBar title={peerName} subtitle={direct.connection === 'connected' ? undefined : 'Reconnecting…'} />
+    <ChatBar title={peerName} />
     <Conversation
       key={id}
+      conversation={`d:${id}`}
       avatars
       messages={messages}
       userId={userId!}
       loading={(!chat.ready && !chat.error) || (!!friend && direct.loading)}
       error={chat.error || (friend ? direct.error : '')}
       available={!!friend && chat.ready}
-      connected={direct.connection === 'connected'}
       nextCursor={direct.nextCursor}
       loadOlder={direct.loadOlder}
       refresh={refresh}
-      send={(body) => api!.sendDirectMessage(id, body)}
+      send={(body, clientId) => api!.sendDirectMessage(id, body, clientId)}
       unavailable={chat.error ? 'Reconnect to open this conversation.' : 'This friendship is no longer available.'}
       emptyState={emptyState}
       composerLabel={`Message ${peerName}`}
       canOpenProfile={(message) => message.user === userId || message.user === peer?.id}
-      openProfile={(message) => router.push(message.user === userId ? '/edit-profile' : { pathname: '/person/[id]', params: { id: message.user } })}
+      openProfile={(message) => router.push(message.user === userId ? '/profile' : { pathname: '/person/[id]', params: { id: message.user } })}
     />
 
   </View>;

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { act, render, reset, state } from './support/native-harness.mjs';
+import { z } from '@qr-chat/validation';
 
 const { ChatProvider, useChat, errorMessage } = await import(new URL('../src/providers/chat-provider.tsx', import.meta.url).href);
 
@@ -65,4 +66,28 @@ test('accepted DM previews subscribe to message changes and stop after friendshi
   await act(async () => { await chat.refresh(); });
   assert.equal(directWatcher.stopped, true, 'The message watcher is cleaned up when its friendship is removed');
   await screen.update();
+});
+
+test('a failed message outlives its conversation screen and keeps its client id for the retry', async (t) => {
+  reset();
+  state.auth.api = { client: {}, userId: async () => 'me' };
+  state.loadChatSnapshot = async () => ({ session: { id: 'me', name: 'Andy', avatarUrl: null, hidden: [] }, groups: [], friends: [], directPreviews: {} });
+  let outbox;
+  function Screen() { outbox = useChat().outbox; return null; }
+  function Root({ open }) { return React.createElement(ChatProvider, null, open ? React.createElement(Screen) : null); }
+  const screen = await render(t, Root, { open: true });
+  const clientIds = [];
+  await act(async () => { outbox.send('g:room', 'Hello', async (_text, clientId) => { clientIds.push(clientId); throw new Error('Offline'); }); });
+  await screen.update({ open: false });
+  await screen.update({ open: true });
+  const [failed] = outbox.visible('g:room', []);
+  assert.equal(failed?.failed, true, 'Leaving the chat must not drop the failed message');
+  await act(async () => { outbox.retry(failed, async (_text, clientId) => { clientIds.push(clientId); return { id: 1 }; }); });
+  assert.equal(clientIds.length, 2);
+  assert.equal(clientIds[0], clientIds[1]);
+});
+
+test('validation errors show the schema message instead of a generic hint', () => {
+  const invalid = z.string().refine(() => false, 'Choose a photo smaller than 2 MB.').safeParse('');
+  assert.equal(errorMessage(invalid.error), 'Choose a photo smaller than 2 MB.');
 });

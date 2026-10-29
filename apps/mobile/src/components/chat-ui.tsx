@@ -6,6 +6,7 @@ import { Button as ComposeButton, Text as ComposeText } from '@expo/ui/jetpack-c
 import { fillMaxWidth, height } from '@expo/ui/jetpack-compose/modifiers';
 import { Image } from 'expo-image';
 import { SymbolView, type AndroidSymbol } from 'expo-symbols';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextProps, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-screens/experimental';
 import { errorMessage } from '@/providers/chat-provider';
@@ -15,6 +16,10 @@ export const colors = {
   canvas: '#ffffff', surface: '#ffffff', text: '#111111', muted: '#66635c', line: '#ece9e2', fill: '#f3f1ec',
   primary: '#ffc629', onPrimary: '#111111', primaryTint: '#fff1bf', onPrimaryTint: '#5a4a12', secondary: '#2d4bd1', onSecondary: '#ffffff',
   avatar: '#ece9e2', online: '#22b35e', danger: '#c42b2b', dangerTint: '#fdecec', warning: '#ffe4d1', onWarning: '#7a3410', floating: 'rgba(255,255,255,0.94)', photo: '#5b5a55',
+  onDanger: '#ffffff', onPhoto: '#ffffff', onPhotoMuted: 'rgba(255,255,255,0.76)', onPhotoLine: 'rgba(255,255,255,0.92)',
+  photoScrim: 'rgba(10,20,30,0.29)', // web fades 0.2 to 0.38; flat mean, no expo-linear-gradient
+  shadowText: 'rgba(0,0,0,0.4)', scrimLight: 'rgba(17,17,17,0.12)', floatingGlass: 'rgba(255,255,255,0.55)',
+  camera: '#07090b', cameraSheet: 'rgba(7,9,11,0.9)', cameraShade: 'rgba(3,5,7,0.48)',
 };
 export const shadowFloat = '0 1px 2px rgba(17,17,17,0.08), 0 8px 24px rgba(17,17,17,0.12)';
 const symbols = {
@@ -36,7 +41,7 @@ export function Icon({ name, size = 25, color = colors.text }: { name: IconName;
   if (process.env.EXPO_OS === 'ios') return <Image source={`sf:${ios}`} tintColor={color} style={{ width: size, height: size }} accessibilityElementsHidden />;
   return <View collapsable={false} accessible={false} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden><SymbolView name={{ android: android as AndroidSymbol }} tintColor={color} size={size} style={{ width: size, height: size }} /></View>;
 }
-export function Copy({ style, ...props }: TextProps) { return <Text selectable {...props} style={[styles.copy, style]} />; }
+export function Copy({ style, ...props }: TextProps) { return <Text {...props} style={[styles.copy, style]} />; }
 export function Screen({ children, contentContainerStyle }: PropsWithChildren<{ contentContainerStyle?: StyleProp<ViewStyle> }>) {
   // Bound the viewport before flex layout so footers cannot grow behind native bars.
   return <SafeAreaView edges={{ top: true, bottom: true, left: true, right: true }} collapsable={false} style={styles.screen}>
@@ -110,7 +115,15 @@ export function ErrorNotice({ message, retry }: { message: string; retry?: () =>
   if (!message) return null;
   return <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}><Copy style={{ color: colors.danger }}>{message}</Copy>{retry && <Button label="Retry" onPress={retry} subtle />}</View>;
 }
-export function Skeleton({ profile = false, view = 'groups' }: { profile?: boolean; view?: 'home' | 'groups' | 'chats' | 'messages' }) {
+/** Placeholder bars that pulse together (web shimmers); still under reduced motion. */
+export function Skeleton(props: Parameters<typeof SkeletonBody>[0]) {
+  const reduced = useReducedMotion();
+  const opacity = useSharedValue(1);
+  useEffect(() => { if (!reduced) opacity.value = withRepeat(withTiming(0.5, { duration: 800 }), -1, true); }, [reduced, opacity]);
+  const pulse = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View style={pulse}><SkeletonBody {...props} /></Animated.View>;
+}
+function SkeletonBody({ profile = false, view = 'groups' }: { profile?: boolean; view?: 'home' | 'groups' | 'chats' | 'messages' }) {
   if (profile) return <View accessibilityLabel="Loading profile" accessibilityRole="progressbar" style={{ gap: 16, alignItems: 'center', paddingTop: 10 }}>
     <View style={[styles.skeleton, { height: 130, width: 130, borderRadius: 65 }]} />
     <View style={[styles.skeleton, { width: 164, height: 28 }]} /><View style={[styles.skeleton, { width: 105, height: 17 }]} />

@@ -7,13 +7,14 @@ export function createRefreshCoordinator(delayMs = 100) {
     job.timer = undefined;
     job.running = true;
     try {
+      // A failed run still honours a re-run queued during it; waiters get the last run's outcome.
+      let failed = false;
+      let error: unknown;
       do {
         job.dirty = false;
-        await job.run();
+        try { await job.run(); failed = false; } catch (caught) { failed = true; error = caught; }
       } while (job.dirty && jobs.get(key) === job);
-      job.waiters.forEach(({ resolve }) => resolve());
-    } catch (error) {
-      job.waiters.forEach(({ reject }) => reject(error));
+      job.waiters.forEach(({ resolve, reject }) => failed ? reject(error) : resolve());
     } finally {
       if (jobs.get(key) === job) jobs.delete(key);
     }

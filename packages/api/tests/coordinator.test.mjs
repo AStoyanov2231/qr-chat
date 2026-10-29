@@ -20,3 +20,10 @@ test('pause cancels queued work and a later session can schedule fresh work', as
   await tick(); assert.equal(calls, 0);
   await queue.request('overview', async () => { calls++; }); assert.equal(calls, 1);
 });
+test('a failed run still performs a re-run requested during it', async () => {
+  const queue = createRefreshCoordinator(1); let calls = 0; let release;
+  const read = async () => { calls++; if (calls === 1) { await new Promise(resolve => { release = resolve; }); throw new Error('Offline'); } };
+  const first = queue.request('chat', read); await tick();
+  const second = queue.request('chat', read); release();
+  await Promise.all([first, second]); assert.equal(calls, 2);
+});

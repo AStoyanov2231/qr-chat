@@ -4,6 +4,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ChatCircle, DeviceMobile, Globe, QrCode, Users } from "@phosphor-icons/react";
+import { cssVar } from "@/lib/css-var";
 
 export function LandingPage() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -12,7 +13,7 @@ export function LandingPage() {
     let active = true;
     if (canvas.current) {
       void QRCode.toCanvas(canvas.current, new URL("/sign-in", window.location.origin).href, {
-        width: 180, margin: 4, errorCorrectionLevel: "M", color: { dark: "#111111", light: "#ffffff" },
+        width: 180, margin: 4, errorCorrectionLevel: "M", color: { dark: cssVar("--text"), light: cssVar("--surface") },
       }).then(() => { if (active) setQrReady(true); }, () => { if (active) setQrReady(false); });
     }
     return () => { active = false; };

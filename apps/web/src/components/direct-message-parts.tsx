@@ -1,9 +1,10 @@
-import { type FormEventHandler } from "react";
+import { useLayoutEffect, useRef, type FormEventHandler } from "react";
 import type { Session } from "@qr-chat/domain";
 import type { ChatSnapshot } from "@qr-chat/api";
 import { Icon } from "@/components/icon";
 import { Avatar } from "@/components/avatar";
 import type { OutboxItem } from "@/hooks/use-outbox";
+import { sendsOnEnter } from "@/lib/message-input";
 
 type DirectMessage = { id: number; sender_id: string | null; body: string; created_at: string };
 type PeerProfile = NonNullable<ChatSnapshot["friends"][number]["user_a"]>;
@@ -64,6 +65,18 @@ export function FirstDirectMessageEmpty({ friendName }: { friendName: string }) 
   );
 }
 
+/** Composer field: Enter sends, Shift+Enter adds a line, and it grows with the text (capped in CSS). */
+export function MessageInput({ id, value, disabled, placeholder, onChange }: { id: string; value: string; disabled: boolean; placeholder: string; onChange: (value: string) => void }) {
+  const field = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = field.current;
+    if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }
+  }, [value]);
+  return <textarea ref={field} id={id} rows={1} value={value} disabled={disabled} maxLength={4000} placeholder={placeholder} autoComplete="off"
+    onChange={(event) => onChange(event.target.value)}
+    onKeyDown={(event) => { if (sendsOnEnter(event)) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />;
+}
+
 export function DirectMessageComposer({
   draft,
   friendName,
@@ -87,15 +100,7 @@ export function DirectMessageComposer({
     <form className="message-composer" onSubmit={onSubmit}>
       <div className="message-composer-pill">
         <label className="sr-only" htmlFor="direct-message">Direct message</label>
-        <input
-          id="direct-message"
-          value={draft}
-          disabled={busy}
-          maxLength={4000}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={`Message ${friendName}…`}
-          autoComplete="off"
-        />
+        <MessageInput id="direct-message" value={draft} disabled={loading} placeholder={`Message ${friendName}…`} onChange={onChange} />
         <button
           type="submit"
           className="send"
